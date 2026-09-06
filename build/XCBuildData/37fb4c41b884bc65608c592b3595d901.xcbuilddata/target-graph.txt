@@ -1,4 +1,0 @@
-Target dependency graph (2 targets)
-Target 'NekozeFixTests' in project 'NekozeFix'
-➜ Explicit dependency on target 'NekozeFix' in project 'NekozeFix'
-Target 'NekozeFix' in project 'NekozeFix' (no dependencies)

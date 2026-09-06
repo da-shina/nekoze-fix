@@ -59,11 +59,12 @@ struct CalibrationLogic {
 
             // Continue accumulation with new samples
             let timeInterval = now - lastTime
+
+            // Check for posture instability BEFORE updating lastAngle (angle delta > 5 degrees)
+            let angleDelta = abs(sample.nearAngleDegrees - lastAngle)
+
             lastAngle = sample.nearAngleDegrees
             lastTime = now
-
-            // Check for posture instability (angle delta > 5 degrees)
-            let angleDelta = abs(sample.nearAngleDegrees - lastAngle)
             if angleDelta > 5.0 {
                 // Reset accumulation on instability
                 accumulatedAngles = [sample.nearAngleDegrees]

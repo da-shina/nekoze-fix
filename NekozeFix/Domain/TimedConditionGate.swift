@@ -7,10 +7,10 @@ import Foundation
 /// When the accumulated time reaches `requiredDuration`, `tick` returns `true` once.
 ///
 /// Design ref: design.md "TimedConditionGate" section.
-struct TimedConditionGate {
+struct TimedConditionGate: Equatable {
     var requiredDuration: TimeInterval
-    private var accumulated: TimeInterval = 0
-    private var isFired: Bool = false
+    var accumulated: TimeInterval = 0
+    var isFired: Bool = false
 
     init(requiredDuration: TimeInterval) {
         self.requiredDuration = requiredDuration

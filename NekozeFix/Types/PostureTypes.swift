@@ -60,13 +60,22 @@ enum DisplayedPosture: Equatable {
     case personMissing
 }
 
+enum CalibrationProgress: Equatable {
+    case waitingForPerson
+    case accumulating(elapsed: TimeInterval)
+    case completed(referenceNearAngleDegrees: Double)
+}
+
 struct SessionSnapshot: Equatable {
     var phase: SessionPhase
     var displayedPosture: DisplayedPosture
     var isDimmed: Bool
+    var isRotating: Bool
     var isPersonDetected: Bool
     var sensitivity: Double
     var isMonitoringEnabled: Bool
+    var slouchGate: TimedConditionGate
+    var calibrationProgress: CalibrationProgress
 }
 
 /// Minimum confidence threshold for keypoint inclusion in analysis.

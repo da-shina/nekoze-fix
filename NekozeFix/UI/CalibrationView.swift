@@ -8,7 +8,6 @@ struct CalibrationView: View {
     // MARK: - Environment
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
-    @EnvironmentObject private var timedConditionGate: TimedConditionGate
 
     // MARK: - State
 
@@ -17,6 +16,7 @@ struct CalibrationView: View {
     @State private var showingPersonMissing = false
     @State private var progressMessage = "3秒間姿勢を保持してください"
     @State private var cancellables = Set<AnyCancellable>()
+    @State private var timer: Timer?
 
     // MARK: - Body
 
@@ -71,30 +71,23 @@ struct CalibrationView: View {
             setupObservers()
         }
         .onDisappear {
-            timerCancel()
+            timer?.invalidate()
+            timer = nil
         }
     }
 
     // MARK: - Private Methods
 
     private func setupTimer() {
+        timer?.invalidate()
         timerRemaining = 3.0
-        timerInvalidate()
 
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             if self.timerRemaining > 0 {
                 self.timerRemaining -= 0.5
-                if self.timerRemaining <= 0 {
-                    self.timerRemaining = 0
-                    timer.invalidate()
-                }
             }
         }
-    }
-
-    private func timerInvalidate() {
-        timerRemaining = 0
     }
 
     private func setupObservers() {
@@ -107,20 +100,15 @@ struct CalibrationView: View {
                 self?.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
             }
             .store(in: &cancellables)
-
-        // Observe gate state
-        timedConditionGate.$isConditionMet
-            .sink { [weak self] isConditionMet in
-                self?.progressMessage = isConditionMet ? "姿勢を保持中..." : "姿勢を保持中..."
-            }
-            .store(in: &cancellables)
     }
 
     private func recalibrate() {
+        timer?.invalidate()
         timerRemaining = 3.0
         isPersonDetected = false
         showingPersonMissing = false
         progressMessage = "3秒間姿勢を保持してください"
+        setupTimer()
     }
 }
 
@@ -128,11 +116,8 @@ struct CalibrationView: View {
 
 struct CalibrationView_Previews: PreviewProvider {
     static var previews: some View {
-        Group {
-            CalibrationView()
-                .environmentObject(PostureSessionManager())
-                .environmentObject(TimedConditionGate(requiredDuration: 3.0))
-                .previewDisplayName("Calibration - Ready")
-        }
+        CalibrationView()
+            .environmentObject(PostureSessionManager())
+            .previewDisplayName("Calibration - Ready")
     }
 }

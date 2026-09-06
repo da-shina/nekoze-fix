@@ -23,7 +23,6 @@ struct RootView: View {
                 PermissionView()
             case .rotating:
                 MonitorView()
-                    .environmentObject(DeviceOrientationMonitor())
             @unknown default:
                 PermissionView()
             }
