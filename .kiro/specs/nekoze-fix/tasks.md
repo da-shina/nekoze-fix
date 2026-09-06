@@ -2,7 +2,7 @@
 
 ## 1. Foundation: project setup and test infrastructure
 
-- [ ] 1.1 Xcode project setup
+- [x] 1.1 Xcode project setup
   - Create `NekozeFix.xcodeproj` with iOS 16+ deployment target
   - Configure SwiftUI lifecycle with `NekozeFixApp.swift` entry point
   - Set up folder structure: Types, Domain, Services, Session, UI, Resources, Tests
