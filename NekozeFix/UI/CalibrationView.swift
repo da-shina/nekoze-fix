@@ -79,13 +79,15 @@ struct CalibrationView: View {
 
     private func setupTimer() {
         timerRemaining = 3.0
+        timerInvalidate()
 
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
-            if timerRemaining > 0 {
-                timerRemaining -= 0.5
-                if timerRemaining <= 0 {
-                    timerRemaining = 0
-                    timerInvalidate()
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
+            guard let self = self else { return }
+            if self.timerRemaining > 0 {
+                self.timerRemaining -= 0.5
+                if self.timerRemaining <= 0 {
+                    self.timerRemaining = 0
+                    timer.invalidate()
                 }
             }
         }

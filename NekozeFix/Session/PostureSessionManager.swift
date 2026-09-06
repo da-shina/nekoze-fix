@@ -23,11 +23,6 @@ final class PostureSessionManager: ObservableObject {
 
     // MARK: - Public Methods
 
-    /// Bootstraps the session: checks camera authorization
-    func bootstrap() async {
-        // Phase transitions handled externally via CameraSessionManager
-    }
-
     /// Transitions to calibrating phase
     func startCalibration() {
         snapshot.phase = .calibrating
@@ -42,12 +37,16 @@ final class PostureSessionManager: ObservableObject {
     func startMonitoring() {
         snapshot.phase = .monitoring
         snapshot.isDimmed = false
+        snapshot.isRotating = false
+        // Reset gates when starting monitoring
+        snapshot.slouchGate.reset()
     }
 
     /// Stops posture monitoring
     func stopMonitoring() {
         snapshot.phase = .idle
         snapshot.isDimmed = false
+        snapshot.isRotating = false
     }
 
     /// Enters dim mode (black screen with wake lock)
@@ -83,5 +82,13 @@ final class PostureSessionManager: ObservableObject {
     /// Updates monitoring enabled flag
     func updateMonitoringEnabled(_ enabled: Bool) {
         snapshot.isMonitoringEnabled = enabled
+    }
+}
+
+// MARK: - Preview
+
+struct PostureSessionManager_Previews: PreviewProvider {
+    static var previews: some View {
+        PostureSessionManager()
     }
 }

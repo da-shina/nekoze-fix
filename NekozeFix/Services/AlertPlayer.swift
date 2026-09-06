@@ -7,7 +7,6 @@ final class AlertPlayer {
     // MARK: - Properties
 
     private var audioPlayer: AVAudioPlayer?
-    private var repeatingTimer: Timer?
     private let soundURL: URL
     private let audioSession = AVAudioSession.sharedInstance()
 
