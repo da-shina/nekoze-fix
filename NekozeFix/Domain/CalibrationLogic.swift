@@ -1,9 +1,9 @@
 import Foundation
 
-/// Concrete domain struct for calibration logic.
-/// Handles accumulation of stable posture angles and reference value management.
+/// キャリブレーションロジックを扱うドメイン構造体。
+/// 安定した姿勢角度の蓄積と基準値の管理を行う。
 struct CalibrationLogic {
-    // MARK: - State
+    // MARK: - 状態
 
     private var accumulatedAngles: [Double] = []
     private var isAccumulating = false
@@ -11,10 +11,10 @@ struct CalibrationLogic {
     private var lastAngle: Double = 0.0
     private var lastTime: TimeInterval = 0
 
-    // MARK: - Public API
+    // MARK: - 公開API
 
-    /// Starts a new calibration session.
-    /// Overwrites any previous reference.
+    /// 新しいキャリブレーションセッションを開始する。
+/// 以前の基準値は上書きされる。
     mutating func start() {
         accumulatedAngles = []
         isAccumulating = false
@@ -23,33 +23,33 @@ struct CalibrationLogic {
         lastTime = 0
     }
 
-    /// Processes a posture sample and presence status.
+    /// 姿勢サンプルと人物検出状態を処理する。
     /// - Parameters:
-    ///   - sample: The angle sample from PostureAnalyzer (may be nil if no valid angle)
-    ///   - presence: Person detection status
-    ///   - now: Current time interval
-    /// - Returns: Calibration progress state
+    ///   - sample: PostureAnalyzer からの角度サンプル（有効な角度がない場合は nil）
+    ///   - presence: 人物検出状態
+    ///   - now: 現在の時刻間隔
+    /// - Returns: キャリブレーション進捗状態
     mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval) -> CalibrationProgress {
-        // Handle person missing - reset immediately
+        // 人物が見つからない場合 - 即座にリセット
         if presence == .personMissing {
             accumulatedAngles = []
             isAccumulating = false
             return .waitingForPerson
         }
 
-        // Update person presence status
+        // 人物検出状態を更新
         self.personPresent = presence == .personDetected
 
-        // If person is not detected, wait for person
+        // 人物が検出されなければ待機
         if !personPresent {
             return .waitingForPerson
         }
 
-        // Handle sample availability
+        // サンプルの有無を処理
         if let sample = sample {
-            // If we have a valid angle sample and are not accumulating yet, start accumulating
+            // 有効な角度サンプルがあり、まだ蓄積中でなければ蓄積を開始
             if !isAccumulating {
-                // Start accumulation with first valid sample
+                // 最初の有効サンプルで蓄積を開始
                 accumulatedAngles = [sample.nearAngleDegrees]
                 isAccumulating = true
                 lastAngle = sample.nearAngleDegrees
@@ -57,48 +57,47 @@ struct CalibrationLogic {
                 return .accumulating(elapsed: 0)
             }
 
-            // Continue accumulation with new samples
+            // 新しいサンプルで蓄積を継続
             let timeInterval = now - lastTime
 
-            // Check for posture instability BEFORE updating lastAngle (angle delta > 5 degrees)
+            // lastAngle 更新前に姿勢の不安定さをチェック（角度変化 > 5度）
             let angleDelta = abs(sample.nearAngleDegrees - lastAngle)
 
             lastAngle = sample.nearAngleDegrees
             lastTime = now
             if angleDelta > 5.0 {
-                // Reset accumulation on instability
+                // 不安定な場合は蓄積をリセット
                 accumulatedAngles = [sample.nearAngleDegrees]
                 lastAngle = sample.nearAngleDegrees
                 lastTime = now
                 return .accumulating(elapsed: 0)
             }
 
-            // Add new angle to accumulation
+            // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
         }
 
-        // Check if we have accumulated enough for completion (3 seconds of stable posture)
-        // At ~60fps, we need approximately 180 frames (5 seconds) for 3 seconds stability
-        // But requirement is 3 seconds of stable detection
+        // 蓄積が完了に十分かチェック（3秒間の安定した姿勢）
+        // ~60fps では、3秒の安定検出に約180フレームが必要
         if isAccumulating && accumulatedAngles.count >= 180 { // 3 seconds * 60 fps
-            // Calculate average of accumulated angles
+            // 蓄積された角度の平均を計算
             let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
             let completedProgress = .completed(referenceNearAngleDegrees: average)
 
-            // Reset state after completion
+            // 完了後に状態をリセット
             accumulatedAngles = []
             isAccumulating = false
 
             return completedProgress
         }
 
-        // If accumulating but not yet completed
+        // 蓄積中だがまだ完了していない場合
         if isAccumulating {
             let elapsed = now - lastTime
             return .accumulating(elapsed: elapsed)
         }
 
-        // Default state
+        // デフォルト状態
         return .waitingForPerson
     }
 }

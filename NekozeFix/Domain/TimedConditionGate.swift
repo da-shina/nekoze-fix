@@ -1,12 +1,12 @@
 import Foundation
 
-/// N-second continuous condition gate.
+/// N秒間の連続条件ゲート。
 ///
-/// Accumulates time only while `isConditionMet == true`.
-/// When the condition becomes false, the accumulator resets immediately.
-/// When the accumulated time reaches `requiredDuration`, `tick` returns `true` once.
+/// `isConditionMet == true` の間のみ時間を蓄積する。
+/// 条件が false になると蓄積は即座にリセットされる。
+/// 蓄積時間が `requiredDuration` に達すると、`tick` は一度だけ `true` を返す。
 ///
-/// Design ref: design.md "TimedConditionGate" section.
+/// 設計参照: design.md "TimedConditionGate" セクション。
 struct TimedConditionGate: Equatable {
     var requiredDuration: TimeInterval
     var accumulated: TimeInterval = 0
@@ -16,11 +16,11 @@ struct TimedConditionGate: Equatable {
         self.requiredDuration = requiredDuration
     }
 
-    /// Call each frame with the current condition state and elapsed time delta.
+    /// フレームごとに現在の条件状態と経過時間 delta で呼び出す。
     /// - Parameters:
-    ///   - isConditionMet: whether the gate condition is currently satisfied
-    ///   - deltaTime: time elapsed since the last tick
-    /// - Returns: `true` once when the accumulated time first reaches `requiredDuration`.
+    ///   - isConditionMet: ゲート条件が現在満たされているか
+    ///   - deltaTime: 前回の tick からの経過時間
+    /// - Returns: 蓄積時間が初めて `requiredDuration` に達した時に一度だけ `true`。
     mutating func tick(isConditionMet: Bool, deltaTime: TimeInterval) -> Bool {
         if isConditionMet {
             if !isFired {

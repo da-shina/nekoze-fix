@@ -14,7 +14,7 @@ final class PostureSessionManagerTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Phase Transitions
+    // MARK: - フェーズ遷移
 
     func testDefaultPhase_isAwaitingPermission() {
         XCTAssertEqual(sut.snapshot.phase, .awaitingPermission)
@@ -52,7 +52,7 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
-    // MARK: - Posture Updates
+    // MARK: - 姿勢更新
 
     func testUpdatePosture_good_updatesSnapshot() {
         sut.updatePosture(.good)
@@ -69,7 +69,7 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
     }
 
-    // MARK: - Person Detection
+    // MARK: - 人物検出
 
     func testUpdatePersonDetected_true_setsFlag() {
         sut.updatePersonDetected(true)
@@ -81,7 +81,7 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isPersonDetected)
     }
 
-    // MARK: - Sensitivity
+    // MARK: - 感度
 
     func testUpdateSensitivity_clampsToRange() {
         sut.updateSensitivity(-0.5)
@@ -94,7 +94,7 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.sensitivity, 0.5)
     }
 
-    // MARK: - Monitoring Enabled
+    // MARK: - 監視有効化
 
     func testUpdateMonitoringEnabled_true() {
         sut.updateMonitoringEnabled(true)
@@ -106,7 +106,7 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isMonitoringEnabled)
     }
 
-    // MARK: - Phase Update
+    // MARK: - フェーズ更新
 
     func testUpdatePhase_rotating() {
         sut.updatePhase(.rotating)

@@ -14,33 +14,33 @@ final class SettingsStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Sensitivity to Threshold Mapping
+    // MARK: - 感度からしきい値へのマッピング
 
-    /// sensitivity 0.0 → 20 degrees
+    /// sensitivity 0.0 → 20度
     func testSensitivityZero_thresholdIs20Degrees() {
         sut.sensitivity = 0.0
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 20.0, accuracy: 0.001)
     }
 
-    /// sensitivity 1.0 → 5 degrees
+    /// sensitivity 1.0 → 5度
     func testSensitivityOne_thresholdIs5Degrees() {
         sut.sensitivity = 1.0
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 5.0, accuracy: 0.001)
     }
 
-    /// sensitivity 0.5 → 12.5 degrees (midpoint)
+    /// sensitivity 0.5 → 12.5度（中点）
     func testSensitivityHalf_thresholdIs12Point5Degrees() {
         sut.sensitivity = 0.5
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 12.5, accuracy: 0.001)
     }
 
-    /// sensitivity 0.75 → 8.75 degrees
+    /// sensitivity 0.75 → 8.75度
     func testSensitivityThreeQuarters_thresholdIs8Point75Degrees() {
         sut.sensitivity = 0.75
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 8.75, accuracy: 0.001)
     }
 
-    /// sensitivity 0.25 → 16.25 degrees
+    /// sensitivity 0.25 → 16.25度
     func testSensitivityOneQuarter_thresholdIs16Point25Degrees() {
         sut.sensitivity = 0.25
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 16.25, accuracy: 0.001)
@@ -49,7 +49,7 @@ final class SettingsStoreTests: XCTestCase {
     // MARK: - isMonitoringEnabled
 
     func testDefaultMonitoringEnabled_isFalse() {
-        // Default should be false for first launch
+        // 初回起動時はfalseであるべき
         XCTAssertFalse(sut.isMonitoringEnabled)
     }
 
@@ -64,7 +64,7 @@ final class SettingsStoreTests: XCTestCase {
     // MARK: - Default Sensitivity
 
     func testDefaultSensitivity_isHalf() {
-        // Default sensitivity should be 0.5
+        // デフォルトの感度は0.5であるべき
         XCTAssertEqual(sut.sensitivity, 0.5, accuracy: 0.001)
     }
 }

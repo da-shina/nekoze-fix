@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// UI layer: root view switching between permission/calibration/monitor phases.
-/// See design.md "UI Components" - RootView.
+/// UI レイヤー: permission/calibration/monitor フェーズを切り替えるルートビュー。
+/// design.md の "UI Components" - RootView を参照。
 
 struct RootView: View {
-    // MARK: - Environment
+    // MARK: - 環境
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
 
-    // MARK: - Body
+    // MARK: - 本文
 
     var body: some View {
         Group {
@@ -34,14 +34,14 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Computed Properties
+    // MARK: - 計算プロパティ
 
     private var snapshot: SessionSnapshot {
         sessionManager.snapshot
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct RootView_Previews: PreviewProvider {
     static var previews: some View {

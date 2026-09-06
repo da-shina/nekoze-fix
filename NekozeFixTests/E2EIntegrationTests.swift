@@ -15,22 +15,22 @@ final class E2EIntegrationTests: XCTestCase {
     }
 
     func testE2ECriticalPath() {
-        // Phase 1: Permission check
+        // フェーズ1: 許可確認
         XCTAssertEqual(sut.snapshot.phase, .awaitingPermission)
 
-        // Phase 2: Bootstrap (simulates auth check)
+        // フェーズ2: Bootstrap（認証チェックをシミュレート）
         Task { @MainActor in
             await sut.bootstrap()
         }
 
-        // Phase 3: Calibration
+        // フェーズ3: キャリブレーション
         sut.startCalibration()
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
 
-        // Simulate 3 seconds of stable person detection
+        // 人物検出が3秒間安定をシミュレート
         sut.updatePersonDetected(true)
 
-        // Simulate timed condition gate - 3 seconds stable
+        // TimedConditionGate をシミュレート - 3秒間安定
         var gate = TimedConditionGate(requiredDuration: 3.0)
         let startTime = CFAbsoluteTimeGetCurrent()
 
@@ -39,48 +39,48 @@ final class E2EIntegrationTests: XCTestCase {
             if gate.isFired { break }
         }
 
-        // Should complete after 3 seconds
+        // 3秒後に完了するはず
         if gate.isFired {
-            // Calibration completed - should move to idle or monitoring
+            // キャリブレーション完了 - idle または monitoring に移行
             let finalPhase = sut.snapshot.phase
-            // At this point, calibration is complete and we can start monitoring
+            // キャリブレーションが完了し、モニタリングを開始可能
             sut.startMonitoring()
             XCTAssertTrue(sut.snapshot.phase == .monitoring || sut.snapshot.phase == .idle)
         } else {
-            XCTFail("Calibration gate should fire after 3 seconds")
+            XCTFail("キャリブレーションゲートは3秒後に発火するはず")
         }
     }
 
     func testSlouchDetectionFlow() {
-        // Setup: calibrated and monitoring
+        // セットアップ: キャリブレーション済みでモニタリング中
         sut.startMonitoring()
         sut.updatePersonDetected(true)
 
-        // Simulate slouch detection
+        // 前傾姿勢検出をシミュレート
         var gate = TimedConditionGate(requiredDuration: 5.0)
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        // Simulate 5 seconds of slouch (angle over threshold)
+        // 前傾姿勢5秒間（角度が閾値超過）をシミュレート
         for _ in 0..<60 {
             gate.tick(isConditionMet: true, now: CFAbsoluteTimeGetCurrent())
             if gate.isFired { break }
         }
 
-        // After 5+ seconds of slouch, notification should be triggered
-        // The confirmed slouch triggers AlertPlayer.playOnce()
-        XCTAssertTrue(gate.isFired, "5 seconds of slouch should trigger the gate")
+        // 5秒以上の前傾姿勢の後、通知がトリガーされるはず
+        // 確認された前傾姿勢は AlertPlayer.playOnce() をトリガー
+        XCTAssertTrue(gate.isFired, "5秒の前傾姿勢でゲートが発火するはず")
     }
 
     func testDimModeToggle() {
-        // Start with normal monitoring
+        // 通常のモニタリングから開始
         sut.startMonitoring()
         XCTAssertFalse(sut.snapshot.isDimmed)
 
-        // Enter dim mode
+        // ダイムモードに入る
         sut.enterDimMode()
         XCTAssertTrue(sut.snapshot.isDimmed)
 
-        // Exit dim mode
+        // ダイムモードを終了
         sut.exitDimMode()
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
@@ -88,15 +88,15 @@ final class E2EIntegrationTests: XCTestCase {
     func testSensitivityMapping() {
         let store = SettingsStore()
 
-        // sensitivity 0.0 → 20 degrees
+        // sensitivity 0.0 → 20度
         store.sensitivity = 0.0
         XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 20.0)
 
-        // sensitivity 1.0 → 5 degrees
+        // sensitivity 1.0 → 5度
         store.sensitivity = 1.0
         XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 5.0)
 
-        // sensitivity 0.5 → 12.5 degrees
+        // sensitivity 0.5 → 12.5度
         store.sensitivity = 0.5
         XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 12.5, accuracy: 0.001)
     }

@@ -1,27 +1,27 @@
 import Vision
 
-/// Vision-based body pose keypoint extraction.
+/// Vision ベースの人体ポーズキーポイント抽出。
 ///
-/// Uses VNDetectHumanBodyPoseRequest to extract keypoints,
-/// filters by confidence threshold (0.5), and returns nil
-/// for empty observations (personMissing).
+/// VNDetectHumanBodyPoseRequest を用いてキーポイントを抽出し、
+/// 信頼度閾値 (0.5) でフィルタリング、空の観測結果 (personMissing) の場合は
+/// nil を返します。
 ///
-/// Design ref: design.md "PoseDetector" section.
+/// 設計参照: design.md の "PoseDetector" セクション。
 final class PoseDetector {
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     private let request = VNDetectHumanBodyPoseRequest()
     private let visionQueue = DispatchQueue(label: "com.nekozefix.vision.queue")
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
     init() {
-        // VNDetectHumanBodyPoseRequestRevision1 is available from iOS 14.0
-        // Use default revision for iOS 16.0+ compatibility
+        // VNDetectHumanBodyPoseRequestRevision1 は iOS 14.0 から利用可
+        // iOS 16.0+ 互換のためデフォルトリビジョン使用
         request.revision = VNDetectHumanBodyPoseRequestRevision1
     }
 
-    // MARK: - Detection
+    // MARK: - 検出
 
     func detect(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> PoseFrame? {
         var result: PoseFrame?
@@ -36,7 +36,7 @@ final class PoseDetector {
             }
 
             guard let observation = request.results?.first as? VNHumanBodyPoseObservation else {
-                // Empty observation: nil indicates personMissing
+                // 空の観測結果: nil は personMissing を示す
                 result = nil
                 return
             }
@@ -60,7 +60,7 @@ final class PoseDetector {
         return result
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     private func extractPoseFrame(from observation: VNHumanBodyPoseObservation, orientation: CGImagePropertyOrientation) -> PoseFrame? {
         let keypointThreshold: Float = 0.5
@@ -73,7 +73,7 @@ final class PoseDetector {
             return Keypoint(x: Double(point.x), y: Double(point.y), confidence: Double(observation.recognizedPoint(key).confidence))
         }
 
-        // Latest-frame-only dispatch when queue backlogged
+        // キューのバックログ時は最新フレームのみをディスパッチ
         let leftEar = extractKeypoint(.leftEar)
         let rightEar = extractKeypoint(.rightEar)
         let leftShoulder = extractKeypoint(.leftShoulder)

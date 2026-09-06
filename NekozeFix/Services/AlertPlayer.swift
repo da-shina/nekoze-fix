@@ -1,36 +1,36 @@
 import AVFoundation
 
-/// Services layer: notification sound playback with .playback audio category.
-/// See design.md "AlertPlayer" section.
+/// サービス層: .playback オーディオカテゴリによる通知音再生。
+/// 詳細は design.md "AlertPlayer" セクション参照。
 
 final class AlertPlayer {
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     private var audioPlayer: AVAudioPlayer?
     private var repeatingTimer: Timer?
     private let soundURL: URL
     private let audioSession = AVAudioSession.sharedInstance()
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
-    /// Preloads the alert sound during session configuration
-    /// - Parameter soundURL: URL to the alert sound file
+    /// セッション設定時にアラート音をプリロードします
+    /// - Parameter soundURL: アラートサウンドファイルのURL
     init(soundURL: URL) {
         self.soundURL = soundURL
         configureAudioSession()
     }
 
-    // MARK: - Public Methods
+    // MARK: - パブリックメソッド
 
-    /// Configures the alert player with the alert sound
-    /// - Throws: if audio file cannot be loaded
+    /// アラートプレイヤーをアラートサウンドで構成します
+    /// - Throws: オーディオファイルの読み込みに失敗した場合
     func configureSession() throws {
         let player = try AVAudioPlayer(contentsOf: soundURL)
         player.prepareToPlay()
         self.audioPlayer = player
     }
 
-    /// Plays the alert sound once immediately
+    /// アラート音を即座に1回だけ再生します
     func playOnce() {
         guard let player = audioPlayer else { return }
         player.stop()
@@ -38,38 +38,38 @@ final class AlertPlayer {
         player.play()
     }
 
-    /// Starts repeating the alert at 30-second intervals
+    /// 30秒間隔でアラート音を繰り返し再生します
     func startRepeating() {
         guard let player = audioPlayer else { return }
-        // Stop any existing timer
+        // 既存のタイマーを停止
         repeatingTimer?.invalidate()
 
-        // Play immediately
+        // 即座に再生
         player.stop()
         player.currentTime = 0
         player.play()
 
-        // Start 30-second interval timer
+        // 30秒間隔のタイマーを開始
         repeatingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             self?.playOnce()
         }
     }
 
-    /// Stops any currently playing alert sound immediately
+    /// 現在再生中のアラート音を即座に停止します
     func stop() {
         audioPlayer?.stop()
         repeatingTimer?.invalidate()
         repeatingTimer = nil
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     private func configureAudioSession() {
         do {
             try audioSession.setCategory(.playback, options: .duckOthers)
             try audioSession.setActive(true)
         } catch {
-            print("Failed to configure audio session: \(error)")
+            print("オーディオセッションの構成に失敗しました: \(error)")
         }
     }
 }

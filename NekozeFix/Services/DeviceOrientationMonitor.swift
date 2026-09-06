@@ -1,21 +1,21 @@
 import UIKit
 import AVFoundation
 
-/// Services layer: device orientation monitoring and rotation detection.
-/// See design.md "DeviceOrientationMonitor" section.
+/// サービス層: デバイスの向きの監視と回転検出。
+/// design.md の "DeviceOrientationMonitor" セクション参照。
 
 final class DeviceOrientationMonitor: ObservableObject {
-    // MARK: - Published Properties
+    // MARK: - 公開プロパティ
 
     @Published private(set) var currentVideoOrientation: AVCaptureVideoOrientation = .portrait
     @Published private(set) var isRotating = false
 
-    // MARK: - Private Properties
+    // MARK: - プライベートプロパティ
 
     private var rotationTimer: Timer?
     private let notificationCenter = NotificationCenter.default
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
     init() {
         startMonitoring()
@@ -25,9 +25,9 @@ final class DeviceOrientationMonitor: ObservableObject {
         stopMonitoring()
     }
 
-    // MARK: - Public Methods
+    // MARK: - パブリックメソッド
 
-    /// Starts monitoring device orientation changes
+    /// デバイスの向きの変化の監視を開始します
     func startMonitoring() {
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         notificationCenter.addObserver(
@@ -39,7 +39,7 @@ final class DeviceOrientationMonitor: ObservableObject {
         updateOrientation()
     }
 
-    /// Stops monitoring device orientation changes
+    /// デバイスの向きの変化の監視を停止します
     func stopMonitoring() {
         notificationCenter.removeObserver(
             self,
@@ -51,20 +51,20 @@ final class DeviceOrientationMonitor: ObservableObject {
         rotationTimer = nil
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     @objc private func deviceOrientationDidChange() {
-        // Cancel any existing rotation timer
+        // 既存の回転タイマーをキャンセル
         rotationTimer?.invalidate()
 
-        // Mark as rotating
+        // 回転中としてマーク
         isRotating = true
 
-        // Update current orientation
+        // 現在の向きを更新
         let orientationChanged = updateOrientation()
 
-        // Start 5-second timer only when meaningful orientation changes occur
-        // (not for face-up/face-down which return early)
+        // 意味のある向きの変化があった場合のみ5秒タイマーを開始
+        // (face-up/face-down は早期リターンするため含まない)
         if orientationChanged {
             rotationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
                 DispatchQueue.main.async {
@@ -72,7 +72,7 @@ final class DeviceOrientationMonitor: ObservableObject {
                 }
             }
         } else {
-            // Face-up/face-down: rotation complete immediately
+            // Face-up/face-down: 即座に回転完了
             isRotating = false
         }
     }
@@ -91,7 +91,7 @@ final class DeviceOrientationMonitor: ObservableObject {
         case .landscapeRight:
             newOrientation = .landscapeLeft
         default:
-            // For unknown orientations (face up/down), keep current and signal no change
+            // 不明な向き (face up/down) の場合は現在値を保持し、変化なしを通知
             return false
         }
 

@@ -22,41 +22,41 @@ final class PerformanceTests: XCTestCase {
 
     // MARK: - NFR 8.1: Keypoint Processing >= 15fps
 
-    /// Verifies the processing pipeline is structured to support 15fps
-    /// This test ensures the code paths are non-blocking and use background queues
+    /// 処理パイプラインが15fps支持的構造になっていることを検証
+    /// このテストはコードパスがノンブロッキングでバックグラウンドキューを使用することを保証
     func testPoseDetectorUsesBackgroundQueue() {
-        // The PoseDetector uses a dedicated serial queue
-        // and discards late frames - this is verified by code inspection
+        // PoseDetectorは専用のシリアルキューを使用
+        // 遅いフレームは破棄 - コード検査で確認済み
         XCTAssertNotNil(poseDetector)
     }
 
-    /// Verifies CameraSessionManager uses .high preset (720p) for performance
+    /// CameraSessionManagerがパフォーマンス用に.highプリセット（720p）を使用することを検証
     func testCameraSessionUsesHighPreset() {
         let cameraManager = CameraSessionManager()
-        // Verify it uses .high preset (configured in configureSession)
+        // .highプリセットを使用（configureSessionで設定済み）
         XCTAssertNotNil(cameraManager)
     }
 
-    /// Verifies async processing chain: camera -> vision -> analyzer
+    /// 非同期処理チェーン: camera -> vision -> analyzer を検証
     func testAsyncProcessingChain() {
-        // CameraSessionManager uses sessionQueue (background)
-        // PoseDetector uses visionQueue (background)
-        // PostureAnalyzer is pure function (no I/O)
-        // All designed to run at >= 15fps
+        // CameraSessionManagerはsessionQueueを使用（バックグラウンド）
+        // PoseDetectorはvisionQueueを使用（バックグラウンド）
+        // PostureAnalyzerは純粋関数（I/Oなし）
+        // すべて >= 15fpsで動作するように設計済み
         XCTAssertNotNil(sut)
     }
 
     // MARK: - NFR 8.2: Notification Latency <= 0.5s
 
-    /// Verifies AlertPlayer preloads sound for immediate playback
+    /// AlertPlayerが即座再生用にサウンドをプリロードすることを検証
     func testAlertPlayerPreloadsSound() {
         let alertPlayer = AlertPlayer(soundURL: URL(fileURLWithPath: "/dev/null"))
-        // Preload is done in init via configureAudioSession
-        // Sound is preloaded via configureSession()
+        // プリロードはinit内のconfigureAudioSessionで実行
+        // サウンドはconfigureSession()でプリロード済み
         XCTAssertNotNil(alertPlayer)
     }
 
-    /// Verifies AlertPlayer.playOnce fires without delay
+    /// AlertPlayer.playOnceが延迟なく発火することを検証
     func testAlertPlayerPlayOnceDoesNotBlock() {
         let alertPlayer = AlertPlayer(soundURL: URL(fileURLWithPath: "/dev/null"))
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -64,25 +64,25 @@ final class PerformanceTests: XCTestCase {
         alertPlayer.playOnce()
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
-        // Should be near-instantaneous (< 0.1s for nil player case)
+        // nilプレイヤーの場合はほぼ瞬時（< 0.1秒）
         XCTAssertLessThan(elapsed, 0.1)
     }
 
     // MARK: - Battery Optimization (NFR 9.1, 9.2)
 
-    /// Verifies dim mode reduces power consumption
+    /// ダイムモード消費電力を削減することを検証
     func testDimModeUsesBlackScreen() {
-        // Dim mode: brightness = 0.0, isIdleTimerDisabled = true
-        // CameraPreviewView is hidden during dim mode
-        // This is verified by code inspection of MonitorView and CameraPreviewView
-        XCTAssertTrue(true, "Dim mode implementation reduces GPU/CPU load")
+        // ダイムモード: brightness = 0.0, isIdleTimerDisabled = true
+        // CameraPreviewViewはダイムモード中は非表示
+        // MonitorViewとCameraPreviewViewのコード検査で確認済み
+        XCTAssertTrue(true, "ダイムモードの実装はGPU/CPU負荷を軽減")
     }
 
-    /// Verifies background stops camera and audio
+    /// バックグラウンドでカメラとオーディオを停止することを検証
     func testBackgroundStopsServices() {
         let lifecycleObserver = AppLifecycleObserver()
-        // On background: camera stops, audio stops, isIdleTimerDisabled = false
-        // This is implemented in AppLifecycleObserver callbacks
+        // バックグラウンド時: カメラ停止、オーディオ停止、isIdleTimerDisabled = false
+        // AppLifecycleObserverコールバックで実装済み
         XCTAssertNotNil(lifecycleObserver)
     }
 }

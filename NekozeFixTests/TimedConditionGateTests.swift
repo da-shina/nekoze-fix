@@ -4,93 +4,93 @@ import XCTest
 final class TimedConditionGateTests: XCTestCase {
 
     func test_tick_while_conditionTrue_accumulatesTime() {
-        // Given: a gate requiring 3.0 seconds
+        // 前提: 3.0秒必要なゲート
         var gate = TimedConditionGate(requiredDuration: 3.0)
 
-        // When: tick with condition true for 2.5 seconds (using actual deltaTime)
-        let deltaTime: TimeInterval = 1.0 / 60.0  // ~60fps
-        for _ in 0..<150 {  // 150 frames = 2.5 seconds
+        // 手順: 条件がtrueで2.5秒間tick（実際のdeltaTimeを使用）
+        let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
+        for _ in 0..<150 {  // 150フレーム = 2.5秒
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
-        // Then: should not have fired yet (2.5s < 3.0s)
+        // 検証: まだ発火していない（2.5秒 < 3.0秒）
         XCTAssertFalse(gate.tick(isConditionMet: true, deltaTime: deltaTime))
     }
 
     func test_tick_while_conditionFalse_resetsAccumulator() {
-        // Given: a gate requiring 3.0 seconds, partially accumulated
+        // 前提: 3.0秒必要なゲート、部分的に蓄積済み
         var gate = TimedConditionGate(requiredDuration: 3.0)
-        gate.accumulated = 1.5  // Simulate 1.5 seconds accumulated
+        gate.accumulated = 1.5  // 1.5秒蓄積をシミュレート
 
-        // When: condition becomes false
+        // 手順: 条件がfalseになる
         gate.tick(isConditionMet: false, deltaTime: 0.0)
 
-        // Then: accumulator should be reset to 0
+        // 検証: アキュムレータが0にリセットされる
         XCTAssertEqual(gate.accumulated, 0.0)
         XCTAssertFalse(gate.isFired)
     }
 
     func test_tick_firesOnceWhenDurationReached() {
-        // Given: a gate requiring 2.0 seconds
+        // 前提: 2.0秒必要なゲート
         var gate = TimedConditionGate(requiredDuration: 2.0)
-        let deltaTime: TimeInterval = 1.0 / 60.0  // ~60fps
+        let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
 
-        // When: tick with condition true for 2.0 seconds
-        for _ in 0..<120 {  // 120 frames = 2.0 seconds
+        // 手順: 条件がtrueで2.0秒間tick
+        for _ in 0..<120 {  // 120フレーム = 2.0秒
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
-        // Then: should have fired
+        // 検証: 発火しているはず
         XCTAssertTrue(gate.isFired)
-        // Subsequent ticks should return false (already fired)
+        // 後続のtickはfalseを返す（すでに発火済み）
         XCTAssertFalse(gate.tick(isConditionMet: true, deltaTime: deltaTime))
     }
 
     func test_tick_falseResetsImmediately() {
-        // Given: a gate requiring 5.0 seconds, accumulated time 4.0 seconds
+        // 前提: 5.0秒必要なゲート、蓄積時間4.0秒
         var gate = TimedConditionGate(requiredDuration: 5.0)
         gate.accumulated = 4.0
 
-        // When: condition becomes false
+        // 手順: 条件がfalseになる
         gate.tick(isConditionMet: false, deltaTime: 0.0)
 
-        // Then: accumulator should reset immediately
+        // 検証: アキュムレータが即座にリセット
         XCTAssertEqual(gate.accumulated, 0.0)
         XCTAssertFalse(gate.isFired)
     }
 
     func test_tick_trueAfterReset_shouldStartAccumulatingAgain() {
-        // Given: gate with 3.0s requirement
+        // 前提: 3.0秒要件のゲート
         var gate = TimedConditionGate(requiredDuration: 3.0)
-        let deltaTime: TimeInterval = 1.0 / 60.0  // ~60fps
+        let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
 
-        // When: condition true for 1.5 seconds
+        // 手順: 条件が1.5秒間true
         for _ in 0..<90 {
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
-        // Then: should not have fired yet (1.5s < 3.0s)
+        // 検証: まだ発火していない（1.5秒 < 3.0秒）
         XCTAssertFalse(gate.isFired)
 
-        // When: condition becomes false then true again
+        // 手順: 条件がfalseになり、再びtrueになる
         gate.tick(isConditionMet: false, deltaTime: 0.0)
-        for _ in 0..<180 {  // 180 frames = 3.0 seconds
+        for _ in 0..<180 {  // 180フレーム = 3.0秒
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
-        // Then: should have fired
+        // 検証: 発火しているはず
         XCTAssertTrue(gate.isFired)
     }
 
     func test_tick_usesActualDeltaTime() {
-        // Given: a gate requiring 1.0 second
+        // 前提: 1.0秒必要なゲート
         var gate = TimedConditionGate(requiredDuration: 1.0)
 
-        // When: tick with large deltaTime (simulating slow frame rate)
+        // 手順: 大きなdeltaTimeでtick（フレームレートが遅い場合をシミュレート）
         gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
         gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
 
-        // Then: should have fired (1.0s >= 1.0s)
+        // 検証: 発火しているはず（1.0秒 >= 1.0秒）
         XCTAssertTrue(gate.isFired)
     }
 }

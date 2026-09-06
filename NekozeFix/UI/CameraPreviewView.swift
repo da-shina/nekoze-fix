@@ -1,11 +1,11 @@
 import SwiftUI
 import AVFoundation
 
-/// UI layer: AVCaptureVideoPreviewLayer SwiftUI wrapper.
-/// See design.md "UI Components" - CameraPreviewView.
+/// UI レイヤー: AVCaptureVideoPreviewLayer SwiftUI ラッパー。
+/// design.md の "UI Components" - CameraPreviewView を参照。
 
 struct CameraPreviewView: UIViewRepresentable {
-    // MARK: - Properties
+    // MARK: - プロパティ
 
     let session: AVCaptureSession
 
@@ -26,19 +26,19 @@ struct CameraPreviewView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        // Update preview layer frame if needed
+        // 必要に応じてプレビューレイヤーのフレームを更新
         if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
             previewLayer.frame = uiView.bounds
         }
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct CameraPreviewView_Previews: PreviewProvider {
     static var previews: some View {
         CameraPreviewView(session: AVCaptureSession())
             .frame(width: 300, height: 400)
-            .previewDisplayName("Camera Preview")
+            .previewDisplayName("カメラプレビュー")
     }
 }

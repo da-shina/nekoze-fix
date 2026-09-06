@@ -1,7 +1,7 @@
 import Foundation
 
-// Types layer: shared value objects and enums.
-// See design.md "Types" section for full contracts.
+// Types レイヤー: 共有される値オブジェクトと列挙型。
+// 完全な契約については design.md の "Types" セクションを参照。
 
 enum CameraAuthorization {
     case notDetermined
@@ -69,6 +69,6 @@ struct SessionSnapshot: Equatable {
     var isMonitoringEnabled: Bool
 }
 
-/// Minimum confidence threshold for keypoint inclusion in analysis.
-// Design spec: confidence < 0.5 → exclude from slouch detection.
+/// 解析に含めるキーポイントの最小信頼度閾値。
+// 設計仕様: confidence < 0.5 → 前傾検出から除外。
 let minimumKeypointConfidence: Double = 0.5

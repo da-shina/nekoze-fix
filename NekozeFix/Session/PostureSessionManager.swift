@@ -1,91 +1,91 @@
 import SwiftUI
 import Combine
 
-/// Session layer: posture monitoring session state machine.
-/// See design.md "PostureSessionManager" section.
+/// セッション層: 姿勢監視セッションの状態マシン。
+/// design.md "PostureSessionManager" セクション参照。
 
 @MainActor
 final class PostureSessionManager: ObservableObject {
-    // MARK: - Published Properties
+    // MARK: - 公開プロパティ
 
     @Published private(set) var snapshot: SessionSnapshot
 
-    // MARK: - Private Properties
+    // MARK: - プライベートプロパティ
 
     private var cancellables = Set<AnyCancellable>()
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
-    /// Initializes with a default snapshot
+    /// デフォルトのスナップショットで初期化する
     init() {
         self.snapshot = SessionSnapshot()
     }
 
-    // MARK: - Public Methods
+    // MARK: - 公開メソッド
 
-    /// Transitions to calibrating phase
+    /// キャリブレーションフェーズに遷移する
     func startCalibration() {
         snapshot.phase = .calibrating
     }
 
-    /// Recalibrates from idle
+    /// アイドル状態から再キャリブレーションする
     func recalibrate() {
         snapshot.phase = .calibrating
     }
 
-    /// Starts posture monitoring
+    /// 姿勢監視を開始する
     func startMonitoring() {
         snapshot.phase = .monitoring
         snapshot.isDimmed = false
         snapshot.isRotating = false
-        // Reset gates when starting monitoring
+        // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
     }
 
-    /// Stops posture monitoring
+    /// 姿勢監視を停止する
     func stopMonitoring() {
         snapshot.phase = .idle
         snapshot.isDimmed = false
         snapshot.isRotating = false
     }
 
-    /// Enters dim mode (black screen with wake lock)
+    /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
     func enterDimMode() {
         snapshot.isDimmed = true
     }
 
-    /// Exits dim mode
+    /// ディムモードを終了する
     func exitDimMode() {
         snapshot.isDimmed = false
     }
 
-    /// Updates sensitivity setting
+    /// 感度設定を更新する
     func updateSensitivity(_ value: Double) {
         snapshot.sensitivity = max(0.0, min(1.0, value))
     }
 
-    /// Updates displayed posture state
+    /// 表示される姿勢状態を更新する
     func updatePosture(_ posture: DisplayedPosture) {
         snapshot.displayedPosture = posture
     }
 
-    /// Updates person detection state
+    /// 人検出状態を更新する
     func updatePersonDetected(_ detected: Bool) {
         snapshot.isPersonDetected = detected
     }
 
-    /// Updates phase (for external state machine control)
+    /// フェーズを更新する（外部ステートマシン制御用）
     func updatePhase(_ phase: SessionPhase) {
         snapshot.phase = phase
     }
 
-    /// Updates monitoring enabled flag
+    /// 監視有効フラグを更新する
     func updateMonitoringEnabled(_ enabled: Bool) {
         snapshot.isMonitoringEnabled = enabled
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct PostureSessionManager_Previews: PreviewProvider {
     static var previews: some View {

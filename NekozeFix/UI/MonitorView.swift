@@ -1,43 +1,43 @@
 import SwiftUI
 
-/// UI layer: monitoring display, dim mode, sensitivity control.
-/// See design.md "UI Components" - MonitorView.
+/// UI レイヤー: 監視表示、デイムモード、感度調整。
+/// design.md の "UI Components" - MonitorView を参照。
 
 struct MonitorView: View {
-    // MARK: - Environment
+    // MARK: - 環境
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
     @EnvironmentObject private var settingsStore: SettingsStore
 
-    // MARK: - State
+    // MARK: - 状態
 
     @State private var originalBrightness: CGFloat = UIScreen.main.brightness
 
-    // MARK: - Body
+    // MARK: - 本文
 
     var body: some View {
         ZStack {
-            // Main content
+            // メインコンテンツ
             VStack(spacing: 24) {
-                // Status display
+                // ステータス表示
                 statusView
 
                 Spacer()
 
-                // Posture indicator
+                // 姿勢インジケーター
                 postureIndicator
 
                 Spacer()
 
-                // Sensitivity slider
+                // 感度スライダー
                 sensitivitySlider
 
-                // Control buttons
+                // コントロールボタン
                 controlButtons
             }
             .padding()
 
-            // Dim mode overlay
+            // デイムモードオーバーレイ
             if sessionManager.snapshot.isDimmed {
                 dimModeOverlay
             }
@@ -45,7 +45,7 @@ struct MonitorView: View {
         .background(Color(.systemBackground))
     }
 
-    // MARK: - Subviews
+    // MARK: - サブビュー
 
     private var statusView: some View {
         HStack {
@@ -100,7 +100,7 @@ struct MonitorView: View {
 
     private var controlButtons: some View {
         HStack(spacing: 16) {
-            // Stop monitoring button
+            // 監視停止ボタン
             Button(action: stopMonitoring) {
                 Label("停止", systemImage: "stop.fill")
                     .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct MonitorView: View {
             }
             .buttonStyle(.borderless)
 
-            // Dim mode button
+            // デイムモードボタン
             Button(action: toggleDimMode) {
                 Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
                     .frame(maxWidth: .infinity)
@@ -141,7 +141,7 @@ struct MonitorView: View {
             )
     }
 
-    // MARK: - Computed Properties
+    // MARK: - 計算プロパティ
 
     private var statusIcon: String {
         switch sessionManager.snapshot.phase {
@@ -202,7 +202,7 @@ struct MonitorView: View {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - アクション
 
     private func stopMonitoring() {
         sessionManager.stopMonitoring()
@@ -230,7 +230,7 @@ struct MonitorView: View {
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct MonitorView_Previews: PreviewProvider {
     static var previews: some View {
@@ -238,7 +238,7 @@ struct MonitorView_Previews: PreviewProvider {
             MonitorView()
                 .environmentObject(PostureSessionManager())
                 .environmentObject(SettingsStore())
-                .previewDisplayName("Monitor - Good Posture")
+                .previewDisplayName("モニター - 良好")
 
             MonitorView()
                 .environmentObject({
@@ -247,7 +247,7 @@ struct MonitorView_Previews: PreviewProvider {
                     return manager
                 }())
                 .environmentObject(SettingsStore())
-                .previewDisplayName("Monitor - Slouch Detected")
+                .previewDisplayName("モニター - 猫背検出")
         }
     }
 }

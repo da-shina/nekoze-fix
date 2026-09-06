@@ -1,28 +1,28 @@
 import AVFoundation
 import UIKit
 
-/// Front camera session management and permissions.
+/// フロントカメラのセッション管理とパーミッション。
 ///
-/// Manages AVCaptureSession with `.high` preset (720p),
-/// serial capture queue, and async authorization.
+/// `.high` プリセット (720p)、シリアルキャプチャキュー、
+/// 非同期認証による AVCaptureSession の管理。
 ///
-/// Design ref: design.md "CameraSessionManager" section.
+/// 設計参照: design.md の "CameraSessionManager" セクション。
 final class CameraSessionManager: NSObject, ObservableObject {
-    // MARK: - Published Properties
+    // MARK: - 公開プロパティ
 
     @Published private(set) var authorization: CameraAuthorization = .notDetermined
 
-    // MARK: - Public Properties
+    // MARK: - パブリックプロパティ
 
     let captureSession = AVCaptureSession()
 
-    // MARK: - Private Properties
+    // MARK: - プライベートプロパティ
 
     private let sessionQueue = DispatchQueue(label: "com.nekozefix.camera.session")
     private var videoOutput: AVCaptureVideoDataOutput?
     private var sampleBufferDelegate: AVCaptureVideoDataOutputSampleBufferDelegate?
 
-    // MARK: - Authorization
+    // MARK: - 認証
 
     func requestAuthorization() async -> CameraAuthorization {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -50,7 +50,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Session Management
+    // MARK: - セッション管理
 
     func start() async throws {
         guard authorization == .authorized else {
@@ -92,7 +92,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Sample Buffer Delegate
+    // MARK: - サンプルバッファデリゲート
 
     func setSampleBufferDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
         sessionQueue.async { [weak self] in
@@ -100,7 +100,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     private func configureSession() throws {
         captureSession.beginConfiguration()
@@ -108,10 +108,10 @@ final class CameraSessionManager: NSObject, ObservableObject {
 
         captureSession.sessionPreset = .high  // 720p
 
-        // Remove existing inputs
+        // 既存の入力を削除
         captureSession.inputs.forEach { captureSession.removeInput($0) }
 
-        // Add front camera
+        // フロントカメラを追加
         guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
             throw CameraError.cameraNotAvailable
         }
@@ -127,7 +127,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
             throw CameraError.sessionConfigurationFailed
         }
 
-        // Configure video output
+        // ビデオ出力の設定
         let output = AVCaptureVideoDataOutput()
         output.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -135,19 +135,19 @@ final class CameraSessionManager: NSObject, ObservableObject {
         output.alwaysDiscardsLateVideoFrames = true
         output.setSampleBufferDelegate(sampleBufferDelegate, queue: sessionQueue)
 
-        // Remove existing outputs
+        // 既存の出力を削除
         captureSession.outputs.forEach { captureSession.removeOutput($0) }
 
         if captureSession.canAddOutput(output) {
             captureSession.addOutput(output)
             self.videoOutput = output
 
-            // Set video orientation to portrait
+            // ビデオ向きをポートレートに設定
             if let connection = output.connection(with: .video) {
                 if connection.isVideoOrientationSupported {
                     connection.videoOrientation = .portrait
                 }
-                // Mirror front camera
+                // フロントカメラのミラー処理
                 if connection.isVideoMirroringSupported {
                     connection.isVideoMirrored = true
                 }
@@ -158,7 +158,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
     }
 }
 
-// MARK: - Errors
+// MARK: - エラー
 
 enum CameraError: LocalizedError {
     case notAuthorized
@@ -168,11 +168,11 @@ enum CameraError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAuthorized:
-            return "Camera not authorized"
+            return "カメラが許可されていません"
         case .cameraNotAvailable:
-            return "Camera not available"
+            return "カメラが利用できません"
         case .sessionConfigurationFailed:
-            return "Failed to configure camera session"
+            return "カメラセッションの構成に失敗しました"
         }
     }
 }

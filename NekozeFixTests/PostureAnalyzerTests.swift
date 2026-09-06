@@ -16,7 +16,7 @@ final class PostureAnalyzerTests: XCTestCase {
     }
 
     func testNearSideSelection_LeftShoulderSmallerX() {
-        // Given: left shoulder x < right shoulder x
+        // 前提: 左肩のx座標 < 右肩のx座標
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 100, y: 200, confidence: 0.9),
@@ -25,17 +25,17 @@ final class PostureAnalyzerTests: XCTestCase {
             rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.9)
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.farSideDetected, true)
-        XCTAssertEqual(verdict, .good) // angle should be small
+        XCTAssertEqual(verdict, .good) // 角度は小さいはず
     }
 
     func testNearSideSelection_RightShoulderSmallerX() {
-        // Given: right shoulder x < left shoulder x
+        // 前提: 右肩のx座標 < 左肩のx座標
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 250, y: 200, confidence: 0.9),
@@ -44,87 +44,87 @@ final class PostureAnalyzerTests: XCTestCase {
             rightShoulder: Keypoint(x: 150, y: 250, confidence: 0.9)
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertEqual(sample?.nearSide, .right)
         XCTAssertEqual(sample?.farSideDetected, true)
     }
 
     func testAngleCalculation_Acute0to90Degrees() {
-        // Given: create a frame with known angle
-        // shoulder at (100, 200), ear at (100, 100) -> straight up, 0 degrees
+        // 前提: 角度が既知のフレームを作成
+        // shoulder at (100, 200), ear at (100, 100) -> 真上、0度
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 100, y: 100, confidence: 0.9),
-            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // invalid
+            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // 無効
             leftShoulder: Keypoint(x: 100, y: 200, confidence: 0.9),
-            rightShoulder: Keypoint(x: 300, y: 200, confidence: 0.0)  // invalid
+            rightShoulder: Keypoint(x: 300, y: 200, confidence: 0.0)  // 無効
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees, 0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
     }
 
     func testSlouchDetection_WhenAngleExceedsThreshold() {
-        // Given: reference angle 0 degrees, current angle 15 degrees, threshold 10 degrees
-        // Create frame where ear is to the right of shoulder creating angle
+        // 前提: リファレンス角度0度、現在の角度15度、しきい値10度
+        // 耳が肩より右にあるフレームを作成して角度を作る
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 115, y: 190, confidence: 0.9), // creates angle
-            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // invalid
+            leftEar: Keypoint(x: 115, y: 190, confidence: 0.9), // 角度を作る
+            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // 無効
             leftShoulder: Keypoint(x: 100, y: 200, confidence: 0.9),
-            rightShoulder: Keypoint(x: 300, y: 200, confidence: 0.0)  // invalid
+            rightShoulder: Keypoint(x: 300, y: 200, confidence: 0.0)  // 無効
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertGreaterThan(sample!.nearAngleDegrees, 10)
         XCTAssertEqual(verdict, .slouchCandidate)
     }
 
     func testInsufficientKeypoints_ReturnsNilSample() {
-        // Given: no valid keypoints
+        // 前提: 有効なキーがない
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 100, y: 200, confidence: 0.4), // below threshold
+            leftEar: Keypoint(x: 100, y: 200, confidence: 0.4), // しきい値以下
             rightEar: Keypoint(x: 300, y: 200, confidence: 0.4),
             leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.4),
             rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.4)
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertNil(sample)
         XCTAssertEqual(verdict, .insufficientKeypoints)
     }
 
     func testOneSideDetection_TreatsDetectedSideAsNear() {
-        // Given: only left side valid
+        // 前提: 左側のみ有効
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 100, y: 200, confidence: 0.9),
-            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // invalid
+            rightEar: Keypoint(x: 300, y: 200, confidence: 0.0), // 無効
             leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.9),
-            rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.0)  // invalid
+            rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.0)  // 無効
         )
 
-        // When
+        // 手順
         let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // Then
+        // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.farSideDetected, false) // far side not detected
+        XCTAssertEqual(sample?.farSideDetected, false) // far側未検出
     }
 }

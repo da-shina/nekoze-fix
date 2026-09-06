@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// UI layer: camera permission prompt and settings guidance UI.
-/// See design.md "UI Components" - PermissionView.
+/// UI レイヤー: カメラ許可プロンプトと設定ガイダンスUI。
+/// design.md の "UI Components" - PermissionView を参照。
 
 struct PermissionView: View {
-    // MARK: - Environment
+    // MARK: - 環境
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
 
-    // MARK: - Body
+    // MARK: - 本文
 
     var body: some View {
         VStack(spacing: 24) {
-            // App icon/title area
+            // アプリアイコン/タイトルエリア
             VStack(spacing: 12) {
                 Image(systemName: "camera.fill")
                     .font(.system(size: 64))
@@ -30,7 +30,7 @@ struct PermissionView: View {
 
             Spacer()
 
-            // Permission state content
+            // 許可状態に応じたコンテンツ
             if sessionManager.snapshot.phase == .permissionDenied {
                 deniedContent
             } else {
@@ -43,7 +43,7 @@ struct PermissionView: View {
         .background(Color(.systemBackground))
     }
 
-    // MARK: - Subviews
+    // MARK: - サブビュー
 
     private var requestingContent: some View {
         VStack(spacing: 16) {
@@ -92,11 +92,11 @@ struct PermissionView: View {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - アクション
 
     private func requestAuthorization() {
-        // CameraSessionManager handles actual authorization request
-        // RootView will call bootstrap() again
+        // CameraSessionManager が実際の認証リクエストを処理
+        // RootView が再度 bootstrap() を呼び出す
         sessionManager.updatePhase(.awaitingPermission)
     }
 
@@ -106,7 +106,7 @@ struct PermissionView: View {
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct PermissionView_Previews: PreviewProvider {
     static var previews: some View {
@@ -120,7 +120,7 @@ struct PermissionView_Previews: PreviewProvider {
                     manager.updatePhase(.permissionDenied)
                     return manager
                 }())
-                .previewDisplayName("Denied")
+                .previewDisplayName("拒否済み")
         }
     }
 }

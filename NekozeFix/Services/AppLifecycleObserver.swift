@@ -1,20 +1,20 @@
 import UIKit
 
-/// Services layer: app foreground/background lifecycle observation.
-/// See design.md "AppLifecycleObserver" section.
+/// サービス層: アプリのフォアグラウンド/バックグラウンドのライフサイクル監視。
+/// design.md の "AppLifecycleObserver" セクション参照。
 
 final class AppLifecycleObserver: ObservableObject {
-    // MARK: - Published Properties
+    // MARK: - 公開プロパティ
 
     @Published private(set) var isActive = true
 
-    // MARK: - Private Properties
+    // MARK: - プライベートプロパティ
 
     private let notificationCenter = NotificationCenter.default
     private var onBackground: (() -> Void)?
     private var onForeground: (() -> Void)?
 
-    // MARK: - Initialization
+    // MARK: - 初期化
 
     init() {
         startObserving()
@@ -24,9 +24,9 @@ final class AppLifecycleObserver: ObservableObject {
         stopObserving()
     }
 
-    // MARK: - Public Methods
+    // MARK: - パブリックメソッド
 
-    /// Starts observing app lifecycle events
+    /// アプリのライフサイクルイベントの監視を開始します
     func startObserving() {
         notificationCenter.addObserver(
             self,
@@ -42,7 +42,7 @@ final class AppLifecycleObserver: ObservableObject {
         )
     }
 
-    /// Stops observing app lifecycle events
+    /// アプリのライフサイクルイベントの監視を停止します
     func stopObserving() {
         notificationCenter.removeObserver(
             self,
@@ -56,19 +56,19 @@ final class AppLifecycleObserver: ObservableObject {
         )
     }
 
-    /// Sets the callback for background transitions
-    /// - Parameter callback: Closure to execute when app enters background
+    /// バックグラウンド遷移時のコールバックを設定します
+    /// - Parameter callback: アプリがバックグラウンドになった時に実行するクロージャ
     func onBackgroundTransition(_ callback: @escaping () -> Void) {
         onBackground = callback
     }
 
-    /// Sets the callback for foreground transitions
-    /// - Parameter callback: Closure to execute when app becomes active
+    /// フォアグラウンド遷移時のコールバックを設定します
+    /// - Parameter callback: アプリがアクティブになった時に実行するクロージャ
     func onForegroundTransition(_ callback: @escaping () -> Void) {
         onForeground = callback
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     @objc private func appDidChangeActive(_ notification: Notification) {
         let name = notification.name

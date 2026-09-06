@@ -3,7 +3,7 @@ import XCTest
 
 final class AlertPlayerTests: XCTestCase {
     var sut: AlertPlayer!
-    let invalidURL = URL(fileURLWithPath: "/dev/null") // Not a valid audio file
+    let invalidURL = URL(fileURLWithPath: "/dev/null") // 有効な音声ファイルではない
 
     override func setUp() {
         super.setUp()
@@ -16,38 +16,38 @@ final class AlertPlayerTests: XCTestCase {
     }
 
     func testInitWithInvalidURL_configureSessionThrows() {
-        // Given: AlertPlayer initialized with invalid URL
-        // When: configureSession is called
-        // Then: it should throw an error
+        // 前提: 無効なURLで初期化されたAlertPlayer
+        // 手順: configureSessionが呼ばれる
+        // 検証: エラーが発生するはず
         XCTAssertThrowsError(try sut.configureSession()) { error in
             XCTAssertTrue(error is NSError)
         }
     }
 
     func testPlayOnceWithNilPlayer_doesNotCrash() {
-        // Given: AlertPlayer with nil audioPlayer (due to invalid URL)
-        // When: playOnce is called
-        // Then: should not crash
+        // 前提: audioPlayerがnilのAlertPlayer（無効なURLのため）
+        // 手順: playOnceが呼ばれる
+        // 検証: クラッシュしないはず
         XCTAssertNoThrow(sut.playOnce())
     }
 
     func testStartRepeatingWithNilPlayer_doesNotCrash() {
-        // Given: AlertPlayer with nil audioPlayer
-        // When: startRepeating is called
-        // Then: should not crash
+        // 前提: audioPlayerがnilのAlertPlayer
+        // 手順: startRepeatingが呼ばれる
+        // 検証: クラッシュしないはず
         XCTAssertNoThrow(sut.startRepeating())
     }
 
     func testStopWithNilPlayer_doesNotCrash() {
-        // Given: AlertPlayer with nil audioPlayer
-        // When: stop is called
-        // Then: should not crash
+        // 前提: audioPlayerがnilのAlertPlayer
+        // 手順: stopが呼ばれる
+        // 検証: クラッシュしないはず
         XCTAssertNoThrow(sut.stop())
     }
 
     func testIsPlayingWithNilPlayer_returnsFalse() {
-        // Given: AlertPlayer with nil audioPlayer
-        // Then: isPlaying should be false
+        // 前提: audioPlayerがnilのAlertPlayer
+        // 検証: isPlayingはfalseであるはず
         XCTAssertFalse(sut.isPlaying)
     }
 }

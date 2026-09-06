@@ -1,15 +1,15 @@
 import SwiftUI
 import Combine
 
-/// UI layer: calibration guidance, accumulation timer, person-missing message.
-/// See design.md "UI Components" - CalibrationView.
+/// UI レイヤー: 校正ガイド、集約タイマー、人検出メッセージ。
+/// design.md の "UI Components" - CalibrationView を参照。
 
 struct CalibrationView: View {
-    // MARK: - Environment
+    // MARK: - 環境
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
 
-    // MARK: - State
+    // MARK: - 状態
 
     @State private var timerRemaining = 3.0
     @State private var isPersonDetected = false
@@ -18,17 +18,17 @@ struct CalibrationView: View {
     @State private var cancellables = Set<AnyCancellable>()
     @State private var timer: Timer?
 
-    // MARK: - Body
+    // MARK: - 本文
 
     var body: some View {
         VStack(spacing: 32) {
-            // Timer display
+            // タイマー表示
             Text("\(Int(timerRemaining))秒")
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundColor(.primary)
 
-            // Status indicator
+            // ステータス表示
             HStack {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.green)
@@ -37,7 +37,7 @@ struct CalibrationView: View {
                     .foregroundColor(isPersonDetected ? .green : .red)
             }
 
-            // Message area
+            // メッセージエリア
             VStack(spacing: 16) {
                 if showingPersonMissing {
                     Text("人を検出できません\nもう一度姿勢を保持してください")
@@ -51,7 +51,7 @@ struct CalibrationView: View {
             }
             .frame(maxWidth: .infinity, alignment: .center)
 
-            // Action button
+            // アクションボタン
             Button(action: recalibrate) {
                 Text("再実行")
                     .font(.headline)
@@ -76,7 +76,7 @@ struct CalibrationView: View {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - プライベートメソッド
 
     private func setupTimer() {
         timer?.invalidate()
@@ -91,7 +91,7 @@ struct CalibrationView: View {
     }
 
     private func setupObservers() {
-        // Observe person detection state
+        // 人検出状態を監視
         sessionManager.$snapshot
             .map { $0.isPersonDetected }
             .sink { [weak self] detected in
@@ -112,12 +112,12 @@ struct CalibrationView: View {
     }
 }
 
-// MARK: - Preview
+// MARK: - プレビュー
 
 struct CalibrationView_Previews: PreviewProvider {
     static var previews: some View {
         CalibrationView()
             .environmentObject(PostureSessionManager())
-            .previewDisplayName("Calibration - Ready")
+            .previewDisplayName("校正 - 準備完了")
     }
 }
