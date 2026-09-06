@@ -16,7 +16,9 @@ final class PoseDetector {
     // MARK: - Initialization
 
     init() {
-        request.revision = VNDetectHumanBodyPoseRequestRevision3
+        // VNDetectHumanBodyPoseRequestRevision1 is available from iOS 14.0
+        // Use default revision for iOS 16.0+ compatibility
+        request.revision = VNDetectHumanBodyPoseRequestRevision1
     }
 
     // MARK: - Detection

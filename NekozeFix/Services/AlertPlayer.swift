@@ -62,12 +62,6 @@ final class AlertPlayer {
         repeatingTimer = nil
     }
 
-    /// Checks if an alert sound is currently playing
-    /// - Returns: true if sound is playing, false otherwise
-    var isPlaying: Bool {
-        return audioPlayer?.isPlaying ?? false
-    }
-
     // MARK: - Private Methods
 
     private func configureAudioSession() {

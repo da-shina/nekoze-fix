@@ -61,17 +61,23 @@ final class DeviceOrientationMonitor: ObservableObject {
         isRotating = true
 
         // Update current orientation
-        updateOrientation()
+        let orientationChanged = updateOrientation()
 
-        // Start 5-second timer to mark rotation as complete
-        rotationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.isRotating = false
+        // Start 5-second timer only when meaningful orientation changes occur
+        // (not for face-up/face-down which return early)
+        if orientationChanged {
+            rotationTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.isRotating = false
+                }
             }
+        } else {
+            // Face-up/face-down: rotation complete immediately
+            isRotating = false
         }
     }
 
-    private func updateOrientation() {
+    private func updateOrientation() -> Bool {
         let deviceOrientation = UIDevice.current.orientation
         let newOrientation: AVCaptureVideoOrientation
 
@@ -85,10 +91,11 @@ final class DeviceOrientationMonitor: ObservableObject {
         case .landscapeRight:
             newOrientation = .landscapeLeft
         default:
-            // For unknown orientations (face up/down), keep current
-            return
+            // For unknown orientations (face up/down), keep current and signal no change
+            return false
         }
 
         currentVideoOrientation = newOrientation
+        return true
     }
 }

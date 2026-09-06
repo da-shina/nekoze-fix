@@ -11,7 +11,6 @@ struct MonitorView: View {
 
     // MARK: - State
 
-    @State private var showingDimMode = false
     @State private var originalBrightness: CGFloat = UIScreen.main.brightness
 
     // MARK: - Body
@@ -39,7 +38,7 @@ struct MonitorView: View {
             .padding()
 
             // Dim mode overlay
-            if showingDimMode {
+            if sessionManager.snapshot.isDimmed {
                 dimModeOverlay
             }
         }
@@ -114,10 +113,10 @@ struct MonitorView: View {
 
             // Dim mode button
             Button(action: toggleDimMode) {
-                Label(showingDimMode ? "解除" : "暗転", systemImage: "moon.fill")
+                Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(showingDimMode ? Color.orange : Color.blue)
+                    .background(sessionManager.snapshot.isDimmed ? Color.orange : Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(12)
             }
@@ -210,7 +209,7 @@ struct MonitorView: View {
     }
 
     private func toggleDimMode() {
-        if showingDimMode {
+        if sessionManager.snapshot.isDimmed {
             exitDimMode()
         } else {
             enterDimMode()
@@ -221,14 +220,12 @@ struct MonitorView: View {
         originalBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = 0.0
         UIApplication.shared.isIdleTimerDisabled = true
-        showingDimMode = true
         sessionManager.enterDimMode()
     }
 
     private func exitDimMode() {
         UIScreen.main.brightness = originalBrightness
         UIApplication.shared.isIdleTimerDisabled = false
-        showingDimMode = false
         sessionManager.exitDimMode()
     }
 }

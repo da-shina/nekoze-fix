@@ -16,12 +16,15 @@ struct TimedConditionGate: Equatable {
         self.requiredDuration = requiredDuration
     }
 
-    /// Call each frame with the current condition state and timestamp.
+    /// Call each frame with the current condition state and elapsed time delta.
+    /// - Parameters:
+    ///   - isConditionMet: whether the gate condition is currently satisfied
+    ///   - deltaTime: time elapsed since the last tick
     /// - Returns: `true` once when the accumulated time first reaches `requiredDuration`.
-    mutating func tick(isConditionMet: Bool, now: TimeInterval) -> Bool {
+    mutating func tick(isConditionMet: Bool, deltaTime: TimeInterval) -> Bool {
         if isConditionMet {
             if !isFired {
-                accumulated += 1.0 / 60.0  // Assume ~60fps frame rate
+                accumulated += deltaTime
                 if accumulated >= requiredDuration {
                     isFired = true
                     return true
