@@ -9,7 +9,7 @@
   - Observable completion: project builds with no errors
   - _Requirements: 1.1, 3.1_
 
-- [ ] 1.2 Test infrastructure setup
+- [x] 1.2 Test infrastructure setup
   - Create `NekozeFixTests` target with XCTest
   - Configure testable imports for Domain layer unit tests
   - Observable completion: test target runs and reports 0 tests passing
@@ -17,7 +17,7 @@
 
 ## 2. Core: Domain layer (pure functions)
 
-- [ ] 2.1 (P) PostureAnalyzer — angle calculation and near-side selection
+- [x] 2.1 (P) PostureAnalyzer — angle calculation and near-side selection
   - Implement concrete `PostureAnalyzer` struct (not protocol): `analyze(frame:referenceNearAngleDegrees:slouchDeltaThresholdDegrees:)`
   - Near-side selection by shoulder x-coordinate (left < right → .left)
   - Angle calculation: vector from shoulder to ear vs vertical (0,1), acute 0-90 degrees
@@ -28,7 +28,7 @@
   - _Requirements: 3.5, 4.1, 4.5, 4.6_
   - _Depends: 1.2_
 
-- [ ] 2.2 (P) TimedConditionGate — N-second continuous condition gate
+- [x] 2.2 (P) TimedConditionGate — N-second continuous condition gate
   - Implement concrete `TimedConditionGate` struct with `requiredDuration`, `tick(isConditionMet:now:)`, `reset()`
   - `isConditionMet == true` only accumulates; false resets to zero immediately
   - Calibration instance: 3.0s required; Slouch instance: 5.0s required
@@ -37,7 +37,7 @@
   - _Requirements: 2.3, 2.4, 4.2, 4.3_
   - _Depends: 1.2_
 
-- [ ] 2.3 (P) CalibrationLogic — stable reference posture acquisition
+- [x] 2.3 (P) CalibrationLogic — stable reference posture acquisition
   - Implement concrete `CalibrationLogic` struct with `start()`, `ingest(sample:presence:now:)`, `CalibrationProgress`
   - Accumulate only when `personDetected` and `AngleSample` is valid
   - Posture instability reset: angle delta > 5 degrees or `personMissing` resets accumulation
