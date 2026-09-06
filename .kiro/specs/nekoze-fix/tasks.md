@@ -124,7 +124,7 @@
 
 ## 5. Integration: UI layer
 
-- [ ] 5.1 (P) RootView — phase-based screen switching
+- [x] 5.1 (P) RootView — phase-based screen switching
   - Switch between Permission / Calibration / Monitor views based on `snapshot.phase`
   - Launch flow: bootstrap → permission → calibration → monitoring (3 steps max)
   - Observable completion: app launches and shows PermissionView on first run
@@ -132,7 +132,7 @@
   - _Requirements: 1.1, 1.2, 10.1_
   - _Depends: 4.1_
 
-- [ ] 5.2 (P) PermissionView — camera authorization UI
+- [x] 5.2 (P) PermissionView — camera authorization UI
   - First launch triggers system permission dialog
   - Denied → settings guide + "retry" button (calls `requestAuthorization()`)
   - Observable completion: denied state shows settings guide with retry button
@@ -140,7 +140,7 @@
   - _Requirements: 1.1, 1.2, Q7_
   - _Depends: 4.1_
 
-- [ ] 5.3 (P) CalibrationView — calibration guidance and progress
+- [x] 5.3 (P) CalibrationView — calibration guidance and progress
   - 3-second hold instruction; detection status; accumulation timer display
   - Person missing message; recalibrate button
   - Observable completion: calibration completes after 3s stable, shows completion
@@ -148,7 +148,7 @@
   - _Requirements: 2.1-2.6_
   - _Depends: 4.1_
 
-- [ ] 5.4 (P) MonitorView — monitoring, dim mode, sensitivity control
+- [x] 5.4 (P) MonitorView — monitoring, dim mode, sensitivity control
   - Preview, good/slouch/personMissing display; start/stop buttons
   - Sensitivity slider; dim mode button (enterDimMode/exitDimMode)
   - Dim mode: black screen (brightness 0.0 + wake lock); tap to exit
@@ -157,7 +157,7 @@
   - _Requirements: 3.1-3.4, 4.4, 6.1-6.3, Q2, Q15_
   - _Depends: 4.1, 3.1, 3.3_
 
-- [ ] 5.5 (P) CameraPreviewView — AVCaptureVideoPreviewLayer SwiftUI wrapper
+- [x] 5.5 (P) CameraPreviewView — AVCaptureVideoPreviewLayer SwiftUI wrapper
   - `UIViewRepresentable` wrapping `AVCaptureVideoPreviewLayer`
   - Hidden when dimmed
   - Observable completion: preview visible during monitoring, hidden during dim mode
