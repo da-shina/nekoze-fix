@@ -175,14 +175,14 @@
 
 ## 7. Validation
 
-- [ ] 7.1 Performance verification
+- [x] 7.1 Performance verification
   - Measure keypoint processing >= 15fps with `.high` preset (NFR 8.1)
   - Measure notification latency <= 0.5s from confirmed slouch (NFR 8.2)
   - Observable completion: performance test results meet NFR targets
   - _Requirements: 8.1, 8.2_
   - _Depends: 6.1_
 
-- [ ] 7.2 Battery consumption verification (manual/measured)
+- [x] 7.2 Battery consumption verification (manual/measured)
   - 1-hour continuous monitoring <= 15% battery (NFR 9.1)
   - Dim mode consumption lower than normal mode (NFR 9.2)
   - Observable completion: measured battery consumption meets NFR 9.1/9.2
