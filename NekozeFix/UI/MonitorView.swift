@@ -1,2 +1,256 @@
-// UI layer: monitoring display, dim mode, sensitivity control.
-// See design.md "UI Components" - MonitorView.
+import SwiftUI
+
+/// UI layer: monitoring display, dim mode, sensitivity control.
+/// See design.md "UI Components" - MonitorView.
+
+struct MonitorView: View {
+    // MARK: - Environment
+
+    @EnvironmentObject private var sessionManager: PostureSessionManager
+    @EnvironmentObject private var settingsStore: SettingsStore
+
+    // MARK: - State
+
+    @State private var showingDimMode = false
+    @State private var originalBrightness: CGFloat = UIScreen.main.brightness
+
+    // MARK: - Body
+
+    var body: some View {
+        ZStack {
+            // Main content
+            VStack(spacing: 24) {
+                // Status display
+                statusView
+
+                Spacer()
+
+                // Posture indicator
+                postureIndicator
+
+                Spacer()
+
+                // Sensitivity slider
+                sensitivitySlider
+
+                // Control buttons
+                controlButtons
+            }
+            .padding()
+
+            // Dim mode overlay
+            if showingDimMode {
+                dimModeOverlay
+            }
+        }
+        .background(Color(.systemBackground))
+    }
+
+    // MARK: - Subviews
+
+    private var statusView: some View {
+        HStack {
+            Image(systemName: statusIcon)
+                .foregroundColor(statusColor)
+                .font(.title)
+
+            Text(statusText)
+                .font(.headline)
+                .foregroundColor(statusColor)
+        }
+    }
+
+    private var postureIndicator: some View {
+        VStack(spacing: 16) {
+            Image(systemName: postureIcon)
+                .font(.system(size: 80))
+                .foregroundColor(postureColor)
+                .animation(.easeInOut, value: sessionManager.snapshot.displayedPosture)
+
+            Text(postureText)
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(postureColor)
+        }
+    }
+
+    private var sensitivitySlider: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("感度")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Text("\(Int(settingsStore.sensitivity * 100))%")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            Slider(
+                value: $settingsStore.sensitivity,
+                in: 0...1,
+                step: 0.01
+            ) { _ in
+                sessionManager.updateSensitivity(settingsStore.sensitivity)
+            }
+        }
+        .padding(.horizontal)
+    }
+
+    private var controlButtons: some View {
+        HStack(spacing: 16) {
+            // Stop monitoring button
+            Button(action: stopMonitoring) {
+                Label("停止", systemImage: "stop.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .buttonStyle(.borderless)
+
+            // Dim mode button
+            Button(action: toggleDimMode) {
+                Label(showingDimMode ? "解除" : "暗転", systemImage: "moon.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(showingDimMode ? Color.orange : Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var dimModeOverlay: some View {
+        Color.black
+            .ignoresSafeArea()
+            .onTapGesture {
+                exitDimMode()
+            }
+            .overlay(
+                Text("タップして解除")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .background(Color.black.opacity(0.5))
+                    .cornerRadius(8)
+                    .opacity(0.8)
+            )
+    }
+
+    // MARK: - Computed Properties
+
+    private var statusIcon: String {
+        switch sessionManager.snapshot.phase {
+        case .monitoring:
+            return "antenna.radiowaves.left.and.right"
+        case .rotating:
+            return "arrow.triangle.2.circlepath"
+        default:
+            return "stop.circle"
+        }
+    }
+
+    private var statusColor: Color {
+        sessionManager.snapshot.phase == .monitoring ? .green : .orange
+    }
+
+    private var statusText: String {
+        switch sessionManager.snapshot.phase {
+        case .monitoring:
+            return "監視中"
+        case .rotating:
+            return "回転中..."
+        default:
+            return "停止中"
+        }
+    }
+
+    private var postureIcon: String {
+        switch sessionManager.snapshot.displayedPosture {
+        case .good:
+            return "checkmark.circle.fill"
+        case .slouch:
+            return "exclamationmark.triangle.fill"
+        case .personMissing:
+            return "person.slash.fill"
+        }
+    }
+
+    private var postureColor: Color {
+        switch sessionManager.snapshot.displayedPosture {
+        case .good:
+            return .green
+        case .slouch:
+            return .orange
+        case .personMissing:
+            return .red
+        }
+    }
+
+    private var postureText: String {
+        switch sessionManager.snapshot.displayedPosture {
+        case .good:
+            return "良好"
+        case .slouch:
+            return "猫背を検出"
+        case .personMissing:
+            return "人を検出できません"
+        }
+    }
+
+    // MARK: - Actions
+
+    private func stopMonitoring() {
+        sessionManager.stopMonitoring()
+    }
+
+    private func toggleDimMode() {
+        if showingDimMode {
+            exitDimMode()
+        } else {
+            enterDimMode()
+        }
+    }
+
+    private func enterDimMode() {
+        originalBrightness = UIScreen.main.brightness
+        UIScreen.main.brightness = 0.0
+        UIApplication.shared.isIdleTimerDisabled = true
+        showingDimMode = true
+        sessionManager.enterDimMode()
+    }
+
+    private func exitDimMode() {
+        UIScreen.main.brightness = originalBrightness
+        UIApplication.shared.isIdleTimerDisabled = false
+        showingDimMode = false
+        sessionManager.exitDimMode()
+    }
+}
+
+// MARK: - Preview
+
+struct MonitorView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            MonitorView()
+                .environmentObject(PostureSessionManager())
+                .environmentObject(SettingsStore())
+                .previewDisplayName("Monitor - Good Posture")
+
+            MonitorView()
+                .environmentObject({
+                    let manager = PostureSessionManager()
+                    manager.updatePosture(.slouch)
+                    return manager
+                }())
+                .environmentObject(SettingsStore())
+                .previewDisplayName("Monitor - Slouch Detected")
+        }
+    }
+}

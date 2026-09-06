@@ -1,2 +1,136 @@
-// UI layer: calibration guidance, accumulation timer, person-missing message.
-// See design.md "UI Components" - CalibrationView.
+import SwiftUI
+import Combine
+
+/// UI layer: calibration guidance, accumulation timer, person-missing message.
+/// See design.md "UI Components" - CalibrationView.
+
+struct CalibrationView: View {
+    // MARK: - Environment
+
+    @EnvironmentObject private var sessionManager: PostureSessionManager
+    @EnvironmentObject private var timedConditionGate: TimedConditionGate
+
+    // MARK: - State
+
+    @State private var timerRemaining = 3.0
+    @State private var isPersonDetected = false
+    @State private var showingPersonMissing = false
+    @State private var progressMessage = "3秒間姿勢を保持してください"
+    @State private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(spacing: 32) {
+            // Timer display
+            Text("\(Int(timerRemaining))秒")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+                .foregroundColor(.primary)
+
+            // Status indicator
+            HStack {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+
+                Text(isPersonDetected ? "検出中" : "検出失敗")
+                    .foregroundColor(isPersonDetected ? .green : .red)
+            }
+
+            // Message area
+            VStack(spacing: 16) {
+                if showingPersonMissing {
+                    Text("人を検出できません\nもう一度姿勢を保持してください")
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text(progressMessage)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+
+            // Action button
+            Button(action: recalibrate) {
+                Text("再実行")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.accentColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .navigationBarTitle("校正", displayMode: .inline)
+        .onAppear {
+            setupTimer()
+            setupObservers()
+        }
+        .onDisappear {
+            timerCancel()
+        }
+    }
+
+    // MARK: - Private Methods
+
+    private func setupTimer() {
+        timerRemaining = 3.0
+
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
+            if timerRemaining > 0 {
+                timerRemaining -= 0.5
+                if timerRemaining <= 0 {
+                    timerRemaining = 0
+                    timerInvalidate()
+                }
+            }
+        }
+    }
+
+    private func timerInvalidate() {
+        timerRemaining = 0
+    }
+
+    private func setupObservers() {
+        // Observe person detection state
+        sessionManager.$snapshot
+            .map { $0.isPersonDetected }
+            .sink { [weak self] detected in
+                self?.isPersonDetected = detected
+                self?.showingPersonMissing = !detected
+                self?.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
+            }
+            .store(in: &cancellables)
+
+        // Observe gate state
+        timedConditionGate.$isConditionMet
+            .sink { [weak self] isConditionMet in
+                self?.progressMessage = isConditionMet ? "姿勢を保持中..." : "姿勢を保持中..."
+            }
+            .store(in: &cancellables)
+    }
+
+    private func recalibrate() {
+        timerRemaining = 3.0
+        isPersonDetected = false
+        showingPersonMissing = false
+        progressMessage = "3秒間姿勢を保持してください"
+    }
+}
+
+// MARK: - Preview
+
+struct CalibrationView_Previews: PreviewProvider {
+    static var previews: some View {
+        Group {
+            CalibrationView()
+                .environmentObject(PostureSessionManager())
+                .environmentObject(TimedConditionGate(requiredDuration: 3.0))
+                .previewDisplayName("Calibration - Ready")
+        }
+    }
+}
