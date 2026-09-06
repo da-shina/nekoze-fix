@@ -46,7 +46,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 16.25, accuracy: 0.001)
     }
 
-    // MARK: - isMonitoringEnabled
+    // MARK: - 監視有効フラグ
 
     func testDefaultMonitoringEnabled_isFalse() {
         // 初回起動時はfalseであるべき
@@ -61,7 +61,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertFalse(sut.isMonitoringEnabled)
     }
 
-    // MARK: - Default Sensitivity
+    // MARK: - デフォルト感度
 
     func testDefaultSensitivity_isHalf() {
         // デフォルトの感度は0.5であるべき

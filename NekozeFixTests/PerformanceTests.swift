@@ -20,7 +20,7 @@ final class PerformanceTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - NFR 8.1: Keypoint Processing >= 15fps
+    // MARK: - NFR 8.1: キーポイント処理 >= 15fps
 
     /// 処理パイプラインが15fps支持的構造になっていることを検証
     /// このテストはコードパスがノンブロッキングでバックグラウンドキューを使用することを保証
@@ -46,7 +46,7 @@ final class PerformanceTests: XCTestCase {
         XCTAssertNotNil(sut)
     }
 
-    // MARK: - NFR 8.2: Notification Latency <= 0.5s
+    // MARK: - NFR 8.2: 通知レイテンシ <= 0.5秒
 
     /// AlertPlayerが即座再生用にサウンドをプリロードすることを検証
     func testAlertPlayerPreloadsSound() {
@@ -68,7 +68,7 @@ final class PerformanceTests: XCTestCase {
         XCTAssertLessThan(elapsed, 0.1)
     }
 
-    // MARK: - Battery Optimization (NFR 9.1, 9.2)
+    // MARK: - バッテリー最適化 (NFR 9.1, 9.2)
 
     /// ダイムモード消費電力を削減することを検証
     func testDimModeUsesBlackScreen() {
