@@ -13,59 +13,49 @@ final class PostureSessionManager: ObservableObject {
     // MARK: - Private Properties
 
     private var cancellables = Set<AnyCancellable>()
-    private var authorizationChecked = false
 
     // MARK: - Initialization
 
     /// Initializes with a default snapshot
     init() {
         self.snapshot = SessionSnapshot()
-        setupSubscriptions()
     }
 
     // MARK: - Public Methods
 
-    /// Bootstraps the session: checks camera authorization and prepares services
+    /// Bootstraps the session: checks camera authorization
     func bootstrap() async {
-        // Authorization check happens via CameraSessionManager
-        // This method exists for API compatibility with design
-        authorizationChecked = true
+        // Phase transitions handled externally via CameraSessionManager
     }
 
-    /// Starts the calibration process
+    /// Transitions to calibrating phase
     func startCalibration() {
         snapshot.phase = .calibrating
-        snapshot.calibrationProgress = .waitingForPerson
     }
 
-    /// Recalibrates (called from CalibrationView)
+    /// Recalibrates from idle
     func recalibrate() {
-        startCalibration()
+        snapshot.phase = .calibrating
     }
 
-    /// Starts monitoring posture
+    /// Starts posture monitoring
     func startMonitoring() {
         snapshot.phase = .monitoring
         snapshot.isDimmed = false
-        snapshot.isRotating = false
-        // Reset gates when starting monitoring
-        snapshot.slouchGate.reset()
     }
 
-    /// Stops monitoring posture
+    /// Stops posture monitoring
     func stopMonitoring() {
         snapshot.phase = .idle
         snapshot.isDimmed = false
-        snapshot.isRotating = false
     }
 
     /// Enters dim mode (black screen with wake lock)
     func enterDimMode() {
         snapshot.isDimmed = true
-        // Note: Actual brightness/wake lock handling done in MonitorView
     }
 
-    /// Exits dim mode (restore normal brightness)
+    /// Exits dim mode
     func exitDimMode() {
         snapshot.isDimmed = false
     }
@@ -75,10 +65,23 @@ final class PostureSessionManager: ObservableObject {
         snapshot.sensitivity = max(0.0, min(1.0, value))
     }
 
-    // MARK: - Private Methods
+    /// Updates displayed posture state
+    func updatePosture(_ posture: DisplayedPosture) {
+        snapshot.displayedPosture = posture
+    }
 
-    private func setupSubscriptions() {
-        // Subscribe to our own snapshot changes if needed
-        // For now, we rely on external components to update the snapshot
+    /// Updates person detection state
+    func updatePersonDetected(_ detected: Bool) {
+        snapshot.isPersonDetected = detected
+    }
+
+    /// Updates phase (for external state machine control)
+    func updatePhase(_ phase: SessionPhase) {
+        snapshot.phase = phase
+    }
+
+    /// Updates monitoring enabled flag
+    func updateMonitoringEnabled(_ enabled: Bool) {
+        snapshot.isMonitoringEnabled = enabled
     }
 }
