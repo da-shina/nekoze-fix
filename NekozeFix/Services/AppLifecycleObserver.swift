@@ -73,10 +73,10 @@ final class AppLifecycleObserver: ObservableObject {
     @objc private func appDidChangeActive(_ notification: Notification) {
         let name = notification.name
 
-        if name ==UIApplication.didEnterBackgroundNotification {
+        if name == UIApplication.didEnterBackgroundNotification {
             isActive = false
             onBackground?()
-        } else if name ==UIApplication.didBecomeActiveNotification {
+        } else if name == UIApplication.didBecomeActiveNotification {
             isActive = true
             onForeground?()
         }

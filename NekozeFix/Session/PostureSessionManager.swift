@@ -23,6 +23,11 @@ final class PostureSessionManager: ObservableObject {
 
     // MARK: - 公開メソッド
 
+    /// セッションの初期化を行う
+    func bootstrap() async {
+        // 初期化処理（現在のところ何もしない）
+    }
+
     /// キャリブレーションフェーズに遷移する
     func startCalibration() {
         snapshot.phase = .calibrating
@@ -82,13 +87,5 @@ final class PostureSessionManager: ObservableObject {
     /// 監視有効フラグを更新する
     func updateMonitoringEnabled(_ enabled: Bool) {
         snapshot.isMonitoringEnabled = enabled
-    }
-}
-
-// MARK: - プレビュー
-
-struct PostureSessionManager_Previews: PreviewProvider {
-    static var previews: some View {
-        PostureSessionManager()
     }
 }

@@ -67,15 +67,15 @@ enum CalibrationProgress: Equatable {
 }
 
 struct SessionSnapshot: Equatable {
-    var phase: SessionPhase
-    var displayedPosture: DisplayedPosture
-    var isDimmed: Bool
-    var isRotating: Bool
-    var isPersonDetected: Bool
-    var sensitivity: Double
-    var isMonitoringEnabled: Bool
-    var slouchGate: TimedConditionGate
-    var calibrationProgress: CalibrationProgress
+    var phase: SessionPhase = .idle
+    var displayedPosture: DisplayedPosture = .good
+    var isDimmed: Bool = false
+    var isRotating: Bool = false
+    var isPersonDetected: Bool = false
+    var sensitivity: Double = 0.5
+    var isMonitoringEnabled: Bool = false
+    var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
+    var calibrationProgress: CalibrationProgress = .waitingForPerson
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。

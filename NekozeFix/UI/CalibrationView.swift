@@ -82,8 +82,7 @@ struct CalibrationView: View {
         timer?.invalidate()
         timerRemaining = 3.0
 
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             if self.timerRemaining > 0 {
                 self.timerRemaining -= 0.5
             }
@@ -94,10 +93,10 @@ struct CalibrationView: View {
         // 人検出状態を監視
         sessionManager.$snapshot
             .map { $0.isPersonDetected }
-            .sink { [weak self] detected in
-                self?.isPersonDetected = detected
-                self?.showingPersonMissing = !detected
-                self?.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
+            .sink { [self] detected in
+                self.isPersonDetected = detected
+                self.showingPersonMissing = !detected
+                self.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
             }
             .store(in: &cancellables)
     }

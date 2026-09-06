@@ -82,7 +82,7 @@ struct CalibrationLogic {
         if isAccumulating && accumulatedAngles.count >= 180 { // 3 seconds * 60 fps
             // 蓄積された角度の平均を計算
             let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
-            let completedProgress = .completed(referenceNearAngleDegrees: average)
+            let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average)
 
             // 完了後に状態をリセット
             accumulatedAngles = []
@@ -94,7 +94,7 @@ struct CalibrationLogic {
         // 蓄積中だがまだ完了していない場合
         if isAccumulating {
             let elapsed = now - lastTime
-            return .accumulating(elapsed: elapsed)
+            return CalibrationProgress.accumulating(elapsed: elapsed)
         }
 
         // デフォルト状態

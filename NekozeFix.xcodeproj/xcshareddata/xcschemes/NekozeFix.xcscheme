@@ -35,7 +35,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A5000001"
-               BuildableName = "NekozeFixTests.xctest"
+               BuildableName = "NekozeFixTests"
                BlueprintName = "NekozeFixTests"
                ReferencedContainer = "container:NekozeFix.xcodeproj">
             </BuildableReference>

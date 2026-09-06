@@ -1,9 +1,10 @@
 import Foundation
+import Combine
 
 /// セッション層: 感度と監視フラグの永続化（UserDefaults のみ）。
 /// design.md "SettingsStore" セクション参照。
 
-final class SettingsStore {
+final class SettingsStore: ObservableObject {
     // MARK: - キー
 
     private enum Keys {
@@ -19,6 +20,12 @@ final class SettingsStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // まずデフォルト値を設定
+        let savedSensitivity = defaults.double(forKey: Keys.sensitivity)
+        let savedEnabled = defaults.bool(forKey: Keys.isMonitoringEnabled)
+        self.sensitivity = (savedSensitivity == 0 && defaults.object(forKey: Keys.sensitivity) == nil) ? 0.5 : savedSensitivity
+        self.isMonitoringEnabled = savedEnabled
+        // 初期化後にregisterDefaultsを呼ぶ
         registerDefaults()
     }
 
@@ -26,16 +33,14 @@ final class SettingsStore {
 
     /// ユーザーの感度値（0.0 〜 1.0）
     /// デフォルト: 0.5
-    var sensitivity: Double {
-        get { defaults.double(forKey: Keys.sensitivity) }
-        set { defaults.set(newValue, forKey: Keys.sensitivity) }
+    @Published var sensitivity: Double {
+        didSet { defaults.set(sensitivity, forKey: Keys.sensitivity) }
     }
 
     /// 監視が有効かどうか
     /// デフォルト: false
-    var isMonitoringEnabled: Bool {
-        get { defaults.bool(forKey: Keys.isMonitoringEnabled) }
-        set { defaults.set(newValue, forKey: Keys.isMonitoringEnabled) }
+    @Published var isMonitoringEnabled: Bool {
+        didSet { defaults.set(isMonitoringEnabled, forKey: Keys.isMonitoringEnabled) }
     }
 
     // MARK: - 公開メソッド
