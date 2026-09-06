@@ -18,7 +18,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 
 ### Non-Goals
 
-- バックグラウンド監視、統計・履歴、姿勢データの永続化
+- バックグラウンド監視、統計・履歴、姿勢データの永続化（基準姿勢はプロセス内メモリに保持。UserDefaults に保存しない）
 - カスタム通知音選択、バイブレーション通知
 - クラウド同期、アカウント、HealthKit、ウェアラブル連携
 - Android 対応、全身骨格推定の製品機能化
@@ -28,10 +28,10 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 本スペックが所有する責任境界は次の通りである。
 
 - フロントカメラセッションの構成・開始・停止と権限要求
-- Vision による肩・耳キーポイント抽出と信頼度フィルタ
-- 近側中心の耳ー肩角度計算、キャリブレーション、猫背確定/改善判定
-- 通知音の再生・再通知間隔・停止
-- 監視 UI、画面暗転モード、感度調整、向き追従、フォアグラウンドライフサイクル
+- Vision による肩・耳キーポイント抽出と信頼度フィルタ（confidence < 0.5 を除外）
+- 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、キャリブレーション、猫背確定/改善判定
+- 通知音の再生・再通知間隔・停止（前回の音は停止して次を再生）
+- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、感度調整（0.0-1.0 → 5-20度）、向き追従、フォアグラウンドライフサイクル
 
 ### Out of Boundary
 
@@ -39,11 +39,12 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - 姿勢履歴の保存、分析ダッシュボード
 - OS の権限ダイアログ本体とオーディオ優先度調停の実装
 - 極端なカメラ角度（真横・真後ろ）での検出保証
+- UserDefaults 以外の永続化（Keychain、ファイル DB など）
 
 ### Allowed Dependencies
 
-- iOS/iPadOS 16+ SDK: AVFoundation, Vision, AVFAudio, SwiftUI, UIKit
-- バンドル内の通知音アセット（自前生成の短いメロディ）
+- iOS/iPadOS 16+ SDK: AVFoundation（`.high` プリセット = 720p）、Vision、AVFAudio、SwiftUI、UIKit
+- バンドル内の通知音アセット（`usagi-to-kame.caf`、自前生成の短いメロディ）
 - UserDefaults（感度と前回監視状態のローカル保持のみ）
 
 ### Revalidation Triggers
@@ -52,6 +53,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - 判定指標を角度以外（垂直距離、3D 姿勢推定など）に切り替える場合
 - バックグラウンド監視や永続化をスコープに入れる場合
 - 通知手段を音以外（バイブレーション、システム通知）に拡張する場合
+- カメラプリセットを `.high` から変更する場合
 
 ## Architecture
 
@@ -76,6 +78,7 @@ graph TB
         PermissionView
         CalibrationView
         MonitorView
+        CameraPreviewView
     end
     subgraph SessionLayer [Session]
         PostureSessionManager
@@ -97,6 +100,8 @@ graph TB
     PermissionView --> PostureSessionManager
     CalibrationView --> PostureSessionManager
     MonitorView --> PostureSessionManager
+    MonitorView --> CameraPreviewView
+    CameraPreviewView --> CameraSessionManager
     PostureSessionManager --> SettingsStore
     PostureSessionManager --> CameraSessionManager
     PostureSessionManager --> PoseDetector
@@ -113,8 +118,44 @@ graph TB
 
 - 単一の `PostureSessionManager` がセッション状態の唯一の書き込み点である。UI は状態を表示し、ユーザー操作をコマンドとして渡すだけである
 - Vision 推論はカメラのサンプルバッファキュー上で実行し、UI 更新だけをメインキューへ送る
-- 画面暗転は独立サービスではなく、セッション状態 `dimmed` に対する UI 表現である
+- 画面暗転は独立サービスではなく、`SessionSnapshot.isDimmed` フラグに対する UI 表現である。暗転中も監視・判定は継続する
 - サードパーティライブラリは導入しない
+- カメラプリセットは `.high`（720p）とし、Vision のキーポイント検出精度と NFR 8.1（15fps以上）の双方を満たす
+- デバイス回転の完了判定は 5秒タイムアウト（orientationDidChangeNotification 発火後の静止を待つ）
+- 通知音は監視開始時にプリロードし、停止時に解放する
+
+### Grilling Decisions（24問の設計鋭鋭結果）
+
+以下は `/grilling` セッションで決定した項目である。番号は質問番号に対応する。
+
+| # | 決定項目 | 決定 |
+|---|---------|------|
+| Q1 | デフォルト判定閾値 | 感度0.5 = 10度（線形変換: 20 - sensitivity * 15） |
+| Q2 | 暗転輝度 | 0.0（全黒）+ wake lock |
+| Q3 | 遠側キーポイントの役割 | 「両側検出済みか」の合否判定のみ |
+| Q4 | 基準姿勢の永続化 | 不要（プロセス内メモリのみ） |
+| Q5 | 回転中のゲート保持 | 保持する（リセットしない） |
+| Q6 | personMissing 時のゲート | 即座にリセットする |
+| Q7 | 権限拒否からの復帰 | ユーザーが手動で「再試行」ボタンを押す |
+| Q8 | 暗転中の personMissing | 抑制（完全黒画面維持） |
+| Q9 | 近側の決定基準 | 肩の x 座標が小さい側を近側とする |
+| Q10 | 角度計算の定義 | 鋭角 0〜90度（ベクトルなす角） |
+| Q11 | 片側のみ検出時 | 検出側を自動的に近側として扱う |
+| Q12 | 両側高信頼度時の安定化 | 移動平均なし（生の角度をゲートに投入） |
+| Q13 | カメラプリセット | `.high`（720p） |
+| Q14 | 回転完了判定 | 5秒タイムアウト |
+| Q15 | wake lock の実装 | `UIApplication.shared.isIdleTimerDisabled = true` |
+| Q16 | 回転中の personMissing | 抑制 |
+| Q17 | 通知音プリロード | 監視開始時（`startMonitoring()` 内） |
+| Q18 | 通知音同時再生 | 前の音を停止して次を再生 |
+| Q19 | 暗転中の音量 | ユーザー設定のまま |
+| Q20 | 監視停止時の通知音 | 即座に `stop()` を呼ぶ |
+| Q21 | 人物検出の判定 | 即座に（ノイズ耐性なし） |
+| Q22 | 姿勢崩れ判定 | 角度変化 > 5度 OR 人物検出途絶 |
+| Q23 | 再通知間隔 | 前回通知から30秒 |
+| Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持、バックグラウンド移行時は復元しない |
+
+詳細は各ADR（docs/adr/0008〜0013）に記載されている。
 
 ## File Structure Plan
 
@@ -152,16 +193,16 @@ graph TB
 
 | Component | Domain | Intent | Requirements | Dependencies | Contracts |
 |-----------|--------|--------|--------------|--------------|-----------|
-| Types | Types | 共有値と状態の定義 | 3.3, 4.1 | なし | State |
+| Types | Types | 共有値と状態の定義 | 3.3, 4.1, 4.4 | なし | State |
 | PostureAnalyzer | Domain | 近側角度から猫背候補を出す | 3.5, 4.1, 4.5, 4.6 | Types | Service |
-| TimedConditionGate | Domain | 連続条件の確定 | 2.3, 2.4, 4.2 | Types | Service |
+| TimedConditionGate | Domain | 連続条件の確定 | 2.3, 2.4, 4.2, 4.3 | Types | Service |
 | CalibrationLogic | Domain | 基準角度の確定規則 | 2.1-2.7 | Types, TimedConditionGate | Service |
-| CameraSessionManager | Services | カメラ権限とキャプチャ | 1.1, 1.2, 3.1, 3.2, 7.1, 8.1, 8.2, 8.1性能 | AVFoundation | Service |
-| PoseDetector | Services | キーポイント抽出 | 2.5, 3.4, 4.5, 8.1性能 | Vision | Service |
-| AlertPlayer | Services | 通知音と再通知 | 5.1-5.4, 8.2性能 | AVFAudio | Service |
-| DeviceOrientationMonitor | Services | 回転中の判定停止 | 7.1, 7.2 | UIKit | Event |
+| CameraSessionManager | Services | カメラ権限とキャプチャ（.high 720p） | 1.1, 1.2, 3.1, 3.2, 7.1, 8.1, 8.2, 9.1 | AVFoundation | Service |
+| PoseDetector | Services | キーポイント抽出（confidence ≥ 0.5） | 2.5, 3.4, 4.5, 8.1 | Vision | Service |
+| AlertPlayer | Services | 通知音と再通知（前音停止・上書き） | 5.1-5.4, 8.2 | AVFAudio | Service |
+| DeviceOrientationMonitor | Services | 回転検知（5秒タイムアウト完了） | 7.1, 7.2 | UIKit | Event |
 | AppLifecycleObserver | Services | 背面停止と復帰再開 | 8.1, 8.2 | UIKit | Event |
-| SettingsStore | Session | 感度と監視フラグ | 4.4, 8.2 | UserDefaults | State |
+| SettingsStore | Session | 感度と監視フラグ（0.0-1.0 → 5-20度） | 4.4, 8.2 | UserDefaults | State |
 | PostureSessionManager | Session | セッション状態の唯一の所有者 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
 | PermissionView | UI | 権限 UI | 1.1, 1.2 | Session | State |
 | CalibrationView | UI | 校正 UI | 2.1-2.6, 10.1 | Session | State |
@@ -206,7 +247,7 @@ enum Side: Equatable {
 struct AngleSample: Equatable {
     var nearSide: Side
     var nearAngleDegrees: Double
-    var farAngleDegrees: Double?
+    var farSideDetected: Bool
 }
 
 enum PostureVerdict: Equatable {
@@ -234,14 +275,15 @@ struct SessionSnapshot: Equatable {
     var phase: SessionPhase
     var displayedPosture: DisplayedPosture
     var isDimmed: Bool
-    var calibrationElapsed: TimeInterval
     var isPersonDetected: Bool
     var sensitivity: Double
     var isMonitoringEnabled: Bool
 }
 ```
 
-信頼度閾値は定数 `minimumKeypointConfidence = 0.5` とする。感度はユーザー向けの 0.0...1.0 値とし、内部では角度増加の閾値（度）へ単調変換する。デフォルト感度は中間値とする。
+**信頼度閾値**: 定数 `minimumKeypointConfidence = 0.5` とする。
+
+**感度→閾値変換**: ユーザー向け `sensitivity: 0.0...1.0` を単調変換して `slouchDeltaThresholdDegrees` を算出する。線形補間とし、ADR 0008 / 0012 の決定に従う。詳細は `SettingsStore` 参照。
 
 ### PostureAnalyzer
 
@@ -251,12 +293,28 @@ struct SessionSnapshot: Equatable {
 
 **Postconditions**:
 - 近側の耳と肩が両方有効なら `AngleSample` と `PostureVerdict` を返す
-- 片側のみ有効ならその側だけで判定する（3.5, 4.6）
-- 両側が有効なら近側を主指標、遠側を補助として安定化に使う（4.6）
+- 片側のみ有効ならその側を自動的に「近側」として扱い、その側で判定する（3.5, 4.6）
+- 両側が有効なら **肩の x 座標** が小さい側を近側とする（Q9 決定）。遠側キーポイントの `farAngleDegrees` は返すが、近側判定には使用しない（Q3 決定：遠側は「両側検出済みか」の合否のみ）
 - 有効な耳ー肩ペアが無い場合は `insufficientKeypoints`
 
+**近側決定規則**:
+- `leftShoulder.x < rightShoulder.x` → `nearSide = .left`
+- `rightShoulder.x < leftShoulder.x` → `nearSide = .right`
+- `leftShoulder.x == rightShoulder.x` → デフォルトで `.left`
+- 片側のみ検出 → 検出側を `nearSide` とする
+
+**角度計算**:
+- ベクトル `v = ear - shoulder`
+- 画像上向きの垂直ベクトル `(0, 1)`（Vision の座標系：左下原点、x右向き、y上向き）
+- `cos(θ) = v.y / |v|`
+- `θ = acos(clamp(v.y / |v|, -1, 1))`
+- 結果は **鋭角 0〜90度**（Q10 決定）
+- **移動平均フィルタは適用しない**（Q12 決定：生の角度を 5秒ゲートに投入）
+
+**判定**: `nearAngleDegrees - referenceNearAngleDegrees >= slouchDeltaThresholdDegrees` なら `slouchCandidate`。カメラ設置角は基準値に含まれるため、絶対垂直との比較は行わない。
+
 ```swift
-protocol PostureAnalyzing {
+struct PostureAnalyzer {
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
@@ -264,8 +322,6 @@ protocol PostureAnalyzing {
     ) -> (sample: AngleSample?, verdict: PostureVerdict)
 }
 ```
-
-角度定義: 肩から耳へ向かうベクトルと、画像上向きの垂直ベクトルがなす角（度）。キャリブレーション値からの増加が閾値以上なら `slouchCandidate`。カメラ設置角は基準値に含まれるため、絶対垂直との比較は行わない。
 
 ### TimedConditionGate
 
@@ -282,13 +338,15 @@ struct TimedConditionGate {
 - `isConditionMet == true` の間だけ経過を加算し、`requiredDuration` 到達で `true` を一度返す
 - `false` になった瞬間に蓄積をゼロにする（2.4, 4.2 の途中解除）
 - キャリブレーションは 3.0 秒、猫背確定は 5.0 秒でインスタンスを分ける
+- 回転中は PostureSessionManager が `tick` 呼び出しを停止し、ゲートは保持される（Q5 決定：回転中ゲートはリセットしない）。回転完了後に再開する
+- 人物なし（`isConditionMet == false`）が検出された時点でゲートは即座にリセットされる（Q6 決定）
 
 ### CalibrationLogic
 
-人物検出があり、かつ `PostureAnalyzer` が角度を出せるフレームだけを安定とみなす。
+人物検出があり、かつ `PostureAnalyzer` が角度を出せるフレームだけを安定とみなす。**姿勢崩れは角度変化 > 5度 OR 人物検出途絶** で判定する（Q22 決定）。
 
 ```swift
-protocol Calibrating {
+struct CalibrationLogic {
     mutating func start()
     mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval) -> CalibrationProgress
 }
@@ -302,10 +360,15 @@ enum CalibrationProgress: Equatable {
 
 完了時は蓄積期間中の近側角度の平均を基準姿勢として返す（2.3, 2.7）。再実行は `start()` により基準を上書きする（2.6）。人物なしは完了しない（2.5）。
 
+**姿勢崩れ判定規則**:
+- 直前の近側角度と今回の近側角度の差分が 5度以上 → 蓄積をリセット
+- `presence == .personMissing` → 蓄積をリセット
+- それ以外 → 蓄積を継続
+
 ### CameraSessionManager
 
-**Inbound**: Session からの start/stop、向き更新。  
-**Outbound**: サンプルバッファを PoseDetector へ。  
+**Inbound**: Session からの start/stop、向き更新。
+**Outbound**: サンプルバッファを PoseDetector へ。
 **External P0**: AVFoundation フロントカメラ。
 
 ```swift
@@ -319,7 +382,7 @@ protocol CameraSessionManaging: AnyObject {
 }
 ```
 
-- プリセットは `.medium`（NFR 9.1）。Vision に 4K は不要
+- プリセットは **`.high`（1280x720 相当）**（Q13 決定）。Vision のキーポイント検出精度と NFR 8.1（15fps以上）の双方を満たす
 - `AVCaptureVideoDataOutput` は専用シリアルキュー。メインキューでは動かさない
 - `startRunning` / `stopRunning` はバックグラウンドキューで実行する
 - 権限が `.denied` のとき start は失敗し、UI は設定アプリ導線を出す（1.2）
@@ -335,7 +398,7 @@ protocol PoseDetecting {
 
 - `VNDetectHumanBodyPoseRequest` を使用する
 - 返すキーポイントは confidence >= 0.5 のみ。未満は `nil`（4.5）
-- 観測が空なら `nil` を返し、Session が `personMissing` とする（2.5, 3.4）
+- 観測が空（人物なし）なら `nil` を返す。Session が **即座に** `personMissing` とする（Q21 決定：ノイズ耐性なしの即時判定）
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
 
 ### AlertPlayer
@@ -344,16 +407,19 @@ protocol PoseDetecting {
 protocol AlertPlaying {
     func configureSession() throws
     func playOnce()
-    func startRepeating(interval: TimeInterval)
+    func startRepeating()
     func stop()
 }
 ```
 
 - カテゴリ `.playback`、オプション `.duckOthers`（5.4）
-- 確定猫背の初回で 1 回再生し、継続中は 30 秒間隔（5.1, 5.2）
-- 改善時は即停止し、繰り返しタイマーを破棄する（5.3）
+- **プリロードは `startMonitoring()` 呼び出し時に実行**（Q17 決定）。`configureSession()` と音声ファイルのロードを `startMonitoring()` 内で行う
+- 確定猫背の初回で 1 回再生し、継続中は **前回通知から 30 秒間隔**（Q23 決定：「0s, 30s, 60s...」ではなく「通知時点から30秒後」）
+- **同時再生ポリシー**: 次の再生時刻で前の音がまだ鳴っている場合、前の音を停止して次を再生する（Q18 決定：重複を避ける）
+- 改善時は即停止し、繰り返しタイマーを破棄する（5.3, Q20 決定：監視停止でも `stop()` を即座に呼ぶ）
 - 再生開始は確定判定から 0.5 秒以内（NFR 8.2）。プレイヤーは事前ロードする
 - デフォルト音源はバンドルの `usagi-to-kame.caf`（1〜2 秒）
+- 暗転中の音量は **ユーザー設定のまま**（Q19 決定）。暗転モードは画面のみで音量は変えない
 
 ### DeviceOrientationMonitor
 
@@ -364,17 +430,13 @@ protocol DeviceOrientationMonitoring {
 }
 ```
 
-回転開始で `isRotating = true`、完了で `false`。Session は回転中 `rotating` に遷移し猫背判定を停止する（7.2）。完了後にカメラ向きを更新して監視を再開する（7.1）。
+- `UIDevice.beginGeneratingDeviceOrientationNotifications()` で方向変更を監視
+- 向き変化が検出されたら `isRotating = true`
+- **5秒間 orientation が変化しなければ完了** とみなす（Q14 決定：`isRotating = false`）
+- 完了後に Session が `applyVideoOrientation` を呼んでカメラ向きを更新し、`monitoring` に復帰
 
 ### AppLifecycleObserver
-
-```swift
-protocol AppLifecycleObserving {
-    var isActive: Bool { get }
-}
-```
-
-非アクティブでカメラ停止・通知音停止（8.1）。アクティブ復帰時、`SettingsStore.isMonitoringEnabled` が true かつ校正済みなら監視を再開する（8.2）。
+人物検出のライフサイクルを監視し、Session へ通知する。
 
 ### SettingsStore
 
@@ -386,7 +448,15 @@ protocol SettingsStoring: AnyObject {
 }
 ```
 
-UserDefaults に感度と監視フラグのみ保存する。基準姿勢はプロセス内メモリに保持し、永続化しない（Out of Scope）。
+UserDefaults に感度と監視フラグのみ保存する。基準姿勢は **プロセス内メモリに保持し、永続化しない**（Q4 決定：Out of Scope）。
+
+**感度→閾値変換**:
+```
+slouchDeltaThresholdDegrees = 20 - (sensitivity * 15)
+// sensitivity = 0.0 → 20度
+// sensitivity = 0.5 → 12.5度
+// sensitivity = 1.0 → 5度
+```
 
 ### PostureSessionManager
 
@@ -394,8 +464,8 @@ UserDefaults に感度と監視フラグのみ保存する。基準姿勢はプ�
 
 ```swift
 @MainActor
-protocol PostureSessionCommanding: AnyObject {
-    var snapshot: SessionSnapshot { get }
+class PostureSessionManager: ObservableObject {
+    var snapshot: SessionSnapshot
     func bootstrap() async
     func startCalibration()
     func recalibrate()
@@ -406,6 +476,8 @@ protocol PostureSessionCommanding: AnyObject {
     func updateSensitivity(_ value: Double)
 }
 ```
+
+**権限拒否からの復帰**（Q7 決定）: ユーザーが PermissionView の「再試行」ボタンを押すことで `requestAuthorization()` を再呼び出しする。アプリ自身は OS 標準ダイアログの再トリガを能動的に行わない。
 
 #### 状態機械
 
@@ -438,21 +510,33 @@ stateDiagram-v2
 
 - `confirmedSlouch` 入場で `playOnce` と 30 秒リピート開始
 - `good` 入場で `stop`
-- `personMissing` は判定を進めず表示のみ更新。蓄積中の猫背ゲートはリセットする
-- `dimmed` はフェーズではなくフラグ。監視は継続しプレビューを隠す（6.2）
+- `personMissing` は **即座に** 判定（Vision が `nil` を返したフレームで確定）。蓄積中の猫背ゲートは即座にリセットする（Q6 決定）
+- `dimmed` はフェーズではなくフラグ。監視は継続しプレビューを隠す（6.2）。暗転中の人物なし表示は **抑制**（Q8 決定：完全黒画面維持）
 - 暗転中のタップは `exitDimMode`（6.3）
+- 回転中は personMissing 表示も **抑制**（Q16 決定：回転中黒画面維持）
 
 ### UI Components
 
 いずれも新規境界を持たないため要約のみ。
 
 - **RootView**: snapshot.phase で Permission / Calibration / Monitor を切替える。起動から監視開始までを権限 → 校正 → 開始の 3 ステップに収める（10.1）
-- **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内を出す（1.1, 1.2）
+- **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内と「再試行」ボタンを出す（1.1, 1.2, Q7 決定）
 - **CalibrationView**: 3秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）
-- **MonitorView**: プレビュー、良好/猫背、開始停止、感度、暗転ボタン。暗転時は黒画面＋低輝度、タップで復帰（3.*, 4.4, 6.*）
+- **MonitorView**: プレビュー、良好/猫背、開始停止、感度、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
 - **CameraPreviewView**: `UIViewRepresentable`。暗転中は非表示（3.2, 6.2）
 
-暗転時は `UIScreen.main.brightness` を下げ、解除時に元の値へ戻す。アプリが背面に出るときは元の輝度に復元する。
+**暗転モードの実装詳細**:
+- `enterDimMode()` で:
+  1. 元の輝度値（`UIScreen.main.brightness`）を **PostureSessionManager のインスタンス変数** に保存（Q24 決定：プロセス内メモリ、UserDefaults 永続化なし）
+  2. `UIScreen.main.brightness = 0.0`
+  3. `UIApplication.shared.isIdleTimerDisabled = true`（Q15 決定：wake lock）
+- `exitDimMode()` で:
+  1. `UIApplication.shared.isIdleTimerDisabled = false`
+  2. 保存した輝度値へ復元
+- バックグラウンド移行時（`AppLifecycleObserver.isActive == false`）:
+  1. `isIdleTimerDisabled = false`
+  2. **輝度は復元しない**（Q24 決定：ユーザーの最終操作をそのまま反映）
+  3. カメラ停止・通知音停止
 
 ## System Flows
 
@@ -472,6 +556,8 @@ sequenceDiagram
     Session->>Camera: requestAuthorization
     alt denied
         Session-->>RootView: permissionDenied
+        User->>RootView: 再試行ボタン
+        RootView->>Session: requestAuthorization
     else authorized
         Session-->>RootView: calibrating
         User->>RootView: hold posture
@@ -481,6 +567,7 @@ sequenceDiagram
         Session-->>RootView: completed
         User->>RootView: start monitoring
         Session->>Camera: start
+        Session->>Alert: configureSession (preload)
         loop each frame
             Camera->>Vision: sampleBuffer
             Vision->>Analyzer: PoseFrame
@@ -494,6 +581,25 @@ sequenceDiagram
 
 判定は Session 内のゲートが所有する。AlertPlayer は再生命令だけを受け、判定理由を知らない。
 
+### 暗転モード遷移
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Monitor as MonitorView
+    participant Session as PostureSessionManager
+    participant App as UIApplication
+    User->>Monitor: 暗転ボタンタップ
+    Monitor->>Session: enterDimMode
+    Session->>App: brightness = 0.0
+    Session->>App: isIdleTimerDisabled = true
+    Note over Session: 元の輝度値をインスタンス変数に保存
+    User->>Monitor: 画面タップ
+    Monitor->>Session: exitDimMode
+    Session->>App: isIdleTimerDisabled = false
+    Session->>App: brightness = saved value
+```
+
 ## Data Models
 
 永続化対象は感度と監視フラグのみ。基準姿勢・セッション状態はメモリ上の集約 `PostureSession` が所有する。
@@ -503,17 +609,19 @@ sequenceDiagram
 - confidence < 0.5 のキーポイントは AngleSample に入らない
 - 確定猫背中のみ通知タイマーが存在する
 - 暗転は monitoring または rotating でのみ true になり得る
+- 人物なし（Vision が `nil`）が返った時点で `personMissing` が即座に確定する
+- 暗転中・回転中は personMissing の表示が抑制される
 
 ## Error Handling
 
 | 失敗 | 検出点 | ユーザー影響 | 復旧 |
 |------|--------|--------------|------|
-| カメラ権限拒否 | CameraSessionManager | 設定案内画面 | 設定から許可後に復帰 |
+| カメラ権限拒否 | CameraSessionManager | 設定案内画面＋「再試行」ボタン | 設定から許可後、または再試行ボタン |
 | カメラ構成失敗 | CameraSessionManager | 使用不可メッセージ | 再起動を促す |
-| 人物なし | PoseDetector | フレーム内へ誘導 | 検出再開で自動復帰 |
+| 人物なし | PoseDetector | フレーム内へ誘導（暗転・回転中は表示抑制） | 検出再開で自動復帰 |
 | キーポイント不足 | PostureAnalyzer | 人物なし相当の警告 | 近側再検出 |
 | オーディオセッション失敗 | AlertPlayer | 判定は継続、音なし | 次回再生時に再構成 |
-| 回転中の不安定フレーム | DeviceOrientationMonitor | 判定一時停止 | 回転完了で再開 |
+| 回転中の不安定フレーム | DeviceOrientationMonitor | 判定一時停止（5秒タイムアウトで再開） | 5秒静止で完了 |
 
 失敗時もカメラパイプライン全体を落とさない。部分機能（検知なし表示、音なし監視）を優先する。
 
@@ -523,28 +631,52 @@ sequenceDiagram
 
 ### Domain 単体
 
-- PostureAnalyzer: 近側のみ、遠側低信頼、両側高信頼、confidence 0.49 除外、閾値前後の判定（3.5, 4.1, 4.5, 4.6）
-- TimedConditionGate: 5秒未満で解除したら未確定、5秒連続で確定、改善は即リセット（4.2, 4.3）
-- CalibrationLogic: 3秒安定で平均角度保存、途中崩れで蓄積ゼロ、人物なしで未完了、再実行で上書き（2.3-2.6）
+- **PostureAnalyzer**:
+  - 近側のみ検出（左耳・左肩のみ confidence ≥ 0.5）で `nearSide = .left` を返す
+  - 遠側のみ検出（右耳・右肩のみ confidence ≥ 0.5）で `nearSide = .right` を返す（Q11 決定）
+  - 両側高信頼度で、肩 x 座標が左寄りなら `nearSide = .left`（Q9 決定）
+  - 両側高信頼度で、肩 x 座標が右寄りなら `nearSide = .right`
+  - confidence 0.49 のキーポイントは除外される
+  - 閾値前後の判定（基準 + 9度 = good、基準 + 11度 = slouchCandidate）
+  - 鋭角 0-90度範囲の確認（Q10 決定）
+- **TimedConditionGate**:
+  - 5秒未満で解除したら未確定
+  - 5秒連続で確定
+  - 改善は即リセット
+  - 人物なし（`isConditionMet == false`）即座リセット（Q6 決定）
+- **CalibrationLogic**:
+  - 3秒安定で平均角度保存
+  - 角度変化 > 5度で蓄積リセット（Q22 決定）
+  - 人物検出途絶で蓄積リセット（Q22 決定）
+  - 人物なしで未完了
+  - 再実行で上書き
 
 ### Session 単体
 
 - 開始/停止でカメラ start/stop が対になる（3.1）
-- 確定入場で playOnce、継続で 30 秒リピート、改善で stop（5.1-5.3）
-- 回転中は判定停止、完了で再開（7.2）
+- 開始時に AlertPlayer をプリロード（Q17 決定）
+- 停止時に AlertPlayer.stop() を即座に呼ぶ（Q20 決定）
+- 確定入場で playOnce、継続で 30 秒リピート（Q23 決定：前回通知から30秒）
+- 改善で stop（5.3）
+- 同時再生ポリシー：前の音停止→次を再生（Q18 決定）
+- 回転中は判定停止、5秒タイムアウトで再開（Q5, Q14 決定）
 - 背面で停止、復帰時は isMonitoringEnabled に従う（8.1, 8.2）
 - 暗転フラグ中も判定は進む（6.2）
+- 暗転中の personMissing は表示抑制（Q8 決定）
+- 回転中の personMissing は表示抑制（Q16 決定）
 
 ### UI / 統合
 
-- 権限拒否 UI が設定導線を出す（1.2）
+- 権限拒否 UI が設定導線と「再試行」ボタンを出す（1.2, Q7 決定）
 - 監視中プレビュー表示、暗転中は非表示（3.2, 6.2）
 - 起動から監視開始が 3 ステップ（10.1）
+- 暗転ボタンは enterDimMode を呼ぶ、輝度 0.0 + isIdleTimerDisabled = true（Q2, Q15 決定）
+- 暗転中のタップは exitDimMode を呼ぶ、輝度復元 + isIdleTimerDisabled = false
 
 ### 性能確認（手動または計測テスト）
 
-- キーポイント処理 15 fps 以上（NFR 8.1）
-- 確定から再生まで 0.5 秒以内（NFR 8.2）
+- キーポイント処理 15 fps 以上（NFR 8.1）— `.high` プリセットで達成
+- 確定から再生まで 0.5 秒以内（NFR 8.2）— プリロードで達成
 - 暗転時の消費が通常より低いこと（NFR 9.2）。1時間 15% は実機確認（NFR 9.1）
 
 E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5秒猫背で通知 → 改善で停止 → 暗転 → タップ復帰 → 背面停止 → 前面再開。
@@ -555,9 +687,10 @@ E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5
 
 ## Performance
 
-- キャプチャプリセット `.medium`、Vision は最新フレームのみ
-- 画面暗転時はプレビューレイヤを外し、輝度を下げる
-- AlertPlayer は起動時または監視開始時にプリロード
+- キャプチャプリセット **`.high`（720p）**、Vision は最新フレームのみ
+- 画面暗転時はプレビューレイヤを外し、**輝度 0.0 + wake lock** で消費を抑える
+- AlertPlayer は **監視開始時にプリロード**（Q17 決定）
+- 角度計算は **移動平均なし**（Q12 決定）：生の角度を 5秒ゲートに投入してノイズ吸収
 - UI 更新は判定結果の変化時と表示用間引き（最大 15 Hz）に限定する
 
 ## Requirements Traceability
@@ -565,40 +698,40 @@ E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1 | 起動時カメラ権限 | CameraSessionManager, PermissionView | requestAuthorization | 起動 |
-| 1.2 | 拒否時の設定案内 | PermissionView | snapshot.phase | 起動 |
+| 1.2 | 拒否時の設定案内＋再試行 | PermissionView | snapshot.phase, 再試行ボタン | 起動 |
 | 2.1 | 3秒キープ指示 | CalibrationView, CalibrationLogic | startCalibration | 校正 |
 | 2.2 | 検出状態と蓄積表示 | CalibrationView | calibrationElapsed | 校正 |
 | 2.3 | 3秒安定で自動完了 | CalibrationLogic, TimedConditionGate | CalibrationProgress | 校正 |
-| 2.4 | 崩れでリセット | CalibrationLogic, TimedConditionGate | tick | 校正 |
+| 2.4 | 崩れでリセット | CalibrationLogic, TimedConditionGate | tick, ingest | 校正 |
 | 2.5 | 人物なしは未完了 | PoseDetector, CalibrationLogic | DetectionPresence | 校正 |
 | 2.6 | 再実行で上書き | CalibrationLogic, CalibrationView | recalibrate | 校正 |
 | 2.7 | 設置角の吸収 | PostureAnalyzer, CalibrationLogic | reference angle | 校正 |
 | 3.1 | 開始と停止 | PostureSessionManager, MonitorView | startMonitoring, stopMonitoring | 監視 |
 | 3.2 | プレビュー表示 | CameraPreviewView, MonitorView | captureSession | 監視 |
 | 3.3 | 良好/猫背表示 | PostureSessionManager, MonitorView | displayedPosture | 監視 |
-| 3.4 | 人物なし警告 | PoseDetector, MonitorView | personMissing | 監視 |
-| 3.5 | 片側のみで継続 | PostureAnalyzer | analyze | 判定 |
-| 4.1 | 基準からの角度増加 | PostureAnalyzer | slouchCandidate | 判定 |
+| 3.4 | 人物なし警告 | PoseDetector, MonitorView | personMissing（暗転・回転中は抑制） | 監視 |
+| 3.5 | 片側のみで継続 | PostureAnalyzer | analyze（検出側を近側扱い） | 判定 |
+| 4.1 | 基準からの角度増加 | PostureAnalyzer | slouchCandidate（鋭角 0-90度） | 判定 |
 | 4.2 | 5秒連続で確定 | TimedConditionGate | requiredDuration 5 | 判定 |
 | 4.3 | 改善は即時 | PostureSessionManager | confirmedSlouch to good | 判定 |
-| 4.4 | 感度調整 | SettingsStore, MonitorView | updateSensitivity | 監視 |
+| 4.4 | 感度調整（0.0-1.0 → 5-20度） | SettingsStore, MonitorView | updateSensitivity | 監視 |
 | 4.5 | confidence 0.5 未満除外 | PoseDetector, PostureAnalyzer | minimumKeypointConfidence | 判定 |
-| 4.6 | 近側主、遠側補助 | PostureAnalyzer | AngleSample | 判定 |
+| 4.6 | 近側主、遠側は合否のみ | PostureAnalyzer | AngleSample | 判定 |
 | 5.1 | 確定時に1回再生 | AlertPlayer | playOnce | 通知 |
-| 5.2 | 30秒おき再通知 | AlertPlayer | startRepeating | 通知 |
-| 5.3 | 改善で停止 | AlertPlayer | stop | 通知 |
+| 5.2 | 30秒おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
+| 5.3 | 改善で停止 | AlertPlayer | stop（監視停止でも即座） | 通知 |
 | 5.4 | マナーモードでも再生 | AlertPlayer | playback category | 通知 |
-| 6.1 | 暗転へ切替 | MonitorView, PostureSessionManager | enterDimMode | 暗転 |
+| 6.1 | 暗転へ切替（輝度 0.0 + wake lock） | MonitorView, PostureSessionManager | enterDimMode | 暗転 |
 | 6.2 | 暗転中も監視継続 | PostureSessionManager, CameraPreviewView | isDimmed | 暗転 |
 | 6.3 | タップで復帰 | MonitorView | exitDimMode | 暗転 |
 | 7.1 | 向き追従 | DeviceOrientationMonitor, CameraSessionManager | applyVideoOrientation | 回転 |
-| 7.2 | 回転中は判定停止 | PostureSessionManager | phase rotating | 回転 |
+| 7.2 | 回転中は判定停止（5秒タイムアウト） | PostureSessionManager | phase rotating | 回転 |
 | 8.1 ライフサイクル | 背面で停止 | AppLifecycleObserver, PostureSessionManager | isActive | ライフサイクル |
-| 8.2 ライフサイクル | 復帰時に状態へ従う | AppLifecycleObserver, SettingsStore | isMonitoringEnabled | ライフサイクル |
-| 8.1 性能 | 15 fps 以上 | PoseDetector, CameraSessionManager | detect | 性能 |
-| 8.2 性能 | 0.5 秒以内に再生 | AlertPlayer | playOnce | 性能 |
-| 9.1 | 1時間 15% 以下 | CameraSessionManager | preset medium | 性能 |
-| 9.2 | 暗転時はより低消費 | MonitorView | isDimmed | 暗転 |
+| 8.2 ライフサイクル | 復帰時に状態へ従う（輝度復元しない） | AppLifecycleObserver, SettingsStore | isMonitoringEnabled | ライフサイクル |
+| 8.1 性能 | 15 fps 以上（.high プリセット） | PoseDetector, CameraSessionManager | detect | 性能 |
+| 8.2 性能 | 0.5 秒以内に再生（プリロード） | AlertPlayer | playOnce | 性能 |
+| 9.1 | 1時間 15% 以下 | CameraSessionManager | preset .high | 性能 |
+| 9.2 | 暗転時はより低消費（輝度 0.0） | MonitorView | isDimmed | 暗転 |
 | 10.1 | 3ステップ以内 | RootView | bootstrap | 起動 |
 
 要件 8.1 / 8.2 は機能（ライフサイクル）と非機能（性能）で番号が重複している。トレース上は意味で区別し、ID 自体は requirements.md の表記を維持する。
