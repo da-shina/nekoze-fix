@@ -1,0 +1,179 @@
+{
+  "" : {
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFix-primary.dia",
+    "emit-module-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFix-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFix-primary-emit-module.dia",
+    "pch" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFix-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFix-primary.swiftdeps"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/CalibrationLogic.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationLogic~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/PostureAnalyzer.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/TimedConditionGate.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/TimedConditionGate~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/NekozeFixApp.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/AlertPlayer.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AlertPlayer~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/AppLifecycleObserver.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/AppLifecycleObserver~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/CameraSessionManager.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraSessionManager~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/DeviceOrientationMonitor.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/DeviceOrientationMonitor~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/PoseDetector.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PoseDetector~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Session/PostureSessionManager.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureSessionManager~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Session/SettingsStore.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/SettingsStore~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Types/PostureTypes.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/CalibrationView.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CalibrationView~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/CameraPreviewView.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/CameraPreviewView~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/MonitorView.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/MonitorView~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/PermissionView.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PermissionView~partial.swiftmodule"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/RootView.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.dia",
+    "index-unit-output-path" : "/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.o",
+    "llvm-bc" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.bc",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView.swiftdeps",
+    "swiftmodule" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/RootView~partial.swiftmodule"
+  }
+}

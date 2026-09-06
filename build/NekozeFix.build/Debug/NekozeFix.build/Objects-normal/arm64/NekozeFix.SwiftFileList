@@ -1,0 +1,17 @@
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/NekozeFixApp.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Types/PostureTypes.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/PostureAnalyzer.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/TimedConditionGate.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/CalibrationLogic.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/CameraSessionManager.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/PoseDetector.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/AlertPlayer.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/DeviceOrientationMonitor.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Services/AppLifecycleObserver.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Session/PostureSessionManager.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/Session/SettingsStore.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/RootView.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/PermissionView.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/CalibrationView.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/MonitorView.swift
+/Users/cabos/GitHub/nekoze-fix/NekozeFix/UI/CameraPreviewView.swift

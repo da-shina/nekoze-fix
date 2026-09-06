@@ -1,0 +1,23 @@
+{
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Domain/PostureAnalyzer.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.dia",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureAnalyzer.swiftdeps"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/NekozeFixApp.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.dia",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/NekozeFixApp.swiftdeps"
+  },
+  "/Users/cabos/GitHub/nekoze-fix/NekozeFix/Types/PostureTypes.swift" : {
+    "const-values" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.swiftconstvalues",
+    "dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.d",
+    "diagnostics" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.dia",
+    "object" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.o",
+    "swift-dependencies" : "/Users/cabos/GitHub/nekoze-fix/build/NekozeFix.build/Debug/NekozeFix.build/Objects-normal/arm64/PostureTypes.swiftdeps"
+  }
+}

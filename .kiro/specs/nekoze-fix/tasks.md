@@ -50,7 +50,7 @@
 
 ## 3. Core: Services layer
 
-- [ ] 3.1 (P) CameraSessionManager — front camera session and permissions
+- [x] 3.1 (P) CameraSessionManager — front camera session and permissions
   - Implement concrete `CameraSessionManager` class with `authorization`, `captureSession`, `requestAuthorization()`, `start()`, `stop()`, `applyVideoOrientation(_:)`
   - Preset `.high` (720p); `AVCaptureVideoDataOutput` on serial queue
   - `startRunning`/`stopRunning` on background queue
@@ -60,7 +60,7 @@
   - _Requirements: 1.1, 1.2, 3.1, 7.1, 8.1_
   - _Depends: 1.1_
 
-- [ ] 3.2 (P) PoseDetector — Vision body pose keypoint extraction
+- [x] 3.2 (P) PoseDetector — Vision body pose keypoint extraction
   - Implement concrete `PoseDetector` class: `detect(sampleBuffer:orientation:) -> PoseFrame?`
   - Uses `VNDetectHumanBodyPoseRequest`; confidence < 0.5 → nil keypoint
   - Empty observation → nil (Session treats as personMissing)
@@ -70,7 +70,7 @@
   - _Requirements: 2.5, 3.4, 4.5, 8.1_
   - _Depends: 1.2_
 
-- [ ] 3.3 (P) AlertPlayer — sound notification with playback category
+- [x] 3.3 (P) AlertPlayer — sound notification with playback category
   - Implement concrete `AlertPlayer` class with `configureSession()`, `playOnce()`, `startRepeating()`, `stop()`
   - `.playback` category + `.duckOthers`; preloads sound on `configureSession()`
   - `playOnce` on confirmed slouch; `startRepeating` at 30s interval from last notification
@@ -81,7 +81,7 @@
   - _Requirements: 5.1-5.4, 8.2_
   - _Depends: 1.1, 1.2_
 
-- [ ] 3.4 (P) DeviceOrientationMonitor — rotation detection with 5s timeout
+- [x] 3.4 (P) DeviceOrientationMonitor — rotation detection with 5s timeout
   - Implement concrete `DeviceOrientationMonitor`: `currentVideoOrientation`, `isRotating`
   - `UIDevice.beginGeneratingDeviceOrientationNotifications()` monitoring
   - Rotation start → `isRotating = true`; 5s no change → `isRotating = false`
@@ -90,7 +90,7 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 1.2_
 
-- [ ] 3.5 (P) AppLifecycleObserver — foreground/background state
+- [x] 3.5 (P) AppLifecycleObserver — foreground/background state
   - Implement as concrete class with `isActive` property, notification center subscription
   - Background → camera stop, audio stop, brightness not restored, `isIdleTimerDisabled = false`
   - Foreground → resume monitoring if `SettingsStore.isMonitoringEnabled` true and calibrated
