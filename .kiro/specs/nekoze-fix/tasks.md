@@ -99,7 +99,7 @@
   - _Requirements: 8.1, 8.2_
   - _Depends: 1.2, 3.1, 3.3_
 
-- [ ] 3.6 (P) SettingsStore — sensitivity and monitoring flag persistence
+- [x] 3.6 (P) SettingsStore — sensitivity and monitoring flag persistence
   - Implement concrete `SettingsStore` class with `sensitivity`, `isMonitoringEnabled`, `slouchDeltaThresholdDegrees()`
   - UserDefaults persistence for sensitivity + monitoring flag only
   - Sensitivity 0.0-1.0 → threshold 20-5 degrees linear mapping (20 - sensitivity * 15)
