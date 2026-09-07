@@ -11,6 +11,11 @@ final class AlertPlayer {
     private let soundURL: URL
     private let audioSession = AVAudioSession.sharedInstance()
 
+    /// 現在再生中かどうか
+    var isPlaying: Bool {
+        audioPlayer?.isPlaying ?? false
+    }
+
     // MARK: - 初期化
 
     /// セッション設定時にアラート音をプリロードします

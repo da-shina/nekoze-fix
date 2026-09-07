@@ -45,6 +45,12 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertNoThrow(sut.stop())
     }
 
+    func testIsPlayingWithNilPlayer_returnsFalse() {
+        // 前提: audioPlayerがnilのAlertPlayer
+        // 検証: isPlayingはfalseであるはず
+        XCTAssertFalse(sut.isPlaying)
+    }
+
     func testStopAfterAlreadyStopped_doesNotCrash() {
         // 前提: audioPlayerがnilのAlertPlayer
         // 手順: stopを2回呼ぶ
