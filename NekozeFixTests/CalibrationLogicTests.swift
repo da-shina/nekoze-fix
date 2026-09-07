@@ -63,7 +63,7 @@ final class CalibrationLogicTests: XCTestCase {
 
         // 検証: 完了しない
         if case .completed = progress {
-            XCTFail("人物がいない状态下では完了しないはず")
+            XCTFail("人物がいない状態下では完了しないはず")
         }
     }
 
