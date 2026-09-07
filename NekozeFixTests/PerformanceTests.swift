@@ -1,6 +1,7 @@
 import XCTest
 @testable import NekozeFix
 
+@MainActor
 final class PerformanceTests: XCTestCase {
     var sut: PostureSessionManager!
     var poseDetector: PoseDetector!

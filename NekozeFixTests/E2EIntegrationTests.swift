@@ -1,6 +1,7 @@
 import XCTest
 @testable import NekozeFix
 
+@MainActor
 final class E2EIntegrationTests: XCTestCase {
     var sut: PostureSessionManager!
 
@@ -35,7 +36,7 @@ final class E2EIntegrationTests: XCTestCase {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         for _ in 0..<60 {
-            gate.tick(isConditionMet: true, now: CFAbsoluteTimeGetCurrent())
+            gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
             if gate.isFired { break }
         }
 
@@ -62,7 +63,7 @@ final class E2EIntegrationTests: XCTestCase {
 
         // 前傾姿勢5秒間（角度が閾値超過）をシミュレート
         for _ in 0..<60 {
-            gate.tick(isConditionMet: true, now: CFAbsoluteTimeGetCurrent())
+            gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
             if gate.isFired { break }
         }
 

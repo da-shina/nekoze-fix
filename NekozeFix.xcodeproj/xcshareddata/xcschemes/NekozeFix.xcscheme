@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1700"
+   LastUpgradeVersion = "2660"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -34,8 +34,8 @@
             parallelizable = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A5000001"
-               BuildableName = "NekozeFixTests"
+               BlueprintIdentifier = "20DBBAC6304EECF500B43650"
+               BuildableName = "NekozeFixTests.xctest"
                BlueprintName = "NekozeFixTests"
                ReferencedContainer = "container:NekozeFix.xcodeproj">
             </BuildableReference>

@@ -328,7 +328,7 @@ final class CalibrationLogicTests: XCTestCase {
         // 約60fpsで3秒以上の安定検出をシミュレート
         for frameIndex in 0..<200 {
             let t = Double(frameIndex) / 60.0
-            let sample = makeSample(angle: 50.0, presence: .personDetected, now: t)
+            let sample = makeSample(angle: 50.0)
             let progress = sut.ingest(sample: sample, presence: .personDetected, now: t)
 
             // 完了への遷移を確認

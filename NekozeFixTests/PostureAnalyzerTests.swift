@@ -68,7 +68,7 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.nearAngleDegrees, 0, accuracy: 0.1)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
     }
 

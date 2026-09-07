@@ -1,6 +1,7 @@
 import XCTest
 @testable import NekozeFix
 
+@MainActor
 final class PostureSessionManagerTests: XCTestCase {
     var sut: PostureSessionManager!
 
