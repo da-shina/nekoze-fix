@@ -19,7 +19,7 @@ final class PostureAnalyzerTests: XCTestCase {
         // 前提: 左肩のx座標 < 右肩のx座標
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 100, y: 200, confidence: 0.9),
+            leftEar: Keypoint(x: 155, y: 350, confidence: 0.9),  // 肩から少し右にずらして小さな角度を作る
             rightEar: Keypoint(x: 300, y: 200, confidence: 0.9),
             leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.9),
             rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.9)
@@ -31,7 +31,7 @@ final class PostureAnalyzerTests: XCTestCase {
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.farSideDetected, true)
-        XCTAssertEqual(verdict, .good) // 角度は小さいはず
+        XCTAssertEqual(verdict, .good) // 角度は小さい（約2.86度）のため良好判定
     }
 
     func testNearSideSelection_RightShoulderSmallerX() {

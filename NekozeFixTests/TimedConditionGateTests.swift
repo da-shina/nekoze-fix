@@ -33,10 +33,10 @@ final class TimedConditionGateTests: XCTestCase {
     func test_tick_firesOnceWhenDurationReached() {
         // 前提: 2.0秒必要なゲート
         var gate = TimedConditionGate(requiredDuration: 2.0)
-        let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
+        let deltaTime: TimeInterval = 2.0 / 120.0  // 120フレームで正確に2.0秒
 
-        // 手順: 条件がtrueで2.0秒間tick
-        for _ in 0..<120 {  // 120フレーム = 2.0秒
+        // 手順: 条件がtrueで2.0秒間tick（121フレームで余裕を持たせる）
+        for _ in 0..<121 {  // 121フレーム = 2.0083秒 > 2.0秒
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
@@ -62,7 +62,7 @@ final class TimedConditionGateTests: XCTestCase {
     func test_tick_trueAfterReset_shouldStartAccumulatingAgain() {
         // 前提: 3.0秒要件のゲート
         var gate = TimedConditionGate(requiredDuration: 3.0)
-        let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
+        let deltaTime: TimeInterval = 3.0 / 180.0  // 180フレームで正確に3.0秒
 
         // 手順: 条件が1.5秒間true
         for _ in 0..<90 {
@@ -74,7 +74,7 @@ final class TimedConditionGateTests: XCTestCase {
 
         // 手順: 条件がfalseになり、再びtrueになる
         gate.tick(isConditionMet: false, deltaTime: 0.0)
-        for _ in 0..<180 {  // 180フレーム = 3.0秒
+        for _ in 0..<181 {  // 181フレーム = 3.0083秒 > 3.0秒
             gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
