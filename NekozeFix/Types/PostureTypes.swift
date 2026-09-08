@@ -67,7 +67,7 @@ enum CalibrationProgress: Equatable {
 }
 
 struct SessionSnapshot: Equatable {
-    var phase: SessionPhase = .idle
+    var phase: SessionPhase = .awaitingPermission
     var displayedPosture: DisplayedPosture = .good
     var isDimmed: Bool = false
     var isRotating: Bool = false
