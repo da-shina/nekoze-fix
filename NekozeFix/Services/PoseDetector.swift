@@ -8,7 +8,7 @@ import QuartzCore
 /// nil を返します。
 ///
 /// 設計参照: design.md の "PoseDetector" セクション。
-final class PoseDetector {
+final class PoseDetector: @unchecked Sendable {
     // MARK: - プロパティ
 
     private var request: VNDetectHumanBodyPoseRequest
