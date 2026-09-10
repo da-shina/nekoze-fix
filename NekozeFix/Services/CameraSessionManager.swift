@@ -16,6 +16,17 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     let captureSession = AVCaptureSession()
 
+    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if let connection = self.videoOutput?.connection(with: .video) {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = orientation
+                }
+            }
+        }
+    }
+
     // MARK: - プライベートプロパティ
 
     private let sessionQueue = DispatchQueue(label: "com.nekozefix.camera.session")

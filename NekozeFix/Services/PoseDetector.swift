@@ -63,7 +63,7 @@ final class PoseDetector: @unchecked Sendable {
     // MARK: - プライベートメソッド
 
     private func extractPoseFrame(from observation: VNHumanBodyPoseObservation) -> PoseFrame? {
-        let keypointThreshold: Float = 0.5
+        let keypointThreshold: Float = 0.3 // 0.5から0.3に緩和して検出率を向上
 
         func extractKeypoint(_ jointName: VNHumanBodyPoseObservation.JointName) -> Keypoint? {
             guard let point = try? observation.recognizedPoint(jointName),

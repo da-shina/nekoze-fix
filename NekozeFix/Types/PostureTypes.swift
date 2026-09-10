@@ -89,6 +89,9 @@ struct SessionSnapshot: Equatable {
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
+    var referenceAngle: Double? = nil
+    var currentThreshold: Double = 0.0
+    var visualizationPoints: [CGPoint] = []
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。

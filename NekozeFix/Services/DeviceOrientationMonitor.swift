@@ -59,9 +59,11 @@ final class DeviceOrientationMonitor: ObservableObject {
 
         // 回転中としてマーク
         isRotating = true
+        print("DeviceOrientationMonitor: Orientation changed")
 
         // 現在の向きを更新
         let orientationChanged = updateOrientation()
+
 
         // 意味のある向きの変化があった場合のみ5秒タイマーを開始
         // (face-up/face-down は早期リターンするため含まない)

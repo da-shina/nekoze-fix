@@ -14,18 +14,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // MARK: - プライベートプロパティ
 
     private var cancellables = Set<AnyCancellable>()
-    private let cameraManager = CameraSessionManager()
+    let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
     private let postureAnalyzer = PostureAnalyzer()
     private var calibrationLogic = CalibrationLogic()
     private let settingsStore: SettingsStore
+    private let orientationMonitor = DeviceOrientationMonitor()
 
     // MARK: - 初期化
 
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
+        super.init()
         setupSettingsObservation()
+        setupOrientationObservation()
     }
 
     private func setupSettingsObservation() {
@@ -38,6 +41,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                         await self.restartCameraPipeline()
                     }
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func setupOrientationObservation() {
+        orientationMonitor.$currentVideoOrientation
+            .sink { [weak self] orientation in
+                print("PostureSessionManager: Updating orientation to \(orientation)")
+                self?.cameraManager.updateVideoOrientation(orientation)
             }
             .store(in: &cancellables)
     }
@@ -151,8 +163,22 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // フレームの向きを取得
-        let orientation = connection.videoOrientation == .portrait ? CGImagePropertyOrientation.up : CGImagePropertyOrientation.right
+        // フレームの向きを動的に取得
+        // AVCaptureConnection.videoOrientation を CGImagePropertyOrientation に変換
+        let videoOrientation = connection.videoOrientation
+        let orientation: CGImagePropertyOrientation
+        switch videoOrientation {
+        case .portrait:
+            orientation = .up
+        case .portraitUpsideDown:
+            orientation = .down
+        case .landscapeLeft:
+            orientation = .right
+        case .landscapeRight:
+            orientation = .left
+        @unknown default:
+            orientation = .up
+        }
 
         // 1. ポーズ検出
         guard let frame = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: orientation) else {
@@ -173,14 +199,25 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 slouchDeltaThresholdDegrees: threshold
             )
 
+            // 可視化用ポイントの抽出 (近傍側の耳と肩)
+            var points: [CGPoint] = []
+            if let sample = sample {
+                let ear = (sample.nearSide == .left) ? frame.leftEar : frame.rightEar
+                let shoulder = (sample.nearSide == .left) ? frame.leftShoulder : frame.rightShoulder
+                if let e = ear, let s = shoulder {
+                    points = [CGPoint(x: e.x, y: e.y), CGPoint(x: s.x, y: s.y)]
+                }
+            }
+
             // 3. 状態更新
-            self.updateState(presence: .personDetected, sample: sample, verdict: verdict)
+            self.updateState(presence: .personDetected, sample: sample, verdict: verdict, points: points)
         }
     }
 
-    private func updateState(presence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil) {
+    private func updateState(presence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil, points: [CGPoint] = []) {
         // メインスレッドで動作することが保証されている
         self.snapshot.isPersonDetected = (presence == .personDetected)
+        self.snapshot.visualizationPoints = points
 
         if self.snapshot.phase == .calibrating {
             // キャリブレーションロジックに投入
@@ -191,13 +228,13 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(_) = progress {
+            if case .completed(let average) = progress {
                 self.snapshot.phase = .monitoring
-                // TODO: refAngle を保存する仕組みを実装
+                self.snapshot.referenceAngle = average
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
-            if let sample = sample {
+            if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
             } else {
                 self.snapshot.displayedPosture = .personMissing
