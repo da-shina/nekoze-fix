@@ -45,7 +45,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .right)
@@ -68,7 +68,7 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0, accuracy: 0.1)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
     }
 
@@ -88,7 +88,7 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertGreaterThan(sample!.nearAngleDegrees, 10)
+        XCTAssertGreaterThan(sample!.nearAngleDegrees, 10.0)
         XCTAssertEqual(verdict, .slouchCandidate)
     }
 
@@ -121,7 +121,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)

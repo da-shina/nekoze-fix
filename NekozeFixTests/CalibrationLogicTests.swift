@@ -170,14 +170,14 @@ final class CalibrationLogicTests: XCTestCase {
         // 前提: 安定したフレームを蓄積中
         sut.start()
 
-        // 45度で蓄積
-        for frameIndex in 0..<60 {
+        // 45度で蓄積（複数フレームで時間を経過させる）
+        for frameIndex in 0..<120 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: t)
         }
 
-        // 手順: 角度が5度未満で変化
-        let progress = sut.ingest(sample: makeSample(angle: 49.0), presence: .personDetected, now: 1.0)
+        // 手順: 角度が5度未満で変化（経過時間が経っているため elapsed > 0）
+        let progress = sut.ingest(sample: makeSample(angle: 49.0), presence: .personDetected, now: 3.0)
 
         // 検証: 蓄積を継続（elapsed > 0 は経過時間がリセットされていないこと）
         if case .accumulating(let elapsed) = progress {
@@ -297,13 +297,13 @@ final class CalibrationLogicTests: XCTestCase {
     func testAngleExactlyFiveDegrees_ContinuesAccumulating() {
         // 前提: 45度で蓄積中
         sut.start()
-        for frameIndex in 0..<60 {
+        for frameIndex in 0..<120 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: t)
         }
 
         // 手順: 角度が正確に5度変化（境界ケース）
-        let progress = sut.ingest(sample: makeSample(angle: 50.0), presence: .personDetected, now: 1.0)
+        let progress = sut.ingest(sample: makeSample(angle: 50.0), presence: .personDetected, now: 3.0)
 
         // 検証: 蓄積を継続（5度はリセットではない）
         if case .accumulating(let elapsed) = progress {
