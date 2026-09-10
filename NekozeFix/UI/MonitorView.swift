@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// UI レイヤー: 監視表示、デイムモード、感度調整。
 /// design.md の "UI Components" - MonitorView を参照。
@@ -37,10 +38,18 @@ struct MonitorView: View {
             }
             .padding()
 
+            // 正しい画角への誘導ガイド
+            if sessionManager.snapshot.showGuideline {
+                PostureGuidelineOverlay()
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+
             // デイムモードオーバーレイ
             if sessionManager.snapshot.isDimmed {
                 dimModeOverlay
             }
+
         }
         .background(Color(.systemBackground))
     }
@@ -156,8 +165,8 @@ struct MonitorView: View {
                     .padding()
                     .background(Color.black.opacity(0.5))
                     .cornerRadius(8)
-                    .opacity(0.8)
             )
+            .opacity(0.8)
     }
 
     // MARK: - 計算プロパティ

@@ -23,6 +23,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - 初期化
 
+    private var guidelineTimer: Timer?
+
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
@@ -163,50 +165,60 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // フレームの向きを動的に取得
-        // AVCaptureConnection.videoOrientation を CGImagePropertyOrientation に変換
+        // 1. カメラ位置に基づいた正確な画像向きの決定
         let videoOrientation = connection.videoOrientation
-        let orientation: CGImagePropertyOrientation
-        switch videoOrientation {
-        case .portrait:
-            orientation = .up
-        case .portraitUpsideDown:
-            orientation = .down
-        case .landscapeLeft:
-            orientation = .right
-        case .landscapeRight:
-            orientation = .left
-        @unknown default:
-            orientation = .up
-        }
 
-        // 1. ポーズ検出
-        guard let frame = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: orientation) else {
-            Task { @MainActor in
-                self.updateState(presence: .personMissing, sample: nil)
-            }
-            return
-        }
-
-        // 2. 姿勢分析
         Task { @MainActor in
+            let isFrontCamera = self.settingsStore.cameraPosition == .front
+            let orientation: CGImagePropertyOrientation
+
+            // Visionの CGImagePropertyOrientation はセンサーの物理的な向きに基づいた指定が必要
+            // 前面カメラと背面カメラでマッピングが異なる
+            switch videoOrientation {
+            case .portrait:
+                orientation = isFrontCamera ? .left : .right
+            case .portraitUpsideDown:
+                orientation = isFrontCamera ? .right : .left
+            case .landscapeLeft:
+                orientation = isFrontCamera ? .up : .down
+            case .landscapeRight:
+                orientation = isFrontCamera ? .down : .up
+            @unknown default:
+                orientation = isFrontCamera ? .left : .right
+            }
+
+            // 2. ポーズ検出
+            guard let frame = self.poseDetector.detect(sampleBuffer: sampleBuffer, orientation: orientation) else {
+                self.updateState(presence: .personMissing, sample: nil)
+                return
+            }
+
+            // 2. 姿勢分析
             let refAngle = self.getReferenceAngle()
             let threshold = self.getThreshold()
 
-            let (sample, verdict) = postureAnalyzer.analyze(
+            let (sample, verdict) = self.postureAnalyzer.analyze(
                 frame: frame,
                 referenceNearAngleDegrees: refAngle,
                 slouchDeltaThresholdDegrees: threshold
             )
 
-            // 可視化用ポイントの抽出 (近傍側の耳と肩)
-            var points: [CGPoint] = []
+            // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:近傍耳, 3:近傍肩)
+            var points = [CGPoint](repeating: .zero, count: 4)
+
+            if let ls = frame.leftShoulder, let rs = frame.rightShoulder {
+                points[0] = CGPoint(x: ls.x, y: ls.y)
+                points[1] = CGPoint(x: rs.x, y: rs.y)
+            }
+
             if let sample = sample {
                 let ear = (sample.nearSide == .left) ? frame.leftEar : frame.rightEar
                 let shoulder = (sample.nearSide == .left) ? frame.leftShoulder : frame.rightShoulder
                 if let e = ear, let s = shoulder {
-                    points = [CGPoint(x: e.x, y: e.y), CGPoint(x: s.x, y: s.y)]
+                    points[2] = CGPoint(x: e.x, y: e.y)
+                    points[3] = CGPoint(x: s.x, y: s.y)
                 }
+                self.snapshot.nearSide = sample.nearSide
             }
 
             // 3. 状態更新
@@ -218,6 +230,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // メインスレッドで動作することが保証されている
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
+
+        // ガイドライン表示制御
+        updateGuidelineState(presence: presence)
 
         if self.snapshot.phase == .calibrating {
             // キャリブレーションロジックに投入
@@ -238,6 +253,30 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
             } else {
                 self.snapshot.displayedPosture = .personMissing
+            }
+        }
+    }
+
+    private func updateGuidelineState(presence: DetectionPresence) {
+        if presence == .personDetected {
+            // 検出成功: ガイドを消し、タイマーをリセット
+            self.snapshot.showGuideline = false
+            guidelineTimer?.invalidate()
+            guidelineTimer = nil
+        } else {
+            // 検出失敗
+            if self.snapshot.phase == .calibrating {
+                // キャリブレーション中は常にガイドを表示
+                self.snapshot.showGuideline = true
+            } else if self.snapshot.phase == .monitoring {
+                // 監視中は2秒経過後に表示
+                if guidelineTimer == nil {
+                    guidelineTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+                        Task { @MainActor in
+                            self?.snapshot.showGuideline = true
+                        }
+                    }
+                }
             }
         }
     }

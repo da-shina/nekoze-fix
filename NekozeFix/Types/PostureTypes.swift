@@ -85,6 +85,7 @@ struct SessionSnapshot: Equatable {
     var isDimmed: Bool = false
     var isRotating: Bool = false
     var isPersonDetected: Bool = false
+    var showGuideline: Bool = false
     var sensitivity: Double = 0.5
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
@@ -92,6 +93,7 @@ struct SessionSnapshot: Equatable {
     var referenceAngle: Double? = nil
     var currentThreshold: Double = 0.0
     var visualizationPoints: [CGPoint] = []
+    var nearSide: Side? = nil
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。

@@ -28,11 +28,19 @@ struct CalibrationView: View {
             CameraPreviewView(session: sessionManager.cameraManager.captureSession)
                 .ignoresSafeArea()
 
+            // 正しい画角への誘導ガイド
+            if sessionManager.snapshot.showGuideline {
+                PostureGuidelineOverlay()
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+
             // 基準線とポイントの可視化
             CalibrationOverlayView(
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                threshold: sessionManager.snapshot.currentThreshold
+                threshold: sessionManager.snapshot.currentThreshold,
+                nearSide: sessionManager.snapshot.nearSide
             )
             .ignoresSafeArea()
 
@@ -182,42 +190,58 @@ struct CalibrationOverlayView: View {
     let referenceAngle: Double
     let currentPoints: [CGPoint]
     let threshold: Double
+    let nearSide: Side?
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if currentPoints.count >= 2 {
-                    // 現在の耳と肩を結ぶ線 (正規化座標を画面サイズに変換)
+                if currentPoints.count >= 2 && currentPoints[0] != .zero && currentPoints[1] != .zero {
+                    // 肩のライン (左肩 -> 右肩)
                     Path { path in
-                        let p1 = CGPoint(x: currentPoints[0].x * geometry.size.width,
-                                         y: currentPoints[0].y * geometry.size.height)
-                        let p2 = CGPoint(x: currentPoints[1].x * geometry.size.width,
-                                         y: currentPoints[1].y * geometry.size.height)
-                        path.move(to: p1)
-                        path.addLine(to: p2)
+                        let pL = normalizePoint(currentPoints[0], in: geometry.size)
+                        let pR = normalizePoint(currentPoints[1], in: geometry.size)
+                        path.move(to: pL)
+                        path.addLine(to: pR)
+                    }
+                    .stroke(Color.blue, lineWidth: 2)
+
+                    // 肩のポイント
+                    ForEach(0..<2) { i in
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                            .position(normalizePoint(currentPoints[i], in: geometry.size))
+                    }
+                }
+
+                if currentPoints.count >= 4 && currentPoints[2] != .zero && currentPoints[3] != .zero {
+                    // 現在の耳と肩を結ぶ線 (近傍耳 -> 近傍肩)
+                    Path { path in
+                        let pE = normalizePoint(currentPoints[2], in: geometry.size)
+                        let pS = normalizePoint(currentPoints[3], in: geometry.size)
+                        path.move(to: pE)
+                        path.addLine(to: pS)
                     }
                     .stroke(Color.yellow, lineWidth: 3)
                 }
 
-                // 基準となる直線 (肩の位置から referenceAngle の方向)
+                // 基準となる直線
                 Path { path in
                     var startPoint = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
 
-                    if currentPoints.count >= 2 {
-                        // 肩の座標を起点にする (currentPoints[1]が肩)
-                        startPoint = CGPoint(
-                            x: currentPoints[1].x * geometry.size.width,
-                            y: currentPoints[1].y * geometry.size.height
-                        )
+                    if currentPoints.count >= 4 && currentPoints[3] != .zero {
+                        // 近傍肩の座標を起点にする (currentPoints[3]が近傍肩)
+                        startPoint = normalizePoint(currentPoints[3], in: geometry.size)
                     }
 
                     let length: CGFloat = 200
-
-                    // referenceAngleは垂直(0度)からの傾き。
-                    // 映像座標系に合わせて調整
                     let radians = referenceAngle * .pi / 180.0
+
+                    // nearSide に基づいてX方向を決定
+                    let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
+
                     let end = CGPoint(
-                        x: startPoint.x + length * sin(radians),
+                        x: startPoint.x + (xDirection * length * sin(radians)),
                         y: startPoint.y - length * cos(radians)
                     )
                     path.move(to: startPoint)
@@ -226,6 +250,43 @@ struct CalibrationOverlayView: View {
                 .stroke(Color.green, lineWidth: 4)
             }
         }
+    }
+
+    /// Vision座標 (0-1, 左下原点) を SwiftUI座標 (左上原点, AspectFill補正済) に変換
+    private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
+        // 1. Y軸反転 (Vision: 左下原点 -> SwiftUI: 左上原点)
+        let visionX = point.x
+        let visionY = 1.0 - point.y
+
+        // 2. AspectFill 補正
+        // 映像の想定アスペクト比 (4:3)
+        let imageAR: CGFloat = 4.0 / 3.0
+        let viewAR = size.width / size.height
+
+        var sx: CGFloat = 1.0
+        var sy: CGFloat = 1.0
+
+        if viewAR > imageAR {
+            // 画面の方が横に長い -> 左右はぴったり、上下がクロップされる
+            // scale = Wv / Wi -> s_x = 1, s_y = (Hi * scale) / Hv = (Hi * Wv/Wi) / Hv = viewAR / imageAR
+            sx = 1.0
+            sy = viewAR / imageAR
+        } else if viewAR < imageAR {
+            // 画面の方が縦に長い -> 上下はぴったり、左右がクロップされる
+            // scale = Hv / Hi -> s_y = 1, s_x = (Wi * scale) / Wv = (Wi * Hv/Hi) / Wv = imageAR / viewAR
+            sx = imageAR / viewAR
+            sy = 1.0
+        }
+
+        // 最終的な正規化座標 (0...1)
+        let normX = visionX * sx + (1.0 - sx) / 2.0
+        let normY = visionY * sy + (1.0 - sy) / 2.0
+
+        // 画面サイズに変換
+        return CGPoint(
+            x: normX * size.width,
+            y: normY * size.height
+        )
     }
 }
 

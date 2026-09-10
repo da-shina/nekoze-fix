@@ -32,7 +32,8 @@ final class PoseDetector: @unchecked Sendable {
         let detectionRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
             defer { semaphore.signal() }
 
-            guard error == nil else {
+            if let error = error {
+                print("Vision Error: \(error)")
                 return
             }
 
@@ -42,7 +43,11 @@ final class PoseDetector: @unchecked Sendable {
                 return
             }
 
-            result = self?.extractPoseFrame(from: observation)
+            let frame = self?.extractPoseFrame(from: observation)
+            if frame == nil {
+                print("Vision: Person detected, but required keypoints were missing or low confidence")
+            }
+            result = frame
         }
 
         let handler = VNImageRequestHandler(
@@ -53,6 +58,7 @@ final class PoseDetector: @unchecked Sendable {
         do {
             try handler.perform([detectionRequest])
         } catch {
+            print("Vision Handler Error: \(error)")
             return nil
         }
 
