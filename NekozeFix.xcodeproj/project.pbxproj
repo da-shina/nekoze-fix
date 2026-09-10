@@ -25,7 +25,7 @@
 		20DBBB2F304EEFCE00B43650 /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB04304EEE2E00B43650 /* PermissionView.swift */; };
 		20DBBB30304EEFCE00B43650 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB05304EEE2E00B43650 /* RootView.swift */; };
 		20DBBB31304EEFD300B43650 /* NekozeFixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */; };
-		20DBBB333053008200B43650 /* PostureGuidelineOverlay 2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB323053008200B43650 /* PostureGuidelineOverlay 2.swift */; };
+		20DBBB353053020800B43650 /* PostureGuidelineOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB343053020800B43650 /* PostureGuidelineOverlay.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,7 +61,7 @@
 		20DBBB05304EEE2E00B43650 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		20DBBB07304EEE2E00B43650 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NekozeFixApp.swift; sourceTree = "<group>"; };
-		20DBBB323053008200B43650 /* PostureGuidelineOverlay 2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostureGuidelineOverlay 2.swift"; sourceTree = "<group>"; };
+		20DBBB343053020800B43650 /* PostureGuidelineOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureGuidelineOverlay.swift; sourceTree = "<group>"; };
 		A2000020 /* NekozeFix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NekozeFix.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -153,12 +153,12 @@
 		20DBBB06304EEE2E00B43650 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				20DBBB343053020800B43650 /* PostureGuidelineOverlay.swift */,
 				20DBBB01304EEE2E00B43650 /* CalibrationView.swift */,
 				20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */,
 				20DBBB03304EEE2E00B43650 /* MonitorView.swift */,
 				20DBBB04304EEE2E00B43650 /* PermissionView.swift */,
 				20DBBB05304EEE2E00B43650 /* RootView.swift */,
-				20DBBB323053008200B43650 /* PostureGuidelineOverlay 2.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -322,7 +322,7 @@
 				20DBBB23304EEE9B00B43650 /* AppLifecycleObserver.swift in Sources */,
 				20DBBB2F304EEFCE00B43650 /* PermissionView.swift in Sources */,
 				20DBBB30304EEFCE00B43650 /* RootView.swift in Sources */,
-				20DBBB333053008200B43650 /* PostureGuidelineOverlay 2.swift in Sources */,
+				20DBBB353053020800B43650 /* PostureGuidelineOverlay.swift in Sources */,
 				20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */,
 				20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */,
 				20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */,

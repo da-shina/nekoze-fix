@@ -231,9 +231,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
 
-        // ガイドライン表示制御
-        updateGuidelineState(presence: presence)
-
         if self.snapshot.phase == .calibrating {
             // キャリブレーションロジックに投入
             let progress = self.calibrationLogic.ingest(
@@ -253,30 +250,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
             } else {
                 self.snapshot.displayedPosture = .personMissing
-            }
-        }
-    }
-
-    private func updateGuidelineState(presence: DetectionPresence) {
-        if presence == .personDetected {
-            // 検出成功: ガイドを消し、タイマーをリセット
-            self.snapshot.showGuideline = false
-            guidelineTimer?.invalidate()
-            guidelineTimer = nil
-        } else {
-            // 検出失敗
-            if self.snapshot.phase == .calibrating {
-                // キャリブレーション中は常にガイドを表示
-                self.snapshot.showGuideline = true
-            } else if self.snapshot.phase == .monitoring {
-                // 監視中は2秒経過後に表示
-                if guidelineTimer == nil {
-                    guidelineTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-                        Task { @MainActor in
-                            self?.snapshot.showGuideline = true
-                        }
-                    }
-                }
             }
         }
     }

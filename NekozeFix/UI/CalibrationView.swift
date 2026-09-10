@@ -28,13 +28,6 @@ struct CalibrationView: View {
             CameraPreviewView(session: sessionManager.cameraManager.captureSession)
                 .ignoresSafeArea()
 
-            // 正しい画角への誘導ガイド
-            if sessionManager.snapshot.showGuideline {
-                PostureGuidelineOverlay()
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-            }
-
             // 基準線とポイントの可視化
             CalibrationOverlayView(
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
