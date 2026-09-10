@@ -1,7 +1,20 @@
 import Foundation
+import AVFoundation
 
 // 型層: 共通の値オブジェクトと列挙型。
 // 完全な仕様は design.md "Types" セクション参照。
+
+enum CameraPosition: String, Codable, Equatable {
+    case front
+    case back
+
+    var avPosition: AVCaptureDevice.Position {
+        switch self {
+        case .front: return .front
+        case .back: return .back
+        }
+    }
+}
 
 enum CameraAuthorization {
     case notDetermined

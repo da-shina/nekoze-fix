@@ -18,13 +18,28 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private let poseDetector = PoseDetector()
     private let postureAnalyzer = PostureAnalyzer()
     private var calibrationLogic = CalibrationLogic()
-    private let settingsStore = SettingsStore()
+    private let settingsStore: SettingsStore
 
     // MARK: - 初期化
 
-    /// デフォルトのスナップショットで初期化する
-    override init() {
+    init(settingsStore: SettingsStore = SettingsStore()) {
+        self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
+        setupSettingsObservation()
+    }
+
+    private func setupSettingsObservation() {
+        settingsStore.$cameraPosition
+            .dropFirst() // 初期値での再起動を防ぐ
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                if self.snapshot.phase == .monitoring || self.snapshot.phase == .calibrating {
+                    Task {
+                        await self.restartCameraPipeline()
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - 公開メソッド
@@ -118,9 +133,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - プライベートメソッド
 
+    private func restartCameraPipeline() async {
+        cameraManager.stop()
+        await startCameraPipeline()
+    }
+
     private func startCameraPipeline() async {
         do {
-            try await cameraManager.start()
+            try await cameraManager.start(position: settingsStore.cameraPosition.avPosition)
             cameraManager.setSampleBufferDelegate(self)
         } catch {
             print("Camera pipeline start failed: \(error)")
@@ -143,7 +163,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
 
         // 2. 姿勢分析
-        // リファレンス角度と閾値はメインスレッドから取得するか、値として渡す必要がある
         Task { @MainActor in
             let refAngle = self.getReferenceAngle()
             let threshold = self.getThreshold()
@@ -172,7 +191,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let refAngle) = progress {
+            if case .completed(_) = progress {
                 self.snapshot.phase = .monitoring
                 // TODO: refAngle を保存する仕組みを実装
             }

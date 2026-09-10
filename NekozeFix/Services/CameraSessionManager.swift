@@ -52,7 +52,7 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     // MARK: - セッション管理
 
-    func start() async throws {
+    func start(position: AVCaptureDevice.Position = .front) async throws {
         guard authorization == .authorized else {
             throw CameraError.notAuthorized
         }
@@ -65,7 +65,7 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
                 }
 
                 do {
-                    try self.configureSession()
+                    try self.configureSession(position: position)
                     self.captureSession.startRunning()
                     continuation.resume()
                 } catch {
@@ -102,7 +102,7 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     // MARK: - プライベートメソッド
 
-    private func configureSession() throws {
+    private func configureSession(position: AVCaptureDevice.Position) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
@@ -111,13 +111,13 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         // 既存の入力を削除
         captureSession.inputs.forEach { captureSession.removeInput($0) }
 
-        // フロントカメラを追加
-        guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+        // 指定された位置のカメラを追加
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
             throw CameraError.cameraNotAvailable
         }
 
         do {
-            let input = try AVCaptureDeviceInput(device: frontCamera)
+            let input = try AVCaptureDeviceInput(device: camera)
             if captureSession.canAddInput(input) {
                 captureSession.addInput(input)
             } else {
@@ -147,9 +147,9 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
                 if connection.isVideoOrientationSupported {
                     connection.videoOrientation = .portrait
                 }
-                // フロントカメラのミラー処理
+                // 前面カメラの時のみミラー処理を有効にする
                 if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = true
+                    connection.isVideoMirrored = (position == .front)
                 }
             }
         } else {

@@ -10,6 +10,7 @@ final class SettingsStore: ObservableObject {
     private enum Keys {
         static let sensitivity = "com.nekozefix.sensitivity"
         static let isMonitoringEnabled = "com.nekozefix.isMonitoringEnabled"
+        static let cameraPosition = "com.nekozefix.cameraPosition"
     }
 
     // MARK: - プロパティ
@@ -25,6 +26,15 @@ final class SettingsStore: ObservableObject {
         let savedEnabled = defaults.bool(forKey: Keys.isMonitoringEnabled)
         self.sensitivity = (savedSensitivity == 0 && defaults.object(forKey: Keys.sensitivity) == nil) ? 0.5 : savedSensitivity
         self.isMonitoringEnabled = savedEnabled
+
+        // カメラ位置の読込
+        if let posString = defaults.string(forKey: Keys.cameraPosition),
+           let pos = CameraPosition(rawValue: posString) {
+            self.cameraPosition = pos
+        } else {
+            self.cameraPosition = .front
+        }
+
         // 初期化後にregisterDefaultsを呼ぶ
         registerDefaults()
     }
@@ -41,6 +51,12 @@ final class SettingsStore: ObservableObject {
     /// デフォルト: false
     @Published var isMonitoringEnabled: Bool {
         didSet { defaults.set(isMonitoringEnabled, forKey: Keys.isMonitoringEnabled) }
+    }
+
+    /// 使用するカメラの位置 (前面/背面)
+    /// デフォルト: .front
+    @Published var cameraPosition: CameraPosition {
+        didSet { defaults.set(cameraPosition.rawValue, forKey: Keys.cameraPosition) }
     }
 
     // MARK: - 公開メソッド
@@ -61,7 +77,8 @@ final class SettingsStore: ObservableObject {
     private func registerDefaults() {
         defaults.register(defaults: [
             Keys.sensitivity: 0.5,
-            Keys.isMonitoringEnabled: false
+            Keys.isMonitoringEnabled: false,
+            Keys.cameraPosition: CameraPosition.front.rawValue
         ])
     }
 }
