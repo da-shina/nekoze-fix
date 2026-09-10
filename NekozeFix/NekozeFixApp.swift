@@ -2,15 +2,12 @@ import SwiftUI
 
 @main
 struct NekozeFixApp: App {
+    @StateObject private var sessionManager = PostureSessionManager()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environmentObject(sessionManager)
         }
-    }
-}
-
-struct ContentView: View {
-    var body: some View {
-        Text("NekozeFix")
     }
 }

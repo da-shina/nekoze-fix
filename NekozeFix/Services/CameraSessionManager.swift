@@ -7,7 +7,7 @@ import UIKit
 /// 非同期認証による AVCaptureSession の管理。
 ///
 /// 設計参照: design.md の "CameraSessionManager" セクション。
-final class CameraSessionManager: NSObject, ObservableObject {
+final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - 公開プロパティ
 
     @Published private(set) var authorization: CameraAuthorization = .notDetermined

@@ -60,9 +60,6 @@ struct CalibrationLogic {
                 return .accumulating(elapsed: 0)
             }
 
-            // 新しいサンプルで蓄積を継続
-            let timeInterval = now - lastTime
-
             // lastAngle 更新前に姿勢の不安定さをチェック（角度変化 > 5度）
             let angleDelta = abs(sample.nearAngleDegrees - lastAngle)
 

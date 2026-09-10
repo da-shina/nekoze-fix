@@ -13,6 +13,7 @@ final class PostureSessionManager: ObservableObject {
     // MARK: - プライベートプロパティ
 
     private var cancellables = Set<AnyCancellable>()
+    private let cameraManager = CameraSessionManager()
 
     // MARK: - 初期化
 
@@ -25,7 +26,15 @@ final class PostureSessionManager: ObservableObject {
 
     /// セッションの初期化を行う
     func bootstrap() async {
-        // 初期化処理（現在のところ何もしない）
+        let auth = await cameraManager.requestAuthorization()
+        switch auth {
+        case .authorized:
+            snapshot.phase = .calibrating
+        case .denied:
+            snapshot.phase = .permissionDenied
+        case .notDetermined:
+            snapshot.phase = .awaitingPermission
+        }
     }
 
     /// キャリブレーションフェーズに遷移する

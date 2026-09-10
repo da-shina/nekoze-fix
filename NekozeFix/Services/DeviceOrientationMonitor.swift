@@ -36,7 +36,7 @@ final class DeviceOrientationMonitor: ObservableObject {
             name: UIDevice.orientationDidChangeNotification,
             object: nil
         )
-        updateOrientation()
+        _ = updateOrientation()
     }
 
     /// デバイスの向きの変化の監視を停止します
