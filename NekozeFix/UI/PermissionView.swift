@@ -14,7 +14,7 @@ struct PermissionView: View {
         VStack(spacing: 24) {
             // アプリアイコン/タイトルエリア
             VStack(spacing: 12) {
-                Image("AppIcon")
+                Image("AppIconImage")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 80, height: 80)
