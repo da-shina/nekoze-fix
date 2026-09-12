@@ -176,15 +176,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             imageAR = 4.0 / 3.0
         }
 
+        // iPadOS 18 以降、videoDataOutput のバッファはインターフェース向きに
+        // 自動回転して配信される（connection.videoOrientation は参考値にすぎない）。
+        // したがって Vision には常に .up を渡す。
+        //
+        // ポーズ検出はキャプチャキュー（sessionQueue）上で同期的に実行する。
+        // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
+        // タップ応答の遅延・取りこぼしを引き起こす。
+        // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
+        let frame = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
-            // iPadOS 18 以降、videoDataOutput のバッファはインターフェース向きに
-            // 自動回転して配信される（connection.videoOrientation は参考値にすぎない）。
-            // したがって Vision には常に .up を渡す。
-            let orientation: CGImagePropertyOrientation = .up
 
-            // 2. ポーズ検出
-            guard let frame = self.poseDetector.detect(sampleBuffer: sampleBuffer, orientation: orientation) else {
+            // 2. ポーズ検出結果の反映
+            guard let frame else {
                 self.updateState(presence: .personMissing, sample: nil)
                 return
             }
