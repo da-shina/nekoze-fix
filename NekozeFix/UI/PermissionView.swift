@@ -95,9 +95,11 @@ struct PermissionView: View {
     // MARK: - アクション
 
     private func requestAuthorization() {
-        // CameraSessionManager が実際の認証リクエストを処理
-        // RootView が再度 bootstrap() を呼び出す
-        sessionManager.updatePhase(.awaitingPermission)
+        // bootstrap() が CameraSessionManager 経由で認証を再リクエストし、
+        // 設定で許可された場合もそのまま校正へ遷移する
+        Task {
+            await sessionManager.bootstrap()
+        }
     }
 
     private func openSettings() {
