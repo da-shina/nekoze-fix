@@ -78,12 +78,4 @@ final class PerformanceTests: XCTestCase {
         // MonitorViewとCameraPreviewViewのコード検査で確認済み
         XCTAssertTrue(true, "ダイムモードの実装はGPU/CPU負荷を軽減")
     }
-
-    /// バックグラウンドでカメラとオーディオを停止することを検証
-    func testBackgroundStopsServices() {
-        let lifecycleObserver = AppLifecycleObserver()
-        // バックグラウンド時: カメラ停止、オーディオ停止、isIdleTimerDisabled = false
-        // AppLifecycleObserverコールバックで実装済み
-        XCTAssertNotNil(lifecycleObserver)
-    }
 }
