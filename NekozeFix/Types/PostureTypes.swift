@@ -85,6 +85,9 @@ struct SessionSnapshot: Equatable {
     var isDimmed: Bool = false
     var isRotating: Bool = false
     var isPersonDetected: Bool = false
+    /// 人物は映っているが肩のキーポイントが読めない状態（顔のみ検出）。
+    /// 校正中の「肩が映っていません」案内に使用。
+    var isShoulderMissing: Bool = false
     var showGuideline: Bool = false
     var sensitivity: Double = 0.5
     var isMonitoringEnabled: Bool = false

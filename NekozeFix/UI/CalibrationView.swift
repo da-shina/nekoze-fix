@@ -15,6 +15,7 @@ struct CalibrationView: View {
 
     @State private var timerRemaining = 3.0
     @State private var isPersonDetected = false
+    @State private var isShoulderMissing = false
     @State private var showingPersonMissing = false
     @State private var progressMessage = "3秒間姿勢を保持してください"
     @State private var cancellables = Set<AnyCancellable>()
@@ -47,6 +48,16 @@ struct CalibrationView: View {
                     .shadow(radius: 4)
 
                 Spacer()
+
+                // 肩が映っていない場合の運用ガイド（顔のみ検出状態）
+                if isPersonDetected && isShoulderMissing {
+                    Label("肩が認識できません。端末を目線より高く、やや見下ろす位置に置いてください", systemImage: "camera.metering.center.weighted")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                        .padding()
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(12)
+                }
 
                 // カメラ操作カード（ステータス・進捗メッセージ・カメラ切替を統合）
                 VStack(spacing: 16) {
@@ -114,6 +125,7 @@ struct CalibrationView: View {
                 // 1. 人物検出状態の更新
                 let detected = snapshot.isPersonDetected
                 self.isPersonDetected = detected
+                self.isShoulderMissing = snapshot.isShoulderMissing
                 self.showingPersonMissing = !detected
                 self.progressMessage = detected ? "姿勢を保持中..." : "姿勢を保持してください"
 

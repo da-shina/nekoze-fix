@@ -235,15 +235,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
             // 人物なし（Body Pose 観測空 かつ 顔なし）
             if case .absent = detection {
+                self.snapshot.isShoulderMissing = false
                 self.updateState(presence: .personMissing, sample: nil)
                 return
             }
 
-            // 顔のみの検出: 人物はいるが角度は計算できない
+            // 顔のみの検出: 人物はいるが角度は計算できない。
+            // 「肩が映っていません」案内を灯す（復帰は pose 検出フレームで消える）。
             guard case .pose(let frame) = detection else {
+                self.snapshot.isShoulderMissing = true
                 self.updateState(presence: .personDetected, sample: nil)
                 return
             }
+            self.snapshot.isShoulderMissing = false
 
             // 2. 姿勢分析
             let refAngle = self.getReferenceAngle()
