@@ -31,13 +31,13 @@ struct PostureOverlayView: View {
                         path.move(to: pL)
                         path.addLine(to: pR)
                     }
-                    .stroke(shoulderColor, lineWidth: isRef ? 1 : 2)
+                    .stroke(shoulderColor, lineWidth: isRef ? 2 : 4)
 
                     // 肩のポイント
                     ForEach(0..<2) { i in
                         Circle()
                             .fill(shoulderColor)
-                            .frame(width: isRef ? 4 : 8, height: isRef ? 4 : 8)
+                            .frame(width: isRef ? 6 : 12, height: isRef ? 6 : 12)
                             .position(normalizePoint(currentPoints[i], in: geometry.size))
                     }
                 }
@@ -47,7 +47,7 @@ struct PostureOverlayView: View {
                     ForEach(2..<4) { i in
                         Circle()
                             .fill(earColor)
-                            .frame(width: isRef ? 4 : 8, height: isRef ? 4 : 8)
+                            .frame(width: isRef ? 6 : 12, height: isRef ? 6 : 12)
                             .position(normalizePoint(currentPoints[i], in: geometry.size))
                     }
                 }
@@ -60,7 +60,7 @@ struct PostureOverlayView: View {
                         path.move(to: pE)
                         path.addLine(to: pS)
                     }
-                    .stroke(lineColor, lineWidth: isRef ? 1 : 3)
+                    .stroke(lineColor, lineWidth: isRef ? 2 : 5)
                 }
 
                 // 基準となる直線 (Reference モードでは非表示)
@@ -77,7 +77,7 @@ struct PostureOverlayView: View {
                         path.move(to: startPoint)
                         path.addLine(to: end)
                     }
-                    .stroke(Color.green, lineWidth: 4)
+                    .stroke(Color.green, lineWidth: 6)
                 }
             }
         }

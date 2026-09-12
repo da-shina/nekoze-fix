@@ -46,48 +46,29 @@ struct CalibrationView: View {
                     .foregroundColor(.primary)
                     .shadow(radius: 4)
 
-                // 基準線のオーバーレイ
-                ZStack {
-                    // カメラプレビューの上に描画するため、ここでは空のViewにして
-                    // 実際にはCameraPreviewViewの上のZStackで管理
-                }
-                .frame(height: 0)
-
-
-                // ステータス表示
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-
-                    Text(isPersonDetected ? "検出中" : "検出失敗")
-                        .foregroundColor(isPersonDetected ? .green : .red)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground).opacity(0.7))
-                .cornerRadius(20)
-
-                // メッセージエリア
-                VStack(spacing: 16) {
-                    if showingPersonMissing {
-                        Text("人を検出できません\nもう一度姿勢を保持してください")
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    } else {
-                        Text(progressMessage)
-                            .foregroundColor(.primary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                .padding()
-                .background(Color(.systemBackground).opacity(0.7))
-                .cornerRadius(12)
-                .frame(maxWidth: .infinity, alignment: .center)
-
                 Spacer()
 
-                // 下部コントロールエリア
-                VStack(spacing: 24) {
+                // カメラ操作カード（ステータス・進捗メッセージ・カメラ切替を統合）
+                VStack(spacing: 16) {
+                    // ステータス表示
+                    HStack {
+                        Image(systemName: isPersonDetected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundColor(isPersonDetected ? .green : .red)
+
+                        Text(isPersonDetected ? "検出中" : "人を検出できません")
+                            .font(.headline)
+                            .foregroundColor(isPersonDetected ? .green : .red)
+
+                        Spacer()
+
+                        Text(progressMessage)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    Divider()
+
                     // カメラ切り替え
                     HStack {
                         Text("カメラ")
@@ -103,13 +84,10 @@ struct CalibrationView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 150)
                     }
-                    .padding()
-                    .background(Color(.systemBackground).opacity(0.8))
-                    .cornerRadius(16)
                 }
                 .padding()
-                .background(Color(.systemBackground).opacity(0.8))
-                .cornerRadius(24)
+                .background(.ultraThinMaterial)
+                .cornerRadius(16)
             }
             .padding()
         }
@@ -137,7 +115,7 @@ struct CalibrationView: View {
                 let detected = snapshot.isPersonDetected
                 self.isPersonDetected = detected
                 self.showingPersonMissing = !detected
-                self.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
+                self.progressMessage = detected ? "姿勢を保持中..." : "姿勢を保持してください"
 
                 // 2. キャリブレーション進捗の更新
                 switch snapshot.calibrationProgress {
