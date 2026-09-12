@@ -21,9 +21,37 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private let settingsStore: SettingsStore
     private let orientationMonitor = DeviceOrientationMonitor()
 
+    // 通知音（design.md "AlertPlayer" Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
+    private lazy var alertPlayer: AlertPlayer? = {
+        guard let url = Bundle.main.url(forResource: "usagi-to-kame", withExtension: "caf") else {
+            print("AlertPlayer: usagi-to-kame.caf が見つかりません")
+            return nil
+        }
+        let player = AlertPlayer(soundURL: url)
+        do {
+            try player.configureSession()
+        } catch {
+            print("AlertPlayer: セッション構成に失敗 \(error)")
+            return nil
+        }
+        return player
+    }()
+    // slouchGate の deltaTime 算出用（メインアクタからのみアクセス）
+    private var lastGateTickTime: TimeInterval?
+
     // MARK: - 初期化
 
     private var guidelineTimer: Timer?
+
+    /// personMissing 確定までの猶予時間（秒）。この未満の連続欠測はノイズ扱い。
+    static let personMissingGracePeriod: TimeInterval = 0.5
+    /// 最後に人物を検出した時刻（nil は未検出継続中）
+    private var lastPersonSeenTime: TimeInterval?
+
+    // FIXME: 検出率測定用の一時 DIAG
+    nonisolated(unsafe) private var diagWindowStart: TimeInterval = 0
+    nonisolated(unsafe) private var diagTotal = 0
+    nonisolated(unsafe) private var diagHits = 0
 
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
@@ -97,6 +125,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isRotating = false
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
+        lastGateTickTime = nil
         Task {
             await startCameraPipeline()
         }
@@ -108,6 +137,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isDimmed = false
         snapshot.isRotating = false
         cameraManager.stop()
+        // 監視停止時は通知音も即停止（design.md Q20）
+        alertPlayer?.stop()
     }
 
     /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
@@ -184,14 +215,33 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
         // タップ応答の遅延・取りこぼしを引き起こす。
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
-        let frame = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+        let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+
+        // FIXME: 検出率測定用の一時 DIAG（10秒ごと、検証後に削除）
+        let detected: Bool
+        if case .absent = detection { detected = false } else { detected = true }
+        diagTotal += 1
+        if detected { diagHits += 1 }
+        let nowDiag = CACurrentMediaTime()
+        if nowDiag - diagWindowStart > 10.0 {
+            print("DIAG: detection rate \(diagHits)/\(diagTotal) in last \(Int(nowDiag - diagWindowStart))s")
+            diagWindowStart = nowDiag
+            diagTotal = 0
+            diagHits = 0
+        }
 
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
 
-            // 2. ポーズ検出結果の反映
-            guard let frame else {
+            // 人物なし（Body Pose 観測空 かつ 顔なし）
+            if case .absent = detection {
                 self.updateState(presence: .personMissing, sample: nil)
+                return
+            }
+
+            // 顔のみの検出: 人物はいるが角度は計算できない
+            guard case .pose(let frame) = detection else {
+                self.updateState(presence: .personDetected, sample: nil)
                 return
             }
 
@@ -244,8 +294,22 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
     }
 
-    private func updateState(presence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil, points: [CGPoint] = []) {
+    private func updateState(presence rawPresence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil, points rawPoints: [CGPoint] = []) {
         // メインスレッドで動作することが保証されている
+
+        // personMissing デバウンス: 欠測が gracePeriod 未満の連続なら
+        // ノイズとして「検出中」を維持する（表示・蓄積とも）。
+        // 復帰（検出）は即時。確定した人物なしのみリセット要因になる。
+        let now = CACurrentMediaTime()
+        var presence = rawPresence
+        var points = rawPoints
+        if rawPresence == .personDetected {
+            lastPersonSeenTime = now
+        } else if let seen = lastPersonSeenTime, now - seen < Self.personMissingGracePeriod {
+            presence = .personDetected
+            points = self.snapshot.visualizationPoints
+        }
+
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
 
@@ -266,10 +330,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
-            if sample != nil {
-                self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
-            } else {
+            if presence == .personMissing {
                 self.snapshot.displayedPosture = .personMissing
+            } else if sample != nil {
+                self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
+            }
+            // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
+
+            // 確定猫背ゲート: 3秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
+            let now = CACurrentMediaTime()
+            let deltaTime = now - (self.lastGateTickTime ?? now)
+            self.lastGateTickTime = now
+            let isSlouch = self.snapshot.displayedPosture == .slouch
+            let fired = self.snapshot.slouchGate.tick(isConditionMet: isSlouch, deltaTime: deltaTime)
+            if fired {
+                self.alertPlayer?.startRepeating()
+            } else if !isSlouch {
+                // 改善時は即停止（design.md Q20）
+                self.alertPlayer?.stop()
             }
         }
     }

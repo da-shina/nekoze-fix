@@ -44,7 +44,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 ### Allowed Dependencies
 
 - iOS/iPadOS 16+ SDK: AVFoundation（`.high` プリセット = 720p）、Vision、AVFAudio、SwiftUI、UIKit
-- バンドル内の通知音アセット（`usagi-to-kame.caf`、自前生成の短いメロディ）
+- バンドル内の通知音アセット（`usagi-to-kame.caf`、うさぎとかめのチップチューンループ音源）
 - UserDefaults（感度と前回監視状態のローカル保持のみ）
 
 ### Revalidation Triggers
@@ -152,7 +152,7 @@ graph TB
 | Q20 | 監視停止時の通知音 | 即座に `stop()` を呼ぶ |
 | Q21 | 人物検出の判定 | 即座に（ノイズ耐性なし） |
 | Q22 | 姿勢崩れ判定 | 角度変化 > 5度 OR 人物検出途絶 |
-| Q23 | 再通知間隔 | 前回通知から30秒 |
+| Q23 | 再通知間隔 | 前回通知から音声1ループ分（音源長に追従、現音源は約14秒） |
 | Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持、バックグラウンド移行時は復元しない |
 
 詳細は各ADR（docs/adr/0008〜0013）に記載されている。
@@ -419,11 +419,11 @@ protocol AlertPlaying {
 
 - カテゴリ `.playback`、オプション `.duckOthers`（5.4）
 - **プリロードは `startMonitoring()` 呼び出し時に実行**（Q17 決定）。`configureSession()` と音声ファイルのロードを `startMonitoring()` 内で行う
-- 確定猫背の初回で 1 回再生し、継続中は **前回通知から 30 秒間隔**（Q23 決定：「0s, 30s, 60s...」ではなく「通知時点から30秒後」）
+- 確定猫背の初回で 1 回再生し、継続中は **前回通知から音声1ループ分**（Q23 決定：「0s, 30s, 60s...」ではなく「通知時点から再再生」。間隔は `AVAudioPlayer.duration` に追従し、音切れ・重複のないシームレスループとする。現音源 `usagi-to-kame.caf` は約14.2秒）
 - **同時再生ポリシー**: 次の再生時刻で前の音がまだ鳴っている場合、前の音を停止して次を再生する（Q18 決定：重複を避ける）
 - 改善時は即停止し、繰り返しタイマーを破棄する（5.3, Q20 決定：監視停止でも `stop()` を即座に呼ぶ）
 - 再生開始は確定判定から 0.5 秒以内（NFR 8.2）。プレイヤーは事前ロードする
-- デフォルト音源はバンドルの `usagi-to-kame.caf`（1〜2 秒）
+- デフォルト音源はバンドルの `usagi-to-kame.caf`（約14.2秒ループ。繰り返し間隔は音源長に連動するため、短いファンファーレである必要はない）
 - 暗転中の音量は **ユーザー設定のまま**（Q19 決定）。暗転モードは画面のみで音量は変えない
 
 ### DeviceOrientationMonitor
@@ -513,7 +513,7 @@ stateDiagram-v2
     confirmedSlouch --> good: angleRecoveredImmediate
 ```
 
-- `confirmedSlouch` 入場で `playOnce` と 30 秒リピート開始
+- `confirmedSlouch` 入場で `playOnce` とリピート開始（間隔は音声ループ長）
 - `good` 入場で `stop`
 - `personMissing` は **即座に** 判定（Vision が `nil` を返したフレームで確定）。蓄積中の猫背ゲートは即座にリセットする（Q6 決定）
 - `dimmed` はフェーズではなくフラグ。監視は継続しプレビューを隠す（6.2）。暗転中の人物なし表示は **抑制**（Q8 決定：完全黒画面維持）
@@ -662,7 +662,7 @@ sequenceDiagram
 - 開始/停止でカメラ start/stop が対になる（3.1）
 - 開始時に AlertPlayer をプリロード（Q17 決定）
 - 停止時に AlertPlayer.stop() を即座に呼ぶ（Q20 決定）
-- 確定入場で playOnce、継続で 30 秒リピート（Q23 決定：前回通知から30秒）
+- 確定入場で playOnce、継続でリピート（Q23 決定：間隔は音声ループ長に追従）
 - 改善で stop（5.3）
 - 同時再生ポリシー：前の音停止→次を再生（Q18 決定）
 - 回転中は判定停止、5秒タイムアウトで再開（Q5, Q14 決定）
@@ -724,7 +724,7 @@ E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5
 | 4.5 | confidence 0.5 未満除外 | PoseDetector, PostureAnalyzer | minimumKeypointConfidence | 判定 |
 | 4.6 | 近側主、遠側は合否のみ | PostureAnalyzer | AngleSample | 判定 |
 | 5.1 | 確定時に1回再生 | AlertPlayer | playOnce | 通知 |
-| 5.2 | 30秒おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
+| 5.2 | 音声ループ長おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
 | 5.3 | 改善で停止 | AlertPlayer | stop（監視停止でも即座） | 通知 |
 | 5.4 | マナーモードでも再生 | AlertPlayer | playback category | 通知 |
 | 6.1 | 暗転へ切替（輝度 0.0 + wake lock） | MonitorView, PostureSessionManager | enterDimMode | 暗転 |
