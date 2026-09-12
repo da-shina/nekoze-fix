@@ -31,9 +31,18 @@ struct PermissionView: View {
             Spacer()
 
             // 許可状態に応じたコンテンツ
-            if sessionManager.snapshot.phase == .permissionDenied {
+            switch sessionManager.snapshot.phase {
+            case .permissionDenied:
                 deniedContent
-            } else {
+            case .idle:
+                // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
+                Button(action: startCalibration) {
+                    Label("校正を開始", systemImage: "arrow.triangle.2.circlepath")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            default:
                 requestingContent
             }
 
@@ -93,6 +102,13 @@ struct PermissionView: View {
     }
 
     // MARK: - アクション
+
+    private func startCalibration() {
+        // bootstrap() が認証確認 → .calibrating 遷移とカメラ起動を行う
+        Task {
+            await sessionManager.bootstrap()
+        }
+    }
 
     private func requestAuthorization() {
         // bootstrap() が CameraSessionManager 経由で認証を再リクエストし、
