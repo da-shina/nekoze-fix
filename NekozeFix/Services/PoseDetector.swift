@@ -126,6 +126,12 @@ final class PoseDetector: @unchecked Sendable {
             return Keypoint(x: Double(point.location.x), y: Double(point.location.y), confidence: Double(point.confidence))
         }
 
+        /// 閾値適用前の raw confidence（-1 = キーポイント未取得）。DEBUG 診断用。
+        func rawConfidence(_ jointName: VNHumanBodyPoseObservation.JointName) -> Double {
+            guard let point = try? observation.recognizedPoint(jointName) else { return -1 }
+            return Double(point.confidence)
+        }
+
         let leftEar = extractKeypoint(.leftEar)
         let rightEar = extractKeypoint(.rightEar)
         let leftShoulder = extractKeypoint(.leftShoulder)
@@ -136,7 +142,9 @@ final class PoseDetector: @unchecked Sendable {
             leftEar: leftEar,
             rightEar: rightEar,
             leftShoulder: leftShoulder,
-            rightShoulder: rightShoulder
+            rightShoulder: rightShoulder,
+            rawLeftShoulderConfidence: rawConfidence(.leftShoulder),
+            rawRightShoulderConfidence: rawConfidence(.rightShoulder)
         )
     }
 }

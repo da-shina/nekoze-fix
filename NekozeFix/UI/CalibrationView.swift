@@ -49,6 +49,15 @@ struct CalibrationView: View {
 
                 Spacer()
 
+                #if DEBUG
+                // 肩 confidence 実測（採用閾値 0.3。. = 未取得 / 観測なし）
+                if isPersonDetected {
+                    Text("shoulder conf  L \(debugConf(sessionManager.snapshot.debugLeftShoulderConfidence)) / R \(debugConf(sessionManager.snapshot.debugRightShoulderConfidence))")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.yellow)
+                }
+                #endif
+
                 // 肩が映っていない場合の運用ガイド（顔のみ検出状態）
                 if isPersonDetected && isShoulderMissing {
                     Label("肩が認識できません。端末を少し離して肩まで画面に収めてください", systemImage: "camera.metering.center.weighted")
@@ -117,6 +126,14 @@ struct CalibrationView: View {
     }
 
     // MARK: - プライベートメソッド
+
+    #if DEBUG
+    /// 肩 confidence 表示用。nil（観測なし）/ 0 未満（キーポイント未取得）は "."
+    private func debugConf(_ value: Double?) -> String {
+        guard let value, value >= 0 else { return "." }
+        return String(format: "%.2f", value)
+    }
+    #endif
 
     private func setupObservers() {
         // snapshot 全体を監視して、人物検出と進捗を更新

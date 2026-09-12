@@ -39,6 +39,10 @@ struct PoseFrame: Equatable {
     var rightEar: Keypoint?
     var leftShoulder: Keypoint?
     var rightShoulder: Keypoint?
+    /// 閾値適用前の肩キーポイント信頼度（-1 = Vision がキーポイントを返さなかった）。
+    /// DEBUG 診断用（なで肩の実測切り分け）。
+    var rawLeftShoulderConfidence: Double = -1
+    var rawRightShoulderConfidence: Double = -1
 }
 
 enum Side: Equatable {
@@ -98,6 +102,11 @@ struct SessionSnapshot: Equatable {
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
+    #if DEBUG
+    /// DEBUG 診断: 採用前の肩 confidence（nil = Body Pose 観測そのものが無い）
+    var debugLeftShoulderConfidence: Double? = nil
+    var debugRightShoulderConfidence: Double? = nil
+    #endif
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。
