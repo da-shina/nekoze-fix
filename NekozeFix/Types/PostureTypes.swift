@@ -76,7 +76,7 @@ enum DisplayedPosture: Equatable {
 enum CalibrationProgress: Equatable {
     case waitingForPerson
     case accumulating(elapsed: TimeInterval)
-    case completed(referenceNearAngleDegrees: Double)
+    case completed(referenceNearAngleDegrees: Double, referencePoints: [CGPoint])
 }
 
 struct SessionSnapshot: Equatable {

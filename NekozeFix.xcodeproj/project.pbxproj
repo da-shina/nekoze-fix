@@ -314,7 +314,6 @@
 				20DBBB2C304EEFCE00B43650 /* CalibrationView.swift in Sources */,
 				20DBBB2D304EEFCE00B43650 /* CameraPreviewView.swift in Sources */,
 				20DBBB2E304EEFCE00B43650 /* MonitorView.swift in Sources */,
-				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
 				20DBBB21304EEE9200B43650 /* TimedConditionGate.swift in Sources */,
 				20DBBB20304EEE9200B43650 /* PostureAnalyzer.swift in Sources */,
 				20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */,
@@ -326,6 +325,7 @@
 				20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */,
 				20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */,
 				20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */,
+				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
 				20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */,
 				20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */,
 			);
@@ -349,6 +349,7 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;
 				MARKETING_VERSION = 1.0;
@@ -371,6 +372,7 @@
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.6;

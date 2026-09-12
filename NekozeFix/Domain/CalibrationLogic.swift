@@ -6,6 +6,7 @@ struct CalibrationLogic {
     // MARK: - 状態
 
     private var accumulatedAngles: [Double] = []
+    private var accumulatedPoints: [[CGPoint]] = []
     private var isAccumulating = false
     private var personPresent = false
     private var lastAngle: Double = 0.0
@@ -15,9 +16,10 @@ struct CalibrationLogic {
     // MARK: - 公開API
 
     /// 新しいキャリブレーションセッションを開始する。
-/// 以前の基準値は上書きされる。
+    /// 以前の基準値は上書きされる。
     mutating func start() {
         accumulatedAngles = []
+        accumulatedPoints = []
         isAccumulating = false
         personPresent = false
         lastAngle = 0.0
@@ -30,11 +32,13 @@ struct CalibrationLogic {
     ///   - sample: PostureAnalyzer からの角度サンプル（有効な角度がない場合は nil）
     ///   - presence: 人物検出状態
     ///   - now: 現在の時刻間隔
+    ///   - points: 可視化ポイント（6点: 0左肩 1右肩 2左耳 3右耳 4近傍耳 5近傍肩）
     /// - Returns: キャリブレーション進捗状態
-    mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval) -> CalibrationProgress {
+    mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval, points: [CGPoint] = []) -> CalibrationProgress {
         // 人物が見つからない場合 - 即座にリセット
         if presence == .personMissing {
             accumulatedAngles = []
+            accumulatedPoints = []
             isAccumulating = false
             return .waitingForPerson
         }
@@ -53,6 +57,7 @@ struct CalibrationLogic {
             if !isAccumulating {
                 // 最初の有効サンプルで蓄積を開始
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedPoints = [points]
                 isAccumulating = true
                 lastAngle = sample.nearAngleDegrees
                 lastTime = now
@@ -68,6 +73,7 @@ struct CalibrationLogic {
             if angleDelta > 5.0 {
                 // 不安定な場合は蓄積をリセット
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedPoints = [points]
                 lastAngle = sample.nearAngleDegrees
                 lastTime = now
                 accumulationStartTime = now
@@ -76,6 +82,9 @@ struct CalibrationLogic {
 
             // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
+            if !points.isEmpty {
+                accumulatedPoints.append(points)
+            }
         }
 
         // 蓄積が完了に十分かチェック（3秒間の安定した姿勢）
@@ -83,10 +92,12 @@ struct CalibrationLogic {
         if isAccumulating && accumulatedAngles.count >= 180 { // 3 seconds * 60 fps
             // 蓄積された角度の平均を計算
             let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
-            let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average)
+            let finalPoints = accumulatedPoints.last ?? []
+            let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referencePoints: finalPoints)
 
             // 完了後に状態をリセット
             accumulatedAngles = []
+            accumulatedPoints = []
             isAccumulating = false
 
             return completedProgress

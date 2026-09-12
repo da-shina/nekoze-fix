@@ -18,12 +18,21 @@ struct MonitorView: View {
 
     var body: some View {
         ZStack {
-            // 背景にカメラプレビューを表示
-            CameraPreviewView(session: sessionManager.cameraManager.captureSession)
+            // 校正で確定した姿勢を薄いグレーで固定表示
+            if let refPoints = sessionManager.snapshot.referencePoints {
+                PostureOverlayView(
+                    mode: .reference,
+                    referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                    currentPoints: refPoints,
+                    threshold: sessionManager.snapshot.currentThreshold,
+                    nearSide: sessionManager.snapshot.nearSide
+                )
                 .ignoresSafeArea()
+            }
 
-            // 姿勢ポイントの可視化
+            // 現在の姿勢をカラーで表示
             PostureOverlayView(
+                mode: .current,
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 threshold: sessionManager.snapshot.currentThreshold,
