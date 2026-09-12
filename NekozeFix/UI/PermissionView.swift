@@ -14,9 +14,11 @@ struct PermissionView: View {
         VStack(spacing: 24) {
             // アプリアイコン/タイトルエリア
             VStack(spacing: 12) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.accentColor)
+                Image("AppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 Text("NekozeFix")
                     .font(.largeTitle)
