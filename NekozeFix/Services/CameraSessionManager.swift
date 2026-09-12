@@ -7,7 +7,7 @@ import UIKit
 /// 非同期認証による AVCaptureSession の管理。
 ///
 /// 設計参照: design.md の "CameraSessionManager" セクション。
-final class CameraSessionManager: NSObject, ObservableObject {
+final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - 公開プロパティ
 
     @Published private(set) var authorization: CameraAuthorization = .notDetermined
@@ -15,6 +15,17 @@ final class CameraSessionManager: NSObject, ObservableObject {
     // MARK: - パブリックプロパティ
 
     let captureSession = AVCaptureSession()
+
+    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if let connection = self.videoOutput?.connection(with: .video) {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = orientation
+                }
+            }
+        }
+    }
 
     // MARK: - プライベートプロパティ
 
@@ -52,7 +63,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
 
     // MARK: - セッション管理
 
-    func start() async throws {
+    func start(position: AVCaptureDevice.Position = .front) async throws {
         guard authorization == .authorized else {
             throw CameraError.notAuthorized
         }
@@ -65,7 +76,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
                 }
 
                 do {
-                    try self.configureSession()
+                    try self.configureSession(position: position)
                     self.captureSession.startRunning()
                     continuation.resume()
                 } catch {
@@ -92,6 +103,26 @@ final class CameraSessionManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - ヘルパー
+
+    /// 現在のデバイス向きから AVCaptureVideoOrientation を推定する。
+    /// UIDevice.orientation が .unknown の場合は windowScene からフォールバック。
+    private func currentDeviceVideoOrientation() -> AVCaptureVideoOrientation {
+        switch UIDevice.current.orientation {
+        case .portrait:           return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft:     return .landscapeRight
+        case .landscapeRight:    return .landscapeLeft
+        default:
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) {
+                return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
+            }
+            return .portrait
+        }
+    }
+
     // MARK: - サンプルバッファデリゲート
 
     func setSampleBufferDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
@@ -102,7 +133,7 @@ final class CameraSessionManager: NSObject, ObservableObject {
 
     // MARK: - プライベートメソッド
 
-    private func configureSession() throws {
+    private func configureSession(position: AVCaptureDevice.Position) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
@@ -111,13 +142,13 @@ final class CameraSessionManager: NSObject, ObservableObject {
         // 既存の入力を削除
         captureSession.inputs.forEach { captureSession.removeInput($0) }
 
-        // フロントカメラを追加
-        guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+        // 指定された位置のカメラを追加
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
             throw CameraError.cameraNotAvailable
         }
 
         do {
-            let input = try AVCaptureDeviceInput(device: frontCamera)
+            let input = try AVCaptureDeviceInput(device: camera)
             if captureSession.canAddInput(input) {
                 captureSession.addInput(input)
             } else {
@@ -142,14 +173,14 @@ final class CameraSessionManager: NSObject, ObservableObject {
             captureSession.addOutput(output)
             self.videoOutput = output
 
-            // ビデオ向きをポートレートに設定
+            // ビデオ向きを現在のデバイス向きに設定
             if let connection = output.connection(with: .video) {
                 if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = .portrait
+                    connection.videoOrientation = currentDeviceVideoOrientation()
                 }
-                // フロントカメラのミラー処理
+                // 前面カメラの時のみミラー処理を有効にする
                 if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = true
+                    connection.isVideoMirrored = (position == .front)
                 }
             }
         } else {

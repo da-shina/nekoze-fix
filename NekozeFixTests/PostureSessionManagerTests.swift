@@ -82,19 +82,6 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isPersonDetected)
     }
 
-    // MARK: - 感度
-
-    func testUpdateSensitivity_clampsToRange() {
-        sut.updateSensitivity(-0.5)
-        XCTAssertEqual(sut.snapshot.sensitivity, 0.0)
-
-        sut.updateSensitivity(1.5)
-        XCTAssertEqual(sut.snapshot.sensitivity, 1.0)
-
-        sut.updateSensitivity(0.5)
-        XCTAssertEqual(sut.snapshot.sensitivity, 0.5)
-    }
-
     // MARK: - 監視有効化
 
     func testUpdateMonitoringEnabled_true() {

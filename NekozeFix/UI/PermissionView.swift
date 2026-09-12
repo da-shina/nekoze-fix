@@ -14,9 +14,11 @@ struct PermissionView: View {
         VStack(spacing: 24) {
             // アプリアイコン/タイトルエリア
             VStack(spacing: 12) {
-                Image(systemName: "camera.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.accentColor)
+                Image("AppIconImage")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
 
                 Text("NekozeFix")
                     .font(.largeTitle)
@@ -31,9 +33,18 @@ struct PermissionView: View {
             Spacer()
 
             // 許可状態に応じたコンテンツ
-            if sessionManager.snapshot.phase == .permissionDenied {
+            switch sessionManager.snapshot.phase {
+            case .permissionDenied:
                 deniedContent
-            } else {
+            case .idle:
+                // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
+                Button(action: startCalibration) {
+                    Label("校正を開始", systemImage: "arrow.triangle.2.circlepath")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            default:
                 requestingContent
             }
 
@@ -94,10 +105,19 @@ struct PermissionView: View {
 
     // MARK: - アクション
 
+    private func startCalibration() {
+        // bootstrap() が認証確認 → .calibrating 遷移とカメラ起動を行う
+        Task {
+            await sessionManager.bootstrap()
+        }
+    }
+
     private func requestAuthorization() {
-        // CameraSessionManager が実際の認証リクエストを処理
-        // RootView が再度 bootstrap() を呼び出す
-        sessionManager.updatePhase(.awaitingPermission)
+        // bootstrap() が CameraSessionManager 経由で認証を再リクエストし、
+        // 設定で許可された場合もそのまま校正へ遷移する
+        Task {
+            await sessionManager.bootstrap()
+        }
     }
 
     private func openSettings() {

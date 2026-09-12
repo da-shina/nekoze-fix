@@ -10,7 +10,7 @@ final class TimedConditionGateTests: XCTestCase {
         // 手順: 条件がtrueで2.5秒間tick（実際のdeltaTimeを使用）
         let deltaTime: TimeInterval = 1.0 / 60.0  // 約60fps
         for _ in 0..<150 {  // 150フレーム = 2.5秒
-            gate.tick(isConditionMet: true, deltaTime: deltaTime)
+            _ = gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
         // 検証: まだ発火していない（2.5秒 < 3.0秒）
@@ -23,7 +23,7 @@ final class TimedConditionGateTests: XCTestCase {
         gate.accumulated = 1.5  // 1.5秒蓄積をシミュレート
 
         // 手順: 条件がfalseになる
-        gate.tick(isConditionMet: false, deltaTime: 0.0)
+        _ = gate.tick(isConditionMet: false, deltaTime: 0.0)
 
         // 検証: アキュムレータが0にリセットされる
         XCTAssertEqual(gate.accumulated, 0.0)
@@ -37,7 +37,7 @@ final class TimedConditionGateTests: XCTestCase {
 
         // 手順: 条件がtrueで2.0秒間tick（121フレームで余裕を持たせる）
         for _ in 0..<121 {  // 121フレーム = 2.0083秒 > 2.0秒
-            gate.tick(isConditionMet: true, deltaTime: deltaTime)
+            _ = gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
         // 検証: 発火しているはず
@@ -52,7 +52,7 @@ final class TimedConditionGateTests: XCTestCase {
         gate.accumulated = 4.0
 
         // 手順: 条件がfalseになる
-        gate.tick(isConditionMet: false, deltaTime: 0.0)
+        _ = gate.tick(isConditionMet: false, deltaTime: 0.0)
 
         // 検証: アキュムレータが即座にリセット
         XCTAssertEqual(gate.accumulated, 0.0)
@@ -66,16 +66,16 @@ final class TimedConditionGateTests: XCTestCase {
 
         // 手順: 条件が1.5秒間true
         for _ in 0..<90 {
-            gate.tick(isConditionMet: true, deltaTime: deltaTime)
+            _ = gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
         // 検証: まだ発火していない（1.5秒 < 3.0秒）
         XCTAssertFalse(gate.isFired)
 
         // 手順: 条件がfalseになり、再びtrueになる
-        gate.tick(isConditionMet: false, deltaTime: 0.0)
+        _ = gate.tick(isConditionMet: false, deltaTime: 0.0)
         for _ in 0..<181 {  // 181フレーム = 3.0083秒 > 3.0秒
-            gate.tick(isConditionMet: true, deltaTime: deltaTime)
+            _ = gate.tick(isConditionMet: true, deltaTime: deltaTime)
         }
 
         // 検証: 発火しているはず
@@ -87,8 +87,8 @@ final class TimedConditionGateTests: XCTestCase {
         var gate = TimedConditionGate(requiredDuration: 1.0)
 
         // 手順: 大きなdeltaTimeでtick（フレームレートが遅い場合をシミュレート）
-        gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
-        gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
+        _ = gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
+        _ = gate.tick(isConditionMet: true, deltaTime: 0.5)  // 500ms
 
         // 検証: 発火しているはず（1.0秒 >= 1.0秒）
         XCTAssertTrue(gate.isFired)

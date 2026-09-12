@@ -43,7 +43,7 @@ final class AlertPlayer {
         player.play()
     }
 
-    /// 30秒間隔でアラート音を繰り返し再生します
+    /// 音声を1ループ再生し、終了直後から次のループを繰り返します
     func startRepeating() {
         guard let player = audioPlayer else { return }
         // 既存のタイマーを停止
@@ -54,8 +54,9 @@ final class AlertPlayer {
         player.currentTime = 0
         player.play()
 
-        // 30秒間隔のタイマーを開始
-        repeatingTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
+        // 音声の実長さと同一間隔で再再生（音切れ・重複なしのシームレスループ）
+        let interval = player.duration > 0 ? player.duration : 30.0
+        repeatingTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.playOnce()
         }
     }

@@ -31,7 +31,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - Vision による肩・耳キーポイント抽出と信頼度フィルタ（confidence < 0.5 を除外）
 - 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、キャリブレーション、猫背確定/改善判定
 - 通知音の再生・再通知間隔・停止（前回の音は停止して次を再生）
-- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、感度調整（0.0-1.0 → 5-20度）、向き追従、フォアグラウンドライフサイクル
+- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（5〜20度）、向き追従、フォアグラウンドライフサイクル
 
 ### Out of Boundary
 
@@ -44,8 +44,8 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 ### Allowed Dependencies
 
 - iOS/iPadOS 16+ SDK: AVFoundation（`.high` プリセット = 720p）、Vision、AVFAudio、SwiftUI、UIKit
-- バンドル内の通知音アセット（`usagi-to-kame.caf`、自前生成の短いメロディ）
-- UserDefaults（感度と前回監視状態のローカル保持のみ）
+- バンドル内の通知音アセット（`usagi-to-kame.caf`、うさぎとかめのチップチューンループ音源）
+- UserDefaults（閾値と前回監視状態のローカル保持のみ）
 
 ### Revalidation Triggers
 
@@ -130,7 +130,7 @@ graph TB
 
 | # | 決定項目 | 決定 |
 |---|---------|------|
-| Q1 | デフォルト判定閾値 | 感度0.5 = 10度（線形変換: 20 - sensitivity * 15） |
+| Q1 | デフォルト判定閾値 | 8度（2026-09-12 改訂: 感度マッピングを廃止し度数直接指定へ。少々の前方頭出しも通知する厳しめ設定） |
 | Q2 | 暗転輝度 | 0.0（全黒）+ wake lock |
 | Q3 | 遠側キーポイントの役割 | 「両側検出済みか」の合否判定のみ |
 | Q4 | 基準姿勢の永続化 | 不要（プロセス内メモリのみ） |
@@ -152,7 +152,7 @@ graph TB
 | Q20 | 監視停止時の通知音 | 即座に `stop()` を呼ぶ |
 | Q21 | 人物検出の判定 | 即座に（ノイズ耐性なし） |
 | Q22 | 姿勢崩れ判定 | 角度変化 > 5度 OR 人物検出途絶 |
-| Q23 | 再通知間隔 | 前回通知から30秒 |
+| Q23 | 再通知間隔 | 前回通知から音声1ループ分（音源長に追従、現音源は約14秒） |
 | Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持、バックグラウンド移行時は復元しない |
 
 詳細は各ADR（docs/adr/0008〜0013）に記載されている。
@@ -177,11 +177,11 @@ graph TB
 | `NekozeFix/Services/DeviceOrientationMonitor.swift` | 向き変化と回転中フラグ | DeviceOrientationMonitor |
 | `NekozeFix/Services/AppLifecycleObserver.swift` | フォアグラウンド/バックグラウンド通知 | AppLifecycleObserver |
 | `NekozeFix/Session/PostureSessionManager.swift` | 監視セッションの状態機械 | PostureSessionManager |
-| `NekozeFix/Session/SettingsStore.swift` | 感度と前回監視状態 | SettingsStore |
+| `NekozeFix/Session/SettingsStore.swift` | 閾値と前回監視状態 | SettingsStore |
 | `NekozeFix/UI/RootView.swift` | 権限・校正・監視の画面切替 | RootView |
 | `NekozeFix/UI/PermissionView.swift` | 権限要求と拒否時の案内 | PermissionView |
 | `NekozeFix/UI/CalibrationView.swift` | 校正指示、蓄積時間、再実行 | CalibrationView |
-| `NekozeFix/UI/MonitorView.swift` | プレビュー、状態表示、開始停止、暗転、感度 | MonitorView |
+| `NekozeFix/UI/MonitorView.swift` | プレビュー、状態表示、開始停止、暗転、閾値 | MonitorView |
 | `NekozeFixTests/PostureAnalyzerTests.swift` | 角度・近側・信頼度の単体試験 | tests |
 | `NekozeFixTests/TimedConditionGateTests.swift` | 3秒/5秒ゲートの単体試験 | tests |
 | `NekozeFixTests/CalibrationLogicTests.swift` | 安定・崩しリセットの単体試験 | tests |
@@ -202,11 +202,11 @@ graph TB
 | AlertPlayer | Services | 通知音と再通知（前音停止・上書き） | 5.1-5.4, 8.2 | AVFAudio | Service |
 | DeviceOrientationMonitor | Services | 回転検知（5秒タイムアウト完了） | 7.1, 7.2 | UIKit | Event |
 | AppLifecycleObserver | Services | 背面停止と復帰再開 | 8.1, 8.2 | UIKit | Event |
-| SettingsStore | Session | 感度と監視フラグ（0.0-1.0 → 5-20度） | 4.4, 8.2 | UserDefaults | State |
+| SettingsStore | Session | 閾値と監視フラグ（5〜20度） | 4.4, 8.2 | UserDefaults | State |
 | PostureSessionManager | Session | セッション状態の唯一の所有者 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
 | PermissionView | UI | 権限 UI | 1.1, 1.2 | Session | State |
 | CalibrationView | UI | 校正 UI | 2.1-2.6, 10.1 | Session | State |
-| MonitorView | UI | 監視・暗転・感度 UI | 3.1-3.4, 4.4, 6.1-6.3, 9.2, 10.1 | Session | State |
+| MonitorView | UI | 監視・暗転・閾値 UI | 3.1-3.4, 4.4, 6.1-6.3, 9.2, 10.1 | Session | State |
 | CameraPreviewView | UI | プレビュー描画 | 3.2, 6.2 | CameraSessionManager | State |
 
 ### Types
@@ -276,14 +276,13 @@ struct SessionSnapshot: Equatable {
     var displayedPosture: DisplayedPosture
     var isDimmed: Bool
     var isPersonDetected: Bool
-    var sensitivity: Double
     var isMonitoringEnabled: Bool
 }
 ```
 
 **信頼度閾値**: 定数 `minimumKeypointConfidence = 0.5` とする。
 
-**感度→閾値変換**: ユーザー向け `sensitivity: 0.0...1.0` を単調変換して `slouchDeltaThresholdDegrees` を算出する。線形補間とし、ADR 0008 / 0012 の決定に従う。詳細は `SettingsStore` 参照。
+**閾値**: 判定閾値は `SettingsStore.slouchThresholdDegrees`（3〜20度、デフォルト 5.0）を単一ソースとして View/Session とも直接参照する。感度（0.0-1.0）を経由する変換層は廃止（2026-09-12 改訂）。
 
 ### PostureAnalyzer
 
@@ -348,17 +347,22 @@ struct TimedConditionGate {
 ```swift
 struct CalibrationLogic {
     mutating func start()
-    mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval) -> CalibrationProgress
+    mutating func ingest(
+        sample: AngleSample?,
+        presence: DetectionPresence,
+        now: TimeInterval,
+        points: [CGPoint] = []  // 可視化ポイント（6点: 0左肩 1右肩 2左耳 3右耳 4近傍耳 5近傍肩）
+    ) -> CalibrationProgress
 }
 
 enum CalibrationProgress: Equatable {
     case waitingForPerson
     case accumulating(elapsed: TimeInterval)
-    case completed(referenceNearAngleDegrees: Double)
+    case completed(referenceNearAngleDegrees: Double, referencePoints: [CGPoint])
 }
 ```
 
-完了時は蓄積期間中の近側角度の平均を基準姿勢として返す（2.3, 2.7）。再実行は `start()` により基準を上書きする（2.6）。人物なしは完了しない（2.5）。
+完了時は蓄積期間中の近側角度の平均を基準姿勢として返し、最終フレームの可視化ポイント列を `referencePoints` として返す（2.3, 2.7）。再実行は `start()` により基準を上書きする（2.6）。人物なしは完了しない（2.5）。
 
 **姿勢崩れ判定規則**:
 - 直前の近側角度と今回の近側角度の差分が 5度以上 → 蓄積をリセット
@@ -400,6 +404,7 @@ protocol PoseDetecting {
 - 返すキーポイントは confidence >= 0.5 のみ。未満は `nil`（4.5）
 - 観測が空（人物なし）なら `nil` を返す。Session が **即座に** `personMissing` とする（Q21 決定：ノイズ耐性なしの即時判定）
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
+- **複数人物時の選択基準（FR 4.7）**: 画面中央 (0.5, 0.5) に最も近いバウンディングボックスの人物のみ認識する。顔観測は `boundingBox`、Body Pose 観測はキーポイントの囲み矩形を代理 box とし、同一の `closestToCenter`（距離二乗比較）を使う。選択はフレーム単位（人物追跡・ID ロックは持たない）
 
 ### AlertPlayer
 
@@ -414,11 +419,11 @@ protocol AlertPlaying {
 
 - カテゴリ `.playback`、オプション `.duckOthers`（5.4）
 - **プリロードは `startMonitoring()` 呼び出し時に実行**（Q17 決定）。`configureSession()` と音声ファイルのロードを `startMonitoring()` 内で行う
-- 確定猫背の初回で 1 回再生し、継続中は **前回通知から 30 秒間隔**（Q23 決定：「0s, 30s, 60s...」ではなく「通知時点から30秒後」）
+- 確定猫背の初回で 1 回再生し、継続中は **前回通知から音声1ループ分**（Q23 決定：「0s, 30s, 60s...」ではなく「通知時点から再再生」。間隔は `AVAudioPlayer.duration` に追従し、音切れ・重複のないシームレスループとする。現音源 `usagi-to-kame.caf` は約14.2秒）
 - **同時再生ポリシー**: 次の再生時刻で前の音がまだ鳴っている場合、前の音を停止して次を再生する（Q18 決定：重複を避ける）
 - 改善時は即停止し、繰り返しタイマーを破棄する（5.3, Q20 決定：監視停止でも `stop()` を即座に呼ぶ）
 - 再生開始は確定判定から 0.5 秒以内（NFR 8.2）。プレイヤーは事前ロードする
-- デフォルト音源はバンドルの `usagi-to-kame.caf`（1〜2 秒）
+- デフォルト音源はバンドルの `usagi-to-kame.caf`（約14.2秒ループ。繰り返し間隔は音源長に連動するため、短いファンファーレである必要はない）
 - 暗転中の音量は **ユーザー設定のまま**（Q19 決定）。暗転モードは画面のみで音量は変えない
 
 ### DeviceOrientationMonitor
@@ -442,21 +447,14 @@ protocol DeviceOrientationMonitoring {
 
 ```swift
 protocol SettingsStoring: AnyObject {
-    var sensitivity: Double { get set }
+    var slouchThresholdDegrees: Double { get set }  // 3.0...20.0、デフォルト 5.0
     var isMonitoringEnabled: Bool { get set }
-    func slouchDeltaThresholdDegrees() -> Double
 }
 ```
 
-UserDefaults に感度と監視フラグのみ保存する。基準姿勢は **プロセス内メモリに保持し、永続化しない**（Q4 決定：Out of Scope）。
+UserDefaults に閾値（度数）と監視フラグのみ保存する。基準姿勢は **プロセス内メモリに保持し、永続化しない**（Q4 決定：Out of Scope）。
 
-**感度→閾値変換**:
-```
-slouchDeltaThresholdDegrees = 20 - (sensitivity * 15)
-// sensitivity = 0.0 → 20度
-// sensitivity = 0.5 → 12.5度
-// sensitivity = 1.0 → 5度
-```
+**閾値ストレージ（2026-09-12 改訂）**: 感度（0.0-1.0）は廃止し、判定閾値を度数そのもの (`slouchThresholdDegrees: 3.0...20.0`、デフォルト 5.0、ステップ 0.5) で永続化する。旧感度キー (`com.nekozefix.sensitivity`) は初回起動時に旧マッピング `20 - sensitivity * 15` で一度だけ変換して引き継ぎ、以降削除する。 registered default を閾値キーに登録すると移行判定がマスクされるため、デフォルト値は `init` 側で担保する。
 
 ### PostureSessionManager
 
@@ -508,7 +506,7 @@ stateDiagram-v2
     confirmedSlouch --> good: angleRecoveredImmediate
 ```
 
-- `confirmedSlouch` 入場で `playOnce` と 30 秒リピート開始
+- `confirmedSlouch` 入場で `playOnce` とリピート開始（間隔は音声ループ長）
 - `good` 入場で `stop`
 - `personMissing` は **即座に** 判定（Vision が `nil` を返したフレームで確定）。蓄積中の猫背ゲートは即座にリセットする（Q6 決定）
 - `dimmed` はフェーズではなくフラグ。監視は継続しプレビューを隠す（6.2）。暗転中の人物なし表示は **抑制**（Q8 決定：完全黒画面維持）
@@ -521,9 +519,10 @@ stateDiagram-v2
 
 - **RootView**: snapshot.phase で Permission / Calibration / Monitor を切替える。起動から監視開始までを権限 → 校正 → 開始の 3 ステップに収める（10.1）
 - **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内と「再試行」ボタンを出す（1.1, 1.2, Q7 決定）
-- **CalibrationView**: 3秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）
-- **MonitorView**: プレビュー、良好/猫背、開始停止、感度、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
-- **CameraPreviewView**: `UIViewRepresentable`。暗転中は非表示（3.2, 6.2）
+- **CalibrationView**: 3秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）。可視化は `PostureOverlayView(mode: .current)` を使用し、肩・耳・判定ラインをリアルタイム表示
+- **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
+- **PostureOverlayView**: 校正・監視共通のオーバーレイ。`mode: .reference` はグレーで固定表示、`mode: .current` はカラーでリアルタイム表示。肩・耳・判定ライン・基準線を描画
+- **CameraPreviewView**: `UIViewRepresentable`。校正画面のみで使用。暗転中は非表示（3.2, 6.2）
 
 **暗転モードの実装詳細**:
 - `enterDimMode()` で:
@@ -602,7 +601,7 @@ sequenceDiagram
 
 ## Data Models
 
-永続化対象は感度と監視フラグのみ。基準姿勢・セッション状態はメモリ上の集約 `PostureSession` が所有する。
+永続化対象は閾値と監視フラグのみ。基準姿勢・セッション状態はメモリ上の集約 `PostureSession` が所有する。
 
 **不変条件**
 - 基準角度が無い状態では monitoring に入れない
@@ -656,7 +655,7 @@ sequenceDiagram
 - 開始/停止でカメラ start/stop が対になる（3.1）
 - 開始時に AlertPlayer をプリロード（Q17 決定）
 - 停止時に AlertPlayer.stop() を即座に呼ぶ（Q20 決定）
-- 確定入場で playOnce、継続で 30 秒リピート（Q23 決定：前回通知から30秒）
+- 確定入場で playOnce、継続でリピート（Q23 決定：間隔は音声ループ長に追従）
 - 改善で stop（5.3）
 - 同時再生ポリシー：前の音停止→次を再生（Q18 決定）
 - 回転中は判定停止、5秒タイムアウトで再開（Q5, Q14 決定）
@@ -714,11 +713,11 @@ E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5
 | 4.1 | 基準からの角度増加 | PostureAnalyzer | slouchCandidate（鋭角 0-90度） | 判定 |
 | 4.2 | 5秒連続で確定 | TimedConditionGate | requiredDuration 5 | 判定 |
 | 4.3 | 改善は即時 | PostureSessionManager | confirmedSlouch to good | 判定 |
-| 4.4 | 感度調整（0.0-1.0 → 5-20度） | SettingsStore, MonitorView | updateSensitivity | 監視 |
+| 4.4 | 閾値調整（5〜20度、ステップ0.5） | SettingsStore, MonitorView | slouchThresholdDegrees | 監視 |
 | 4.5 | confidence 0.5 未満除外 | PoseDetector, PostureAnalyzer | minimumKeypointConfidence | 判定 |
 | 4.6 | 近側主、遠側は合否のみ | PostureAnalyzer | AngleSample | 判定 |
 | 5.1 | 確定時に1回再生 | AlertPlayer | playOnce | 通知 |
-| 5.2 | 30秒おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
+| 5.2 | 音声ループ長おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
 | 5.3 | 改善で停止 | AlertPlayer | stop（監視停止でも即座） | 通知 |
 | 5.4 | マナーモードでも再生 | AlertPlayer | playback category | 通知 |
 | 6.1 | 暗転へ切替（輝度 0.0 + wake lock） | MonitorView, PostureSessionManager | enterDimMode | 暗転 |

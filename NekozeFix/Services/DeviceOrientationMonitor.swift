@@ -36,7 +36,7 @@ final class DeviceOrientationMonitor: ObservableObject {
             name: UIDevice.orientationDidChangeNotification,
             object: nil
         )
-        updateOrientation()
+        _ = updateOrientation()
     }
 
     /// デバイスの向きの変化の監視を停止します
@@ -59,9 +59,11 @@ final class DeviceOrientationMonitor: ObservableObject {
 
         // 回転中としてマーク
         isRotating = true
+        print("DeviceOrientationMonitor: Orientation changed")
 
         // 現在の向きを更新
         let orientationChanged = updateOrientation()
+
 
         // 意味のある向きの変化があった場合のみ5秒タイマーを開始
         // (face-up/face-down は早期リターンするため含まない)
@@ -91,8 +93,15 @@ final class DeviceOrientationMonitor: ObservableObject {
         case .landscapeRight:
             newOrientation = .landscapeLeft
         default:
-            // 不明な向き (face up/down) の場合は現在値を保持し、変化なしを通知
-            return false
+            // 起動直後など .unknown の場合は windowScene から推定
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+               let raw = AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) {
+                newOrientation = raw
+            } else {
+                return false
+            }
         }
 
         currentVideoOrientation = newOrientation

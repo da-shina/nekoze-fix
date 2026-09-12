@@ -11,25 +11,77 @@ struct CameraPreviewView: UIViewRepresentable {
 
     // MARK: - UIViewRepresentable
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .black
-
-        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        previewLayer.videoGravity = .resizeAspectFill
-        previewLayer.connection?.videoOrientation = .portrait
-        previewLayer.frame = view.bounds
-
-        view.layer.addSublayer(previewLayer)
-
-        return view
+    func makeUIView(context: Context) -> CameraPreviewUIView {
+        return CameraPreviewUIView(session: session)
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // 必要に応じてプレビューレイヤーのフレームを更新
-        if let previewLayer = uiView.layer.sublayers?.first as? AVCaptureVideoPreviewLayer {
-            previewLayer.frame = uiView.bounds
+    func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
+        // 必要に応じてセッションを更新
+    }
+}
+
+/// プレビューレイヤーのフレーム管理と向き更新を自動化するカスタムUIView。
+internal class CameraPreviewUIView: UIView {
+    private let previewLayer: AVCaptureVideoPreviewLayer
+
+    init(session: AVCaptureSession) {
+        self.previewLayer = AVCaptureVideoPreviewLayer(session: session)
+        super.init(frame: .zero)
+
+        previewLayer.videoGravity = .resizeAspectFill
+        updatePreviewOrientation()
+
+        // レイヤーを追加
+        self.layer.addSublayer(previewLayer)
+
+        // デバイス回転通知を監視
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(orientationDidChange),
+            name: UIDevice.orientationDidChangeNotification, object: nil
+        )
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        previewLayer.frame = self.bounds
+        CATransaction.commit()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // ビューがウィンドウに追加されたタイミングで向きを確定
+        // （init 時点では window が nil の場合がある）
+        if self.window != nil {
+            updatePreviewOrientation()
         }
+    }
+
+    @objc private func orientationDidChange() {
+        updatePreviewOrientation()
+    }
+
+    private func updatePreviewOrientation() {
+        guard let connection = previewLayer.connection,
+              connection.isVideoOrientationSupported else { return }
+        let orientation: AVCaptureVideoOrientation
+        switch UIDevice.current.orientation {
+        case .portrait:           orientation = .portrait
+        case .portraitUpsideDown: orientation = .portraitUpsideDown
+        case .landscapeLeft:     orientation = .landscapeRight
+        case .landscapeRight:    orientation = .landscapeLeft
+        default:
+            // 起動直後など UIDevice.orientation が未知の場合は
+            // windowScene の interfaceOrientation から推定する
+            guard let scene = self.window?.windowScene else { return }
+            orientation = .init(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
+        }
+        connection.videoOrientation = orientation
     }
 }
 

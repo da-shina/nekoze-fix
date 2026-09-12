@@ -2,54 +2,64 @@ import XCTest
 @testable import NekozeFix
 
 final class SettingsStoreTests: XCTestCase {
-    var sut: SettingsStore!
+    private var suite: UserDefaults!
+    private var sut: SettingsStore!
 
     override func setUp() {
         super.setUp()
-        sut = SettingsStore()
+        suite = UserDefaults(suiteName: "SettingsStoreTests")!
+        suite.removePersistentDomain(forName: "SettingsStoreTests")
+        sut = SettingsStore(defaults: suite)
     }
 
     override func tearDown() {
         sut = nil
+        suite.removePersistentDomain(forName: "SettingsStoreTests")
+        suite = nil
         super.tearDown()
     }
 
-    // MARK: - 感度からしきい値へのマッピング
+    // MARK: - 閾値（度数）
 
-    /// sensitivity 0.0 → 20度
-    func testSensitivityZero_thresholdIs20Degrees() {
-        sut.sensitivity = 0.0
-        XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 20.0, accuracy: 0.001)
+    func testDefaultThreshold_is5Degrees() {
+        XCTAssertEqual(sut.slouchThresholdDegrees, 5.0, accuracy: 0.001)
     }
 
-    /// sensitivity 1.0 → 5度
-    func testSensitivityOne_thresholdIs5Degrees() {
-        sut.sensitivity = 1.0
-        XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 5.0, accuracy: 0.001)
+    func testThreshold_clampedToRange() {
+        sut.slouchThresholdDegrees = 50.0
+        XCTAssertEqual(sut.slouchThresholdDegrees, 20.0, accuracy: 0.001)
+
+        sut.slouchThresholdDegrees = -10.0
+        XCTAssertEqual(sut.slouchThresholdDegrees, 3.0, accuracy: 0.001)
     }
 
-    /// sensitivity 0.5 → 12.5度（中点）
-    func testSensitivityHalf_thresholdIs12Point5Degrees() {
-        sut.sensitivity = 0.5
-        XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 12.5, accuracy: 0.001)
+    func testThreshold_persistsAcrossInstances() {
+        sut.slouchThresholdDegrees = 12.0
+        let reloaded = SettingsStore(defaults: suite)
+        XCTAssertEqual(reloaded.slouchThresholdDegrees, 12.0, accuracy: 0.001)
     }
 
-    /// sensitivity 0.75 → 8.75度
-    func testSensitivityThreeQuarters_thresholdIs8Point75Degrees() {
-        sut.sensitivity = 0.75
-        XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 8.75, accuracy: 0.001)
+    // MARK: - 旧感度キーからの移行
+
+    func testMigration_newKeyWinsOverLegacy() {
+        suite.set(0.0, forKey: "com.nekozefix.sensitivity") // 変換なら20度になる
+        suite.set(7.0, forKey: "com.nekozefix.slouchThresholdDegrees")
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.slouchThresholdDegrees, 7.0, accuracy: 0.001)
     }
 
-    /// sensitivity 0.25 → 16.25度
-    func testSensitivityOneQuarter_thresholdIs16Point25Degrees() {
-        sut.sensitivity = 0.25
-        XCTAssertEqual(sut.slouchDeltaThresholdDegrees(), 16.25, accuracy: 0.001)
+    func testMigration_convertsLegacySensitivityOnceAndDeletesKey() {
+        // 新キーなし・旧キーのみ → 旧マッピング 20 - s*15（0.5 → 12.5度）
+        suite.set(0.5, forKey: "com.nekozefix.sensitivity")
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.slouchThresholdDegrees, 12.5, accuracy: 0.001)
+        // 旧キーは削除済み（以後の再読み込みで変換が二重適用されない）
+        XCTAssertNil(suite.object(forKey: "com.nekozefix.sensitivity"))
     }
 
     // MARK: - 監視有効フラグ
 
     func testDefaultMonitoringEnabled_isFalse() {
-        // 初回起動時はfalseであるべき
         XCTAssertFalse(sut.isMonitoringEnabled)
     }
 
@@ -59,12 +69,5 @@ final class SettingsStoreTests: XCTestCase {
 
         sut.isMonitoringEnabled = false
         XCTAssertFalse(sut.isMonitoringEnabled)
-    }
-
-    // MARK: - デフォルト感度
-
-    func testDefaultSensitivity_isHalf() {
-        // デフォルトの感度は0.5であるべき
-        XCTAssertEqual(sut.sensitivity, 0.5, accuracy: 0.001)
     }
 }

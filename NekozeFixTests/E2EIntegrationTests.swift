@@ -19,11 +19,6 @@ final class E2EIntegrationTests: XCTestCase {
         // フェーズ1: 許可確認
         XCTAssertEqual(sut.snapshot.phase, .awaitingPermission)
 
-        // フェーズ2: Bootstrap（認証チェックをシミュレート）
-        Task { @MainActor in
-            await sut.bootstrap()
-        }
-
         // フェーズ3: キャリブレーション
         sut.startCalibration()
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
@@ -33,23 +28,18 @@ final class E2EIntegrationTests: XCTestCase {
 
         // TimedConditionGate をシミュレート - 3秒間安定
         var gate = TimedConditionGate(requiredDuration: 3.0)
-        let startTime = CFAbsoluteTimeGetCurrent()
 
-        for _ in 0..<60 {
-            gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
-            if gate.isFired { break }
+        // 3秒分（300フレーム @60fps）tick - 余裕を持たせる
+        for _ in 0..<300 {
+            _ = gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
         }
 
         // 3秒後に完了するはず
-        if gate.isFired {
-            // キャリブレーション完了 - idle または monitoring に移行
-            let finalPhase = sut.snapshot.phase
-            // キャリブレーションが完了し、モニタリングを開始可能
-            sut.startMonitoring()
-            XCTAssertTrue(sut.snapshot.phase == .monitoring || sut.snapshot.phase == .idle)
-        } else {
-            XCTFail("キャリブレーションゲートは3秒後に発火するはず")
-        }
+        XCTAssertTrue(gate.isFired, "キャリブレーションゲートは3秒後に発火するはず")
+
+        // キャリブレーション完了 - idle または monitoring に移行
+        sut.startMonitoring()
+        XCTAssertTrue(sut.snapshot.phase == .monitoring || sut.snapshot.phase == .idle)
     }
 
     func testSlouchDetectionFlow() {
@@ -59,12 +49,10 @@ final class E2EIntegrationTests: XCTestCase {
 
         // 前傾姿勢検出をシミュレート
         var gate = TimedConditionGate(requiredDuration: 5.0)
-        let startTime = CFAbsoluteTimeGetCurrent()
 
         // 前傾姿勢5秒間（角度が閾値超過）をシミュレート
-        for _ in 0..<60 {
-            gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
-            if gate.isFired { break }
+        for _ in 0..<300 {
+            _ = gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
         }
 
         // 5秒以上の前傾姿勢の後、通知がトリガーされるはず
@@ -86,19 +74,4 @@ final class E2EIntegrationTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
-    func testSensitivityMapping() {
-        let store = SettingsStore()
-
-        // sensitivity 0.0 → 20度
-        store.sensitivity = 0.0
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 20.0)
-
-        // sensitivity 1.0 → 5度
-        store.sensitivity = 1.0
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 5.0)
-
-        // sensitivity 0.5 → 12.5度
-        store.sensitivity = 0.5
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 12.5, accuracy: 0.001)
-    }
 }

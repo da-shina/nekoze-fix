@@ -1,6 +1,7 @@
 import SwiftUI
+import UIKit
 
-/// UI レイヤー: 監視表示、デイムモード、感度調整。
+/// UI レイヤー: 監視表示、デイムモード、閾値調整。
 /// design.md の "UI Components" - MonitorView を参照。
 
 struct MonitorView: View {
@@ -17,6 +18,30 @@ struct MonitorView: View {
 
     var body: some View {
         ZStack {
+            // 校正で確定した姿勢を薄いグレーで固定表示
+            if let refPoints = sessionManager.snapshot.referencePoints {
+                PostureOverlayView(
+                    mode: .reference,
+                    referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                    currentPoints: refPoints,
+                    threshold: settingsStore.slouchThresholdDegrees,
+                    nearSide: sessionManager.snapshot.nearSide,
+                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                )
+                .ignoresSafeArea()
+            }
+
+            // 現在の姿勢をカラーで表示
+            PostureOverlayView(
+                mode: .current,
+                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                currentPoints: sessionManager.snapshot.visualizationPoints,
+                threshold: settingsStore.slouchThresholdDegrees,
+                nearSide: sessionManager.snapshot.nearSide,
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+            )
+            .ignoresSafeArea()
+
             // メインコンテンツ
             VStack(spacing: 24) {
                 // ステータス表示
@@ -29,8 +54,8 @@ struct MonitorView: View {
 
                 Spacer()
 
-                // 感度スライダー
-                sensitivitySlider
+                // 閾値スライダー
+                thresholdSlider
 
                 // コントロールボタン
                 controlButtons
@@ -41,6 +66,7 @@ struct MonitorView: View {
             if sessionManager.snapshot.isDimmed {
                 dimModeOverlay
             }
+
         }
         .background(Color(.systemBackground))
     }
@@ -73,54 +99,71 @@ struct MonitorView: View {
         }
     }
 
-    private var sensitivitySlider: some View {
+    private var thresholdSlider: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("感度")
+                Text("閾値")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
                 Spacer()
 
-                Text("\(Int(settingsStore.sensitivity * 100))%")
+                Text(String(format: "%.1f°", settingsStore.slouchThresholdDegrees))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             Slider(
-                value: $settingsStore.sensitivity,
-                in: 0...1,
-                step: 0.01
-            ) { _ in
-                sessionManager.updateSensitivity(settingsStore.sensitivity)
-            }
+                value: $settingsStore.slouchThresholdDegrees,
+                in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
+                step: 0.5
+            )
         }
         .padding(.horizontal)
     }
 
     private var controlButtons: some View {
-        HStack(spacing: 16) {
-            // 監視停止ボタン
-            Button(action: stopMonitoring) {
-                Label("停止", systemImage: "stop.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-            .buttonStyle(.borderless)
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // 監視停止ボタン
+                Button(action: stopMonitoring) {
+                    Label("停止", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.borderless)
 
-            // デイムモードボタン
-            Button(action: toggleDimMode) {
-                Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(sessionManager.snapshot.isDimmed ? Color.orange : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                // デイムモードボタン
+                Button(action: toggleDimMode) {
+                    Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(sessionManager.snapshot.isDimmed ? Color.orange : Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
+
+            // カメラ切り替え設定
+            HStack {
+                Text("カメラ")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Picker("カメラ位置", selection: $settingsStore.cameraPosition) {
+                    Text("前面").tag(CameraPosition.front)
+                    Text("背面").tag(CameraPosition.back)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+            }
+            .padding(.horizontal)
         }
     }
 
@@ -137,8 +180,8 @@ struct MonitorView: View {
                     .padding()
                     .background(Color.black.opacity(0.5))
                     .cornerRadius(8)
-                    .opacity(0.8)
             )
+            .opacity(0.8)
     }
 
     // MARK: - 計算プロパティ

@@ -14,7 +14,8 @@ struct PostureAnalyzer {
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
-        slouchDeltaThresholdDegrees: Double
+        slouchDeltaThresholdDegrees: Double,
+        previousNearSide: Side? = nil
     ) -> (sample: AngleSample?, verdict: PostureVerdict) {
 
         // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.5）
@@ -22,57 +23,48 @@ struct PostureAnalyzer {
         let rightValid = isValidPair(ear: frame.rightEar, shoulder: frame.rightShoulder)
 
         // ステップ2: 近傍側の選択
-        // - 両側有効: 肩のx座標で比較（Q9）
-        // - 片側有効: 検出側が近傍側（Q11）
-        // - どちらも無効: キーポイント不足
         var nearSide: Side?
         var nearEar: Keypoint?
         var nearShoulder: Keypoint?
         var farSideDetected = false
 
         if leftValid && rightValid {
-            // 両側有効: 肩のx座標で近傍側を選択
             let lx = frame.leftShoulder!.x
             let rx = frame.rightShoulder!.x
-            if lx < rx {
-                nearSide = .left
-                nearEar = frame.leftEar
-                nearShoulder = frame.leftShoulder
-                farSideDetected = true
-            } else if rx < lx {
-                nearSide = .right
-                nearEar = frame.rightEar
-                nearShoulder = frame.rightShoulder
-                farSideDetected = true
+
+            // ヒステリシスの導入: 前回の判定がある場合、一定の閾値を超えない限り維持する
+            let hysteresisThreshold = 0.02 // 座標系(0-1)における2%のバッファ
+
+            if let prev = previousNearSide {
+                let diff = rx - lx
+                if abs(diff) < hysteresisThreshold {
+                    // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
+                    nearSide = prev
+                } else {
+                    nearSide = diff > 0 ? .left : .right
+                }
             } else {
-                // x座標が同じ場合: 左をデフォルトとする（Q9）
-                nearSide = .left
-                nearEar = frame.leftEar
-                nearShoulder = frame.leftShoulder
-                farSideDetected = true
+                nearSide = lx < rx ? .left : .right
             }
+
+            nearEar = (nearSide == .left) ? frame.leftEar : frame.rightEar
+            nearShoulder = (nearSide == .left) ? frame.leftShoulder : frame.rightShoulder
+            farSideDetected = true
         } else if leftValid {
-            // 左側のみ有効: 自動的に近傍側として扱う（Q11）
             nearSide = .left
             nearEar = frame.leftEar
             nearShoulder = frame.leftShoulder
             farSideDetected = false
         } else if rightValid {
-            // 右側のみ有効: 自動的に近傍側として扱う（Q11）
             nearSide = .right
             nearEar = frame.rightEar
             nearShoulder = frame.rightShoulder
             farSideDetected = false
         } else {
-            // 有効なキーポイントなし
             return (nil, .insufficientKeypoints)
         }
 
         // ステップ3: 鋭角を計算（0〜90度）
-        // 肩から耳へのベクトル: v = (ear.x - shoulder.x, ear.y - shoulder.y)
-        // cos(θ) = v · (0,1) / |v| = v.y / |v|
-        // θ = acos(clamp(v.y / |v|, -1, 1))
-        // 結果は鋭角（Q10）
         let vx = nearEar!.x - nearShoulder!.x
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
@@ -82,11 +74,9 @@ struct PostureAnalyzer {
         let clampedCos = max(-1.0, min(1.0, cosTheta))
         let thetaRadians = acos(clampedCos)
         let thetaDegrees = thetaRadians * 180.0 / .pi
-        let acuteAngle = min(thetaDegrees, 180.0 - thetaDegrees)  // 鋭角を保証
+        let acuteAngle = min(thetaDegrees, 180.0 - thetaDegrees)
 
         // ステップ4: 判定を決定
-        // カメラの取り付け角度は基準値に吸収される。
-        // 絶対的な垂直方向との比較は行わない。
         let referenceAngle = referenceNearAngleDegrees ?? 0.0
         let delta = acuteAngle - referenceAngle
         let verdict: PostureVerdict = delta >= slouchDeltaThresholdDegrees ? .slouchCandidate : .good
@@ -101,7 +91,6 @@ struct PostureAnalyzer {
         )
     }
 
-    /// 耳と肩のキーポイントが両方存在し、信頼度閾値を満たす場合に true を返す。
     private func isValidPair(ear: Keypoint?, shoulder: Keypoint?) -> Bool {
         guard let ear = ear,
               let shoulder = shoulder,

@@ -25,7 +25,7 @@ struct TimedConditionGate: Equatable {
         if isConditionMet {
             if !isFired {
                 accumulated += deltaTime
-                if accumulated >= requiredDuration {
+                if accumulated >= requiredDuration - 1e-9 {
                     isFired = true
                     return true
                 }

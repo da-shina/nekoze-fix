@@ -38,10 +38,10 @@
   - _Depends: 1.2_
 
 - [x] 2.3 (P) CalibrationLogic — stable reference posture acquisition
-  - Implement concrete `CalibrationLogic` struct with `start()`, `ingest(sample:presence:now:)`, `CalibrationProgress`
-  - Accumulate only when `personDetected` and `AngleSample` is valid
+  - Implement concrete `CalibrationLogic` struct with `start()`, `ingest(sample:presence:now:points:)`, `CalibrationProgress`
+  - Accumulate only when `personDetected` and `AngleSample` is valid; accumulate visualization points alongside angles
   - Posture instability reset: angle delta > 5 degrees or `personMissing` resets accumulation
-  - Completion: average of near-side angles during stable period becomes reference posture
+  - Completion: average of near-side angles becomes reference posture; final frame points returned as `referencePoints`
   - Re-run: `start()` overwrites previous reference
   - Observable completion: unit test verifies 3s stable → completed, angle change > 5° → reset
   - _Boundary: CalibrationLogic_
@@ -143,6 +143,7 @@
 - [x] 5.3 (P) CalibrationView — calibration guidance and progress
   - 3-second hold instruction; detection status; accumulation timer display
   - Person missing message; recalibrate button
+  - Shared `PostureOverlayView(mode: .current)` displays shoulders, ears, and near-side judgment line
   - Observable completion: calibration completes after 3s stable, shows completion
   - _Boundary: CalibrationView_
   - _Requirements: 2.1-2.6_
