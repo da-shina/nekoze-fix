@@ -519,7 +519,7 @@ stateDiagram-v2
 
 - **RootView**: snapshot.phase で Permission / Calibration / Monitor を切替える。起動から監視開始までを権限 → 校正 → 開始の 3 ステップに収める（10.1）
 - **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内と「再試行」ボタンを出す（1.1, 1.2, Q7 決定）
-- **CalibrationView**: 3秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）。可視化は `PostureOverlayView(mode: .current)` を使用し、肩・耳・判定ラインをリアルタイム表示
+- **CalibrationView**: 5秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）。可視化は `PostureOverlayView(mode: .current)` を使用し、肩・耳・判定ラインをリアルタイム表示
 - **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
 - **PostureOverlayView**: 校正・監視共通のオーバーレイ。`mode: .reference` はグレーで固定表示、`mode: .current` はカラーでリアルタイム表示。肩・耳・判定ライン・基準線を描画
 - **CameraPreviewView**: `UIViewRepresentable`。校正画面のみで使用。暗転中は非表示（3.2, 6.2）
@@ -644,7 +644,7 @@ sequenceDiagram
   - 改善は即リセット
   - 人物なし（`isConditionMet == false`）即座リセット（Q6 決定）
 - **CalibrationLogic**:
-  - 3秒安定で平均角度保存
+  - 5秒安定で平均角度保存
   - 角度変化 > 5度で蓄積リセット（Q22 決定）
   - 人物検出途絶で蓄積リセット（Q22 決定）
   - 人物なしで未完了
@@ -678,7 +678,7 @@ sequenceDiagram
 - 確定から再生まで 0.5 秒以内（NFR 8.2）— プリロードで達成
 - 暗転時の消費が通常より低いこと（NFR 9.2）。1時間 15% は実機確認（NFR 9.1）
 
-E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5秒猫背で通知 → 改善で停止 → 暗転 → タップ復帰 → 背面停止 → 前面再開。
+E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 5秒猫背で通知 → 改善で停止 → 暗転 → タップ復帰 → 背面停止 → 前面再開。
 
 ## Security
 
@@ -698,9 +698,9 @@ E2E クリティカルパス: 権限許可 → 3秒校正 → 監視開始 → 5
 |-------------|---------|------------|------------|-------|
 | 1.1 | 起動時カメラ権限 | CameraSessionManager, PermissionView | requestAuthorization | 起動 |
 | 1.2 | 拒否時の設定案内＋再試行 | PermissionView | snapshot.phase, 再試行ボタン | 起動 |
-| 2.1 | 3秒キープ指示 | CalibrationView, CalibrationLogic | startCalibration | 校正 |
+| 2.1 | 5秒キープ指示 | CalibrationView, CalibrationLogic | startCalibration | 校正 |
 | 2.2 | 検出状態と蓄積表示 | CalibrationView | calibrationElapsed | 校正 |
-| 2.3 | 3秒安定で自動完了 | CalibrationLogic, TimedConditionGate | CalibrationProgress | 校正 |
+| 2.3 | 5秒安定で自動完了 | CalibrationLogic, TimedConditionGate | CalibrationProgress | 校正 |
 | 2.4 | 崩れでリセット | CalibrationLogic, TimedConditionGate | tick, ingest | 校正 |
 | 2.5 | 人物なしは未完了 | PoseDetector, CalibrationLogic | DetectionPresence | 校正 |
 | 2.6 | 再実行で上書き | CalibrationLogic, CalibrationView | recalibrate | 校正 |

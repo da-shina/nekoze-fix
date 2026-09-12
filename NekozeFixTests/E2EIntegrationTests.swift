@@ -23,19 +23,19 @@ final class E2EIntegrationTests: XCTestCase {
         sut.startCalibration()
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
 
-        // 人物検出が3秒間安定をシミュレート
+        // 人物検出が5秒間安定をシミュレート
         sut.updatePersonDetected(true)
 
-        // TimedConditionGate をシミュレート - 3秒間安定
-        var gate = TimedConditionGate(requiredDuration: 3.0)
+        // TimedConditionGate をシミュレート - 5秒間安定
+        var gate = TimedConditionGate(requiredDuration: 5.0)
 
-        // 3秒分（300フレーム @60fps）tick - 余裕を持たせる
-        for _ in 0..<300 {
+        // 5秒分（330フレーム @60fps）tick - 余裕を持たせる
+        for _ in 0..<330 {
             _ = gate.tick(isConditionMet: true, deltaTime: 1.0/60.0)
         }
 
-        // 3秒後に完了するはず
-        XCTAssertTrue(gate.isFired, "キャリブレーションゲートは3秒後に発火するはず")
+        // 5秒後に完了するはず
+        XCTAssertTrue(gate.isFired, "キャリブレーションゲートは5秒後に発火するはず")
 
         // キャリブレーション完了 - idle または monitoring に移行
         sut.startMonitoring()

@@ -24,7 +24,7 @@ struct PermissionView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
 
-                Text("姿勢を守る、ねこぜフィックス")
+                Text("姿勢を守る、猫背フィックス")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -39,7 +39,7 @@ struct PermissionView: View {
             case .idle:
                 // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
                 Button(action: startCalibration) {
-                    Label("校正を開始", systemImage: "arrow.triangle.2.circlepath")
+                    Label("キャリブレーションを開始", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)

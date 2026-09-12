@@ -13,11 +13,11 @@ struct CalibrationView: View {
 
     // MARK: - 状態
 
-    @State private var timerRemaining = 3.0
+    @State private var timerRemaining = CalibrationLogic.requiredStableDuration
     @State private var isPersonDetected = false
     @State private var isShoulderMissing = false
     @State private var showingPersonMissing = false
-    @State private var progressMessage = "3秒間姿勢を保持してください"
+    @State private var progressMessage = "5秒間姿勢を保持してください"
     @State private var cancellables = Set<AnyCancellable>()
 
     // MARK: - 本文
@@ -132,10 +132,10 @@ struct CalibrationView: View {
                 // 2. キャリブレーション進捗の更新
                 switch snapshot.calibrationProgress {
                 case .waitingForPerson:
-                    self.timerRemaining = 3.0
+                    self.timerRemaining = CalibrationLogic.requiredStableDuration
                 case .accumulating(let elapsed):
-                    // 3秒から経過時間を引いた残時間を表示
-                    self.timerRemaining = max(0, 3.0 - elapsed)
+                    // 必要安定時間から経過時間を引いた残時間を表示
+                    self.timerRemaining = max(0, CalibrationLogic.requiredStableDuration - elapsed)
                 case .completed:
                     self.timerRemaining = 0
                 }

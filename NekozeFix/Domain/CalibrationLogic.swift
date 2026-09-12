@@ -7,7 +7,7 @@ struct CalibrationLogic {
 
     /// 完了に必要な連続安定時間（秒）。サンプル数ではなく実時間で判定するため、
     /// デバイス性能による実効 fps 差の影響を受けない。
-    static let requiredStableDuration: TimeInterval = 3.0
+    static let requiredStableDuration: TimeInterval = 5.0
     /// 安定性判定に用いる直近サンプル数（中央値ベース）
     private static let stabilityWindowSize = 7
     /// 中央値からの角度変化がこの度数を超えたら姿勢崩れとみなす

@@ -6,7 +6,7 @@ import XCTest
 /// 検証要件:
 /// - 2.1: モニタリング前にキャリブレーションを開始可能
 /// - 2.2: 検出状態と経過時間のリアルタイムフィードバック
-/// - 2.3: 姿勢安定後3秒で自動完了
+/// - 2.3: 姿勢安定後5秒で自動完了
 /// - 2.4: 姿勢が不安定になったら蓄積をリセット
 /// - 2.5: 人物未検出では完了不可
 /// - 2.6: 再度実行すると前回のリファレンスを上書き
@@ -67,18 +67,18 @@ final class CalibrationLogicTests: XCTestCase {
         }
     }
 
-    // MARK: - 2.3 + 2.7: 3秒安定 → 平均角度で完了
+    // MARK: - 2.3 + 2.7: 5秒安定 → 平均角度で完了
 
-    func testThreeSecondsStable_Completes() {
+    func testFiveSecondsStable_Completes() {
         // 前提: キャリブレーション開始済み
         sut.start()
 
-        // 手順: 有効な角度で人物が検出され、3秒間安定
-        // 完了は時間ベース（now - 開始 >= 3.0秒）
+        // 手順: 有効な角度で人物が検出され、5秒間安定
+        // 完了は時間ベース（now - 開始 >= 5.0秒）
         let stableAngle: Double = 45.0
         var progress: CalibrationProgress = .waitingForPerson
 
-        for frameIndex in 0...180 {
+        for frameIndex in 0...300 {
             let t = Double(frameIndex) / 60.0
             progress = sut.ingest(sample: makeSample(angle: stableAngle), presence: .personDetected, now: t)
         }
@@ -97,25 +97,25 @@ final class CalibrationLogicTests: XCTestCase {
         sut.start()
 
         // 手順: 特定の角度でフレームを蓄積
-        // 最初60フレーム（1秒）40度
-        for frameIndex in 0..<60 {
+        // 最初100フレーム（約1.67秒）40度
+        for frameIndex in 0..<100 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 40.0), presence: .personDetected, now: t)
         }
-        // 次60フレーム（1秒）50度
-        for frameIndex in 60..<120 {
+        // 次100フレーム（約1.67秒）50度
+        for frameIndex in 100..<200 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 50.0), presence: .personDetected, now: t)
         }
-        // 最後60フレーム（1秒）60度（完了トリガー）
-        for frameIndex in 120..<180 {
+        // 最後100フレーム（約1.67秒）60度（完了トリガー）
+        for frameIndex in 200..<300 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: t)
         }
 
         // 検証: リファレンスは (40 + 50 + 60) / 3 = 50 の平均
-        // 3.0秒での最終プログレスを取得
-        let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 3.0)
+        // 5.0秒での最終プログレスを取得
+        let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
         if case .completed(let refAngle, _) = finalProgress {
             XCTAssertEqual(refAngle, 50.0, accuracy: 0.5)
@@ -170,7 +170,7 @@ final class CalibrationLogicTests: XCTestCase {
         // 前提: 安定したフレームを蓄積中
         sut.start()
 
-        // 45度で蓄積（実時間 1 秒分。完了閾値 3 秒未満に保つ）
+        // 45度で蓄積（実時間 1 秒分。完了閾値 5 秒未満に保つ）
         for frameIndex in 0..<120 {
             let t = Double(frameIndex) / 120.0
             _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: t)
@@ -217,7 +217,7 @@ final class CalibrationLogicTests: XCTestCase {
     func testRerun_OverwritesPreviousReference() {
         // 前提: 最初のキャリブレーション完了済み
         sut.start()
-        for frameIndex in 0..<180 {
+        for frameIndex in 0..<300 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 30.0), presence: .personDetected, now: t)
         }
@@ -230,14 +230,14 @@ final class CalibrationLogicTests: XCTestCase {
         // リセット状態が新しい蓄積準備完了
         _ = afterStart
 
-        // 60度で3秒蓄積
-        for frameIndex in 0..<180 {
+        // 60度で5秒蓄積
+        for frameIndex in 0..<300 {
             let t = Double(frameIndex) / 60.0
             _ = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: t)
         }
 
         // 完了トリガーの最終フレーム
-        let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 3.0)
+        let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
         // 検証: リファレンスは新しい値（約60）
         if case .completed(let refAngle, _) = finalProgress {
@@ -314,15 +314,15 @@ final class CalibrationLogicTests: XCTestCase {
 
     // MARK: - オブザーバブル完了の検証
 
-    /// 重要ユニットテスト: 3秒安定 → 完了
+    /// 重要ユニットテスト: 5秒安定 → 完了
     /// コアのキャリブレーション完了動作を検証
-    func testObservableCompletion_ThreeSecondsStableBecomesCompleted() {
+    func testObservableCompletion_FiveSecondsStableBecomesCompleted() {
         sut.start()
 
         var completed = false
 
-        // 約60fpsで3秒以上の安定検出をシミュレート
-        for frameIndex in 0..<200 {
+        // 約60fpsで5秒以上の安定検出をシミュレート
+        for frameIndex in 0..<320 {
             let t = Double(frameIndex) / 60.0
             let sample = makeSample(angle: 50.0)
             let progress = sut.ingest(sample: sample, presence: .personDetected, now: t)
@@ -333,7 +333,7 @@ final class CalibrationLogicTests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(completed, "3秒の安定後はキャリブレーションが完了するはず")
+        XCTAssertTrue(completed, "5秒の安定後はキャリブレーションが完了するはず")
     }
 
     /// 重要ユニットテスト: 角度変化 > 5度は蓄積をリセット
