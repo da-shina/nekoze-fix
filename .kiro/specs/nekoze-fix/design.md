@@ -12,7 +12,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 
 - フロントカメラと Vision API によるリアルタイム姿勢検知パイプラインを確立する
 - キャリブレーションでカメラ設置角度を吸収した基準姿勢を登録する
-- 近側キーポイント中心の角度ベース猫背判定と、5秒連続検知による確定判定を実装する
+- 近側キーポイント中心の角度ベース猫背判定と、3秒連続検知による確定判定を実装する
 - マナーモードでも再生される通知音と、画面暗転モードでの省電力監視を提供する
 - 縦置き・横置き、バックグラウンド移行・復帰を含むデバイスライフサイクルに対応する
 
@@ -31,7 +31,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - Vision による肩・耳キーポイント抽出と信頼度フィルタ（confidence < 0.5 を除外）
 - 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、キャリブレーション、猫背確定/改善判定
 - 通知音の再生・再通知間隔・停止（前回の音は停止して次を再生）
-- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（5〜20度）、向き追従、フォアグラウンドライフサイクル
+- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（3〜20度）、向き追従、フォアグラウンドライフサイクル
 
 ### Out of Boundary
 
@@ -202,7 +202,7 @@ graph TB
 | AlertPlayer | Services | 通知音と再通知（前音停止・上書き） | 5.1-5.4, 8.2 | AVFAudio | Service |
 | DeviceOrientationMonitor | Services | 回転検知（5秒タイムアウト完了） | 7.1, 7.2 | UIKit | Event |
 | AppLifecycleObserver | Services | 背面停止と復帰再開 | 8.1, 8.2 | UIKit | Event |
-| SettingsStore | Session | 閾値と監視フラグ（5〜20度） | 4.4, 8.2 | UserDefaults | State |
+| SettingsStore | Session | 閾値と監視フラグ（3〜20度） | 4.4, 8.2 | UserDefaults | State |
 | PostureSessionManager | Session | セッション状態の唯一の所有者 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
 | PermissionView | UI | 権限 UI | 1.1, 1.2 | Session | State |
 | CalibrationView | UI | 校正 UI | 2.1-2.6, 10.1 | Session | State |
@@ -308,7 +308,7 @@ struct SessionSnapshot: Equatable {
 - `cos(θ) = v.y / |v|`
 - `θ = acos(clamp(v.y / |v|, -1, 1))`
 - 結果は **鋭角 0〜90度**（Q10 決定）
-- **移動平均フィルタは適用しない**（Q12 決定：生の角度を 5秒ゲートに投入）
+- **移動平均フィルタは適用しない**（Q12 決定：生の角度を 3秒ゲートに投入）
 
 **判定**: `nearAngleDegrees - referenceNearAngleDegrees >= slouchDeltaThresholdDegrees` なら `slouchCandidate`。カメラ設置角は基準値に含まれるため、絶対垂直との比較は行わない。
 
@@ -336,7 +336,7 @@ struct TimedConditionGate {
 
 - `isConditionMet == true` の間だけ経過を加算し、`requiredDuration` 到達で `true` を一度返す
 - `false` になった瞬間に蓄積をゼロにする（2.4, 4.2 の途中解除）
-- キャリブレーションは 3.0 秒、猫背確定は 5.0 秒でインスタンスを分ける
+- キャリブレーションは 5.0 秒、猫背確定は 3.0 秒でインスタンスを分ける
 - 回転中は PostureSessionManager が `tick` 呼び出しを停止し、ゲートは保持される（Q5 決定：回転中ゲートはリセットしない）。回転完了後に再開する
 - 人物なし（`isConditionMet == false`）が検出された時点でゲートは即座にリセットされる（Q6 決定）
 
@@ -639,8 +639,8 @@ sequenceDiagram
   - 閾値前後の判定（基準 + 9度 = good、基準 + 11度 = slouchCandidate）
   - 鋭角 0-90度範囲の確認（Q10 決定）
 - **TimedConditionGate**:
-  - 5秒未満で解除したら未確定
-  - 5秒連続で確定
+  - 3秒未満で解除したら未確定
+  - 3秒連続で確定
   - 改善は即リセット
   - 人物なし（`isConditionMet == false`）即座リセット（Q6 決定）
 - **CalibrationLogic**:
@@ -678,7 +678,7 @@ sequenceDiagram
 - 確定から再生まで 0.5 秒以内（NFR 8.2）— プリロードで達成
 - 暗転時の消費が通常より低いこと（NFR 9.2）。1時間 15% は実機確認（NFR 9.1）
 
-E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 5秒猫背で通知 → 改善で停止 → 暗転 → タップ復帰 → 背面停止 → 前面再開。
+E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3秒猫背で通知 → 改善で停止 → 暗転 → タップ復帰 → 背面停止 → 前面再開。
 
 ## Security
 
@@ -689,7 +689,7 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 5
 - キャプチャプリセット **`.high`（720p）**、Vision は最新フレームのみ
 - 画面暗転時はプレビューレイヤを外し、**輝度 0.0 + wake lock** で消費を抑える
 - AlertPlayer は **監視開始時にプリロード**（Q17 決定）
-- 角度計算は **移動平均なし**（Q12 決定）：生の角度を 5秒ゲートに投入してノイズ吸収
+- 角度計算は **移動平均なし**（Q12 決定）：生の角度を 3秒ゲートに投入
 - UI 更新は判定結果の変化時と表示用間引き（最大 15 Hz）に限定する
 
 ## Requirements Traceability
@@ -711,9 +711,9 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 5
 | 3.4 | 人物なし警告 | PoseDetector, MonitorView | personMissing（暗転・回転中は抑制） | 監視 |
 | 3.5 | 片側のみで継続 | PostureAnalyzer | analyze（検出側を近側扱い） | 判定 |
 | 4.1 | 基準からの角度増加 | PostureAnalyzer | slouchCandidate（鋭角 0-90度） | 判定 |
-| 4.2 | 5秒連続で確定 | TimedConditionGate | requiredDuration 5 | 判定 |
+| 4.2 | 3秒連続で確定 | TimedConditionGate | requiredDuration 3 | 判定 |
 | 4.3 | 改善は即時 | PostureSessionManager | confirmedSlouch to good | 判定 |
-| 4.4 | 閾値調整（5〜20度、ステップ0.5） | SettingsStore, MonitorView | slouchThresholdDegrees | 監視 |
+| 4.4 | 閾値調整（3〜20度、ステップ0.5） | SettingsStore, MonitorView | slouchThresholdDegrees | 監視 |
 | 4.5 | confidence 0.5 未満除外 | PoseDetector, PostureAnalyzer | minimumKeypointConfidence | 判定 |
 | 4.6 | 近側主、遠側は合否のみ | PostureAnalyzer | AngleSample | 判定 |
 | 5.1 | 確定時に1回再生 | AlertPlayer | playOnce | 通知 |
