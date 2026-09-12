@@ -217,10 +217,9 @@ final class CalibrationLogicTests: XCTestCase {
     func testRerun_OverwritesPreviousReference() {
         // 前提: 最初のキャリブレーション完了済み
         sut.start()
-        var progress: CalibrationProgress = .waitingForPerson
         for frameIndex in 0..<180 {
             let t = Double(frameIndex) / 60.0
-            progress = sut.ingest(sample: makeSample(angle: 30.0), presence: .personDetected, now: t)
+            _ = sut.ingest(sample: makeSample(angle: 30.0), presence: .personDetected, now: t)
         }
 
         // 手順: start() を再度呼び出す（再キャリブレーション）
@@ -320,7 +319,6 @@ final class CalibrationLogicTests: XCTestCase {
     func testObservableCompletion_ThreeSecondsStableBecomesCompleted() {
         sut.start()
 
-        var previousProgress: CalibrationProgress = .waitingForPerson
         var completed = false
 
         // 約60fpsで3秒以上の安定検出をシミュレート
@@ -333,7 +331,6 @@ final class CalibrationLogicTests: XCTestCase {
             if case .completed = progress {
                 completed = true
             }
-            previousProgress = progress
         }
 
         XCTAssertTrue(completed, "3秒の安定後はキャリブレーションが完了するはず")

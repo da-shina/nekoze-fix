@@ -19,9 +19,7 @@ final class AlertPlayerTests: XCTestCase {
         // 前提: 無効なURLで初期化されたAlertPlayer
         // 手順: configureSessionが呼ばれる
         // 検証: エラーが発生するはず
-        XCTAssertThrowsError(try sut.configureSession()) { error in
-            XCTAssertTrue(error is NSError)
-        }
+        XCTAssertThrowsError(try sut.configureSession())
     }
 
     func testPlayOnceWithNilPlayer_doesNotCrash() {
