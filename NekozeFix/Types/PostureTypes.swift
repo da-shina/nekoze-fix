@@ -89,13 +89,11 @@ struct SessionSnapshot: Equatable {
     /// 校正中の「肩が映っていません」案内に使用。
     var isShoulderMissing: Bool = false
     var showGuideline: Bool = false
-    var sensitivity: Double = 0.5
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil
     var referencePoints: [CGPoint]? = nil
-    var currentThreshold: Double = 0.0
     var visualizationPoints: [CGPoint] = []
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0

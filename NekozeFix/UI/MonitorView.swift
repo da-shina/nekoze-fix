@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// UI レイヤー: 監視表示、デイムモード、感度調整。
+/// UI レイヤー: 監視表示、デイムモード、閾値調整。
 /// design.md の "UI Components" - MonitorView を参照。
 
 struct MonitorView: View {
@@ -24,7 +24,7 @@ struct MonitorView: View {
                     mode: .reference,
                     referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
-                    threshold: sessionManager.snapshot.currentThreshold,
+                    threshold: settingsStore.slouchThresholdDegrees,
                     nearSide: sessionManager.snapshot.nearSide,
                     imageAspectRatio: sessionManager.snapshot.videoAspectRatio
                 )
@@ -36,7 +36,7 @@ struct MonitorView: View {
                 mode: .current,
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                threshold: sessionManager.snapshot.currentThreshold,
+                threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
@@ -54,8 +54,8 @@ struct MonitorView: View {
 
                 Spacer()
 
-                // 感度スライダー
-                sensitivitySlider
+                // 閾値スライダー
+                thresholdSlider
 
                 // コントロールボタン
                 controlButtons
@@ -99,27 +99,25 @@ struct MonitorView: View {
         }
     }
 
-    private var sensitivitySlider: some View {
+    private var thresholdSlider: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("感度")
+                Text("閾値")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
 
                 Spacer()
 
-                Text("\(Int(settingsStore.sensitivity * 100))%")
+                Text(String(format: "%.1f°", settingsStore.slouchThresholdDegrees))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
 
             Slider(
-                value: $settingsStore.sensitivity,
-                in: 0...1,
-                step: 0.01
-            ) { _ in
-                sessionManager.updateSensitivity(settingsStore.sensitivity)
-            }
+                value: $settingsStore.slouchThresholdDegrees,
+                in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
+                step: 0.5
+            )
         }
         .padding(.horizontal)
     }

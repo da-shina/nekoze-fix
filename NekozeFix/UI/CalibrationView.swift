@@ -33,7 +33,7 @@ struct CalibrationView: View {
                 mode: .current,
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                threshold: sessionManager.snapshot.currentThreshold,
+                threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )

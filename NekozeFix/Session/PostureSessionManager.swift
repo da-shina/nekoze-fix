@@ -151,11 +151,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isDimmed = false
     }
 
-    /// 感度設定を更新する
-    func updateSensitivity(_ value: Double) {
-        snapshot.sensitivity = max(0.0, min(1.0, value))
-    }
-
     /// 表示される姿勢状態を更新する
     func updatePosture(_ posture: DisplayedPosture) {
         snapshot.displayedPosture = posture
@@ -251,7 +246,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
             // 2. 姿勢分析
             let refAngle = self.getReferenceAngle()
-            let threshold = self.getThreshold()
+            let threshold = self.settingsStore.slouchThresholdDegrees
 
             let (sample, verdict) = self.postureAnalyzer.analyze(
                 frame: frame,
@@ -358,10 +353,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func getReferenceAngle() -> Double? {
         snapshot.referenceAngle
-    }
-
-    private func getThreshold() -> Double {
-        return 20.0 - (snapshot.sensitivity * 15.0)
     }
 
     private func verdictFor(sample: AngleSample) -> PostureVerdict {

@@ -1,17 +1,28 @@
 import Foundation
 import Combine
 
-/// セッション層: 感度と監視フラグの永続化（UserDefaults のみ）。
+/// セッション層: 猫背閾値と監視フラグの永続化（UserDefaults のみ）。
 /// design.md "SettingsStore" セクション参照。
 
 final class SettingsStore: ObservableObject {
     // MARK: - キー
 
     private enum Keys {
-        static let sensitivity = "com.nekozefix.sensitivity"
+        /// 旧・感度キー（廃止済み。初回起動時に閾値へ一度だけ変換して削除）
+        static let legacySensitivity = "com.nekozefix.sensitivity"
+        static let slouchThresholdDegrees = "com.nekozefix.slouchThresholdDegrees"
         static let isMonitoringEnabled = "com.nekozefix.isMonitoringEnabled"
         static let cameraPosition = "com.nekozefix.cameraPosition"
     }
+
+    // MARK: - 定数
+
+    /// 閾値の下限（度）
+    static let thresholdMinDegrees: Double = 5.0
+    /// 閾値の上限（度）
+    static let thresholdMaxDegrees: Double = 20.0
+    /// デフォルト閾値（度）。少々の前方頭出しも通知する厳しめ設定
+    static let thresholdDefaultDegrees: Double = 8.0
 
     // MARK: - プロパティ
 
@@ -21,11 +32,20 @@ final class SettingsStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        // まずデフォルト値を設定
-        let savedSensitivity = defaults.double(forKey: Keys.sensitivity)
-        let savedEnabled = defaults.bool(forKey: Keys.isMonitoringEnabled)
-        self.sensitivity = (savedSensitivity == 0 && defaults.object(forKey: Keys.sensitivity) == nil) ? 0.5 : savedSensitivity
-        self.isMonitoringEnabled = savedEnabled
+
+        // 閾値の読込。未設定なら旧感度キーから一度だけ変換して引き継ぐ
+        // （旧マッピング: 20 - sensitivity * 15）
+        if let saved = defaults.object(forKey: Keys.slouchThresholdDegrees) as? Double {
+            self.slouchThresholdDegrees = saved
+        } else if defaults.object(forKey: Keys.legacySensitivity) != nil {
+            let legacy = defaults.double(forKey: Keys.legacySensitivity)
+            self.slouchThresholdDegrees = SettingsStore.clamp(20.0 - legacy * 15.0)
+        } else {
+            self.slouchThresholdDegrees = SettingsStore.thresholdDefaultDegrees
+        }
+        defaults.removeObject(forKey: Keys.legacySensitivity)
+
+        self.isMonitoringEnabled = defaults.bool(forKey: Keys.isMonitoringEnabled)
 
         // カメラ位置の読込
         if let posString = defaults.string(forKey: Keys.cameraPosition),
@@ -41,10 +61,17 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - 公開プロパティ
 
-    /// ユーザーの感度値（0.0 〜 1.0）
-    /// デフォルト: 0.5
-    @Published var sensitivity: Double {
-        didSet { defaults.set(sensitivity, forKey: Keys.sensitivity) }
+    /// 猫背判定閾値（度）。基準姿勢からの角度増加量がこの値以上で猫背候補。
+    /// 範囲: 5.0〜20.0、デフォルト: 8.0
+    @Published var slouchThresholdDegrees: Double {
+        didSet {
+            let clamped = SettingsStore.clamp(slouchThresholdDegrees)
+            if clamped != slouchThresholdDegrees {
+                slouchThresholdDegrees = clamped // didSet 再入で保存
+                return
+            }
+            defaults.set(slouchThresholdDegrees, forKey: Keys.slouchThresholdDegrees)
+        }
     }
 
     /// 監視が有効かどうか
@@ -59,24 +86,17 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(cameraPosition.rawValue, forKey: Keys.cameraPosition) }
     }
 
-    // MARK: - 公開メソッド
-
-    /// 感度（0.0〜1.0）を猫背閾値（度数）に変換する
-    /// 計算式: 20 - (sensitivity * 15)
-    /// - sensitivity 0.0 → 20 度
-    /// - sensitivity 0.5 → 12.5 度
-    /// - sensitivity 1.0 → 5 度
-    /// - Returns: 閾値（度数）
-    func slouchDeltaThresholdDegrees() -> Double {
-        // 線形マッピング: 20 - (sensitivity * 15)
-        return 20.0 - (sensitivity * 15.0)
-    }
-
     // MARK: - プライベートメソッド
 
+    private static func clamp(_ value: Double) -> Double {
+        min(thresholdMaxDegrees, max(thresholdMinDegrees, value))
+    }
+
     private func registerDefaults() {
+        // slouchThresholdDegrees をここに registered default として登録しないこと：
+        // object(forKey:) が登録値を返し、旧感度キーからの移行判定がマスクされる。
+        // デフォルト値は init の else 分岐（thresholdDefaultDegrees）で担保する。
         defaults.register(defaults: [
-            Keys.sensitivity: 0.5,
             Keys.isMonitoringEnabled: false,
             Keys.cameraPosition: CameraPosition.front.rawValue
         ])

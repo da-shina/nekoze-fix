@@ -74,19 +74,4 @@ final class E2EIntegrationTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
-    func testSensitivityMapping() {
-        let store = SettingsStore()
-
-        // sensitivity 0.0 → 20度
-        store.sensitivity = 0.0
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 20.0)
-
-        // sensitivity 1.0 → 5度
-        store.sensitivity = 1.0
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 5.0)
-
-        // sensitivity 0.5 → 12.5度
-        store.sensitivity = 0.5
-        XCTAssertEqual(store.slouchDeltaThresholdDegrees(), 12.5, accuracy: 0.001)
-    }
 }
