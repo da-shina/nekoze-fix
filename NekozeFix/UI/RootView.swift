@@ -13,7 +13,7 @@ struct RootView: View {
     var body: some View {
         Group {
             switch snapshot.phase {
-            case .awaitingPermission:
+            case .awaitingPermission, .permissionDenied:
                 PermissionView()
             case .calibrating:
                 CalibrationView()
@@ -23,8 +23,6 @@ struct RootView: View {
                 PermissionView()
             case .rotating:
                 MonitorView()
-            @unknown default:
-                PermissionView()
             }
         }
         .onAppear {

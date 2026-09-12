@@ -10,6 +10,7 @@ struct CalibrationLogic {
     private var personPresent = false
     private var lastAngle: Double = 0.0
     private var lastTime: TimeInterval = 0
+    private var accumulationStartTime: TimeInterval = 0
 
     // MARK: - 公開API
 
@@ -21,6 +22,7 @@ struct CalibrationLogic {
         personPresent = false
         lastAngle = 0.0
         lastTime = 0
+        accumulationStartTime = 0
     }
 
     /// 姿勢サンプルと人物検出状態を処理する。
@@ -54,11 +56,9 @@ struct CalibrationLogic {
                 isAccumulating = true
                 lastAngle = sample.nearAngleDegrees
                 lastTime = now
+                accumulationStartTime = now
                 return .accumulating(elapsed: 0)
             }
-
-            // 新しいサンプルで蓄積を継続
-            let timeInterval = now - lastTime
 
             // lastAngle 更新前に姿勢の不安定さをチェック（角度変化 > 5度）
             let angleDelta = abs(sample.nearAngleDegrees - lastAngle)
@@ -70,6 +70,7 @@ struct CalibrationLogic {
                 accumulatedAngles = [sample.nearAngleDegrees]
                 lastAngle = sample.nearAngleDegrees
                 lastTime = now
+                accumulationStartTime = now
                 return .accumulating(elapsed: 0)
             }
 
@@ -93,8 +94,8 @@ struct CalibrationLogic {
 
         // 蓄積中だがまだ完了していない場合
         if isAccumulating {
-            let elapsed = now - lastTime
-            return CalibrationProgress.accumulating(elapsed: elapsed)
+            let elapsed = now - accumulationStartTime
+            return CalibrationProgress.accumulating(elapsed: max(elapsed, 0))
         }
 
         // デフォルト状態

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// UI レイヤー: 監視表示、デイムモード、感度調整。
 /// design.md の "UI Components" - MonitorView を参照。
@@ -17,6 +18,19 @@ struct MonitorView: View {
 
     var body: some View {
         ZStack {
+            // 背景にカメラプレビューを表示
+            CameraPreviewView(session: sessionManager.cameraManager.captureSession)
+                .ignoresSafeArea()
+
+            // 姿勢ポイントの可視化
+            PostureOverlayView(
+                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                currentPoints: sessionManager.snapshot.visualizationPoints,
+                threshold: sessionManager.snapshot.currentThreshold,
+                nearSide: sessionManager.snapshot.nearSide
+            )
+            .ignoresSafeArea()
+
             // メインコンテンツ
             VStack(spacing: 24) {
                 // ステータス表示
@@ -41,6 +55,7 @@ struct MonitorView: View {
             if sessionManager.snapshot.isDimmed {
                 dimModeOverlay
             }
+
         }
         .background(Color(.systemBackground))
     }
@@ -99,28 +114,47 @@ struct MonitorView: View {
     }
 
     private var controlButtons: some View {
-        HStack(spacing: 16) {
-            // 監視停止ボタン
-            Button(action: stopMonitoring) {
-                Label("停止", systemImage: "stop.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-            .buttonStyle(.borderless)
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // 監視停止ボタン
+                Button(action: stopMonitoring) {
+                    Label("停止", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.borderless)
 
-            // デイムモードボタン
-            Button(action: toggleDimMode) {
-                Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(sessionManager.snapshot.isDimmed ? Color.orange : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                // デイムモードボタン
+                Button(action: toggleDimMode) {
+                    Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(sessionManager.snapshot.isDimmed ? Color.orange : Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .buttonStyle(.borderless)
             }
-            .buttonStyle(.borderless)
+
+            // カメラ切り替え設定
+            HStack {
+                Text("カメラ")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Picker("カメラ位置", selection: $settingsStore.cameraPosition) {
+                    Text("前面").tag(CameraPosition.front)
+                    Text("背面").tag(CameraPosition.back)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+            }
+            .padding(.horizontal)
         }
     }
 
@@ -137,8 +171,8 @@ struct MonitorView: View {
                     .padding()
                     .background(Color.black.opacity(0.5))
                     .cornerRadius(8)
-                    .opacity(0.8)
             )
+            .opacity(0.8)
     }
 
     // MARK: - 計算プロパティ

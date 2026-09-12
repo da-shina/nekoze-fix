@@ -8,7 +8,7 @@ import QuartzCore
 /// nil を返します。
 ///
 /// 設計参照: design.md の "PoseDetector" セクション。
-final class PoseDetector {
+final class PoseDetector: @unchecked Sendable {
     // MARK: - プロパティ
 
     private var request: VNDetectHumanBodyPoseRequest
@@ -32,7 +32,8 @@ final class PoseDetector {
         let detectionRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
             defer { semaphore.signal() }
 
-            guard error == nil else {
+            if let error = error {
+                print("Vision Error: \(error)")
                 return
             }
 
@@ -42,7 +43,11 @@ final class PoseDetector {
                 return
             }
 
-            result = self?.extractPoseFrame(from: observation)
+            let frame = self?.extractPoseFrame(from: observation)
+            if frame == nil {
+                print("Vision: Person detected, but required keypoints were missing or low confidence")
+            }
+            result = frame
         }
 
         let handler = VNImageRequestHandler(
@@ -53,6 +58,7 @@ final class PoseDetector {
         do {
             try handler.perform([detectionRequest])
         } catch {
+            print("Vision Handler Error: \(error)")
             return nil
         }
 
@@ -63,7 +69,7 @@ final class PoseDetector {
     // MARK: - プライベートメソッド
 
     private func extractPoseFrame(from observation: VNHumanBodyPoseObservation) -> PoseFrame? {
-        let keypointThreshold: Float = 0.5
+        let keypointThreshold: Float = 0.3 // 0.5から0.3に緩和して検出率を向上
 
         func extractKeypoint(_ jointName: VNHumanBodyPoseObservation.JointName) -> Keypoint? {
             guard let point = try? observation.recognizedPoint(jointName),

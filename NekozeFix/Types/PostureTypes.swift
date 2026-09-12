@@ -1,7 +1,20 @@
 import Foundation
+import AVFoundation
 
 // 型層: 共通の値オブジェクトと列挙型。
 // 完全な仕様は design.md "Types" セクション参照。
+
+enum CameraPosition: String, Codable, Equatable {
+    case front
+    case back
+
+    var avPosition: AVCaptureDevice.Position {
+        switch self {
+        case .front: return .front
+        case .back: return .back
+        }
+    }
+}
 
 enum CameraAuthorization {
     case notDetermined
@@ -67,15 +80,21 @@ enum CalibrationProgress: Equatable {
 }
 
 struct SessionSnapshot: Equatable {
-    var phase: SessionPhase = .idle
+    var phase: SessionPhase = .awaitingPermission
     var displayedPosture: DisplayedPosture = .good
     var isDimmed: Bool = false
     var isRotating: Bool = false
     var isPersonDetected: Bool = false
+    var showGuideline: Bool = false
     var sensitivity: Double = 0.5
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
+    var referenceAngle: Double? = nil
+    var referencePoints: [CGPoint]? = nil
+    var currentThreshold: Double = 0.0
+    var visualizationPoints: [CGPoint] = []
+    var nearSide: Side? = nil
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。

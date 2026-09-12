@@ -9,8 +9,8 @@ import Foundation
 /// 設計参照: design.md "TimedConditionGate" セクション。
 struct TimedConditionGate {
     var requiredDuration: TimeInterval
-    private var accumulated: TimeInterval = 0
-    private var isFired: Bool = false
+    var accumulated: TimeInterval = 0
+    var isFired: Bool = false
     private var lastTickTime: TimeInterval? = nil
 
     init(requiredDuration: TimeInterval) {
