@@ -1,0 +1,178 @@
+import AVFoundation
+import UIKit
+
+/// フロントカメラのセッション管理とパーミッション。
+///
+/// `.high` プリセット (720p)、シリアルキャプチャキュー、
+/// 非同期認証による AVCaptureSession の管理。
+///
+/// 設計参照: design.md の "CameraSessionManager" セクション。
+final class CameraSessionManager: NSObject, ObservableObject {
+    // MARK: - 公開プロパティ
+
+    @Published private(set) var authorization: CameraAuthorization = .notDetermined
+
+    // MARK: - パブリックプロパティ
+
+    let captureSession = AVCaptureSession()
+
+    // MARK: - プライベートプロパティ
+
+    private let sessionQueue = DispatchQueue(label: "com.nekozefix.camera.session")
+    private var videoOutput: AVCaptureVideoDataOutput?
+    private var sampleBufferDelegate: AVCaptureVideoDataOutputSampleBufferDelegate?
+
+    // MARK: - 認証
+
+    func requestAuthorization() async -> CameraAuthorization {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .notDetermined:
+            let granted = await AVCaptureDevice.requestAccess(for: .video)
+            await MainActor.run {
+                self.authorization = granted ? .authorized : .denied
+            }
+            return authorization
+        case .authorized:
+            await MainActor.run {
+                self.authorization = .authorized
+            }
+            return .authorized
+        case .denied, .restricted:
+            await MainActor.run {
+                self.authorization = .denied
+            }
+            return .denied
+        @unknown default:
+            await MainActor.run {
+                self.authorization = .denied
+            }
+            return .denied
+        }
+    }
+
+    // MARK: - セッション管理
+
+    func start() async throws {
+        guard authorization == .authorized else {
+            throw CameraError.notAuthorized
+        }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            sessionQueue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(throwing: CameraError.sessionConfigurationFailed)
+                    return
+                }
+
+                do {
+                    try self.configureSession()
+                    self.captureSession.startRunning()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    func stop() {
+        sessionQueue.async { [weak self] in
+            self?.captureSession.stopRunning()
+        }
+    }
+
+    func applyVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if let connection = self.videoOutput?.connection(with: .video) {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = orientation
+                }
+            }
+        }
+    }
+
+    // MARK: - サンプルバッファデリゲート
+
+    func setSampleBufferDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
+        sessionQueue.async { [weak self] in
+            self?.sampleBufferDelegate = delegate
+        }
+    }
+
+    // MARK: - プライベートメソッド
+
+    private func configureSession() throws {
+        captureSession.beginConfiguration()
+        defer { captureSession.commitConfiguration() }
+
+        captureSession.sessionPreset = .high  // 720p
+
+        // 既存の入力を削除
+        captureSession.inputs.forEach { captureSession.removeInput($0) }
+
+        // フロントカメラを追加
+        guard let frontCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+            throw CameraError.cameraNotAvailable
+        }
+
+        do {
+            let input = try AVCaptureDeviceInput(device: frontCamera)
+            if captureSession.canAddInput(input) {
+                captureSession.addInput(input)
+            } else {
+                throw CameraError.sessionConfigurationFailed
+            }
+        } catch {
+            throw CameraError.sessionConfigurationFailed
+        }
+
+        // ビデオ出力の設定
+        let output = AVCaptureVideoDataOutput()
+        output.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(sampleBufferDelegate, queue: sessionQueue)
+
+        // 既存の出力を削除
+        captureSession.outputs.forEach { captureSession.removeOutput($0) }
+
+        if captureSession.canAddOutput(output) {
+            captureSession.addOutput(output)
+            self.videoOutput = output
+
+            // ビデオ向きをポートレートに設定
+            if let connection = output.connection(with: .video) {
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .portrait
+                }
+                // フロントカメラのミラー処理
+                if connection.isVideoMirroringSupported {
+                    connection.isVideoMirrored = true
+                }
+            }
+        } else {
+            throw CameraError.sessionConfigurationFailed
+        }
+    }
+}
+
+// MARK: - エラー
+
+enum CameraError: LocalizedError {
+    case notAuthorized
+    case cameraNotAvailable
+    case sessionConfigurationFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .notAuthorized:
+            return "カメラが許可されていません"
+        case .cameraNotAvailable:
+            return "カメラが利用できません"
+        case .sessionConfigurationFailed:
+            return "カメラセッションの構成に失敗しました"
+        }
+    }
+}
