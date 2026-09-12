@@ -18,7 +18,6 @@ struct CalibrationView: View {
     @State private var showingPersonMissing = false
     @State private var progressMessage = "3秒間姿勢を保持してください"
     @State private var cancellables = Set<AnyCancellable>()
-    @State private var timer: Timer?
 
     // MARK: - 本文
 
@@ -126,54 +125,49 @@ struct CalibrationView: View {
         }
         .navigationBarTitle("校正", displayMode: .inline)
         .onAppear {
-            setupTimer()
             setupObservers()
             if sessionManager.snapshot.phase == .calibrating {
                 Task {
-                    // すでに動作している可能性はあるが、明示的に開始を試みる
-                    // PostureSessionManager の startCalibration() 等と同様の処理を呼び出す
                     sessionManager.startCalibration()
                 }
             }
         }
         .onDisappear {
-            timer?.invalidate()
-            timer = nil
+            // Timer removed
         }
     }
 
     // MARK: - プライベートメソッド
 
-    private func setupTimer() {
-        timer?.invalidate()
-        timerRemaining = 3.0
-
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
-            if self.timerRemaining > 0 {
-                self.timerRemaining -= 0.5
-            }
-        }
-    }
-
     private func setupObservers() {
-        // 人検出状態を監視
+        // snapshot 全体を監視して、人物検出と進捗を更新
         sessionManager.$snapshot
-            .map { $0.isPersonDetected }
-            .sink { [self] detected in
+            .sink { [self] snapshot in
+                // 1. 人物検出状態の更新
+                let detected = snapshot.isPersonDetected
                 self.isPersonDetected = detected
                 self.showingPersonMissing = !detected
                 self.progressMessage = detected ? "姿勢を保持中..." : "人を検出できません\n姿勢を保持してください"
+
+                // 2. キャリブレーション進捗の更新
+                switch snapshot.calibrationProgress {
+                case .waitingForPerson:
+                    self.timerRemaining = 3.0
+                case .accumulating(let elapsed):
+                    // 3秒から経過時間を引いた残時間を表示
+                    self.timerRemaining = max(0, 3.0 - elapsed)
+                case .completed:
+                    self.timerRemaining = 0
+                }
             }
             .store(in: &cancellables)
     }
 
     private func recalibrate() {
-        timer?.invalidate()
         timerRemaining = 3.0
         isPersonDetected = false
         showingPersonMissing = false
         progressMessage = "3秒間姿勢を保持してください"
-        setupTimer()
     }
 }
 
@@ -208,10 +202,20 @@ struct CalibrationOverlayView: View {
                 }
 
                 if currentPoints.count >= 4 && currentPoints[2] != .zero && currentPoints[3] != .zero {
+                    // 両耳のポイント
+                    ForEach(2..<4) { i in
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .position(normalizePoint(currentPoints[i], in: geometry.size))
+                    }
+                }
+
+                if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     // 現在の耳と肩を結ぶ線 (近傍耳 -> 近傍肩)
                     Path { path in
-                        let pE = normalizePoint(currentPoints[2], in: geometry.size)
-                        let pS = normalizePoint(currentPoints[3], in: geometry.size)
+                        let pE = normalizePoint(currentPoints[4], in: geometry.size)
+                        let pS = normalizePoint(currentPoints[5], in: geometry.size)
                         path.move(to: pE)
                         path.addLine(to: pS)
                     }
@@ -219,28 +223,25 @@ struct CalibrationOverlayView: View {
                 }
 
                 // 基準となる直線
-                Path { path in
-                    var startPoint = CGPoint(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                if currentPoints.count >= 6 && currentPoints[5] != .zero {
+                    Path { path in
+                        let startPoint = normalizePoint(currentPoints[5], in: geometry.size)
 
-                    if currentPoints.count >= 4 && currentPoints[3] != .zero {
-                        // 近傍肩の座標を起点にする (currentPoints[3]が近傍肩)
-                        startPoint = normalizePoint(currentPoints[3], in: geometry.size)
+                        let length: CGFloat = 200
+                        let radians = referenceAngle * .pi / 180.0
+
+                        // nearSide に基づいてX方向を決定
+                        let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
+
+                        let end = CGPoint(
+                            x: startPoint.x + (xDirection * length * sin(radians)),
+                            y: startPoint.y - length * cos(radians)
+                        )
+                        path.move(to: startPoint)
+                        path.addLine(to: end)
                     }
-
-                    let length: CGFloat = 200
-                    let radians = referenceAngle * .pi / 180.0
-
-                    // nearSide に基づいてX方向を決定
-                    let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
-
-                    let end = CGPoint(
-                        x: startPoint.x + (xDirection * length * sin(radians)),
-                        y: startPoint.y - length * cos(radians)
-                    )
-                    path.move(to: startPoint)
-                    path.addLine(to: end)
+                    .stroke(Color.green, lineWidth: 4)
                 }
-                .stroke(Color.green, lineWidth: 4)
             }
         }
     }

@@ -200,25 +200,41 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             let (sample, verdict) = self.postureAnalyzer.analyze(
                 frame: frame,
                 referenceNearAngleDegrees: refAngle,
-                slouchDeltaThresholdDegrees: threshold
+                slouchDeltaThresholdDegrees: threshold,
+                previousNearSide: self.snapshot.nearSide
             )
 
-            // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:近傍耳, 3:近傍肩)
-            var points = [CGPoint](repeating: .zero, count: 4)
+            // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
+            var points = [CGPoint](repeating: .zero, count: 6)
 
+            // 1. 両肩の描画 (信頼度 0.3 以上で表示)
             if let ls = frame.leftShoulder, let rs = frame.rightShoulder {
                 points[0] = CGPoint(x: ls.x, y: ls.y)
                 points[1] = CGPoint(x: rs.x, y: rs.y)
             }
 
-            if let sample = sample {
-                let ear = (sample.nearSide == .left) ? frame.leftEar : frame.rightEar
-                let shoulder = (sample.nearSide == .left) ? frame.leftShoulder : frame.rightShoulder
+            // 2. 両耳の描画 (信頼度 0.3 以上で表示)
+            if let le = frame.leftEar, let re = frame.rightEar {
+                points[2] = CGPoint(x: le.x, y: le.y)
+                points[3] = CGPoint(x: re.x, y: re.y)
+            }
+
+            // 3. 判定用ラインの描画 (近傍側を決定して描画)
+            // まず、今回のフレームで判定された近傍側を優先し、なければ前回の状態を継承する
+            let activeNearSide = sample?.nearSide ?? self.snapshot.nearSide
+
+            if let side = activeNearSide {
+                let ear = (side == .left) ? frame.leftEar : frame.rightEar
+                let shoulder = (side == .left) ? frame.leftShoulder : frame.rightShoulder
                 if let e = ear, let s = shoulder {
-                    points[2] = CGPoint(x: e.x, y: e.y)
-                    points[3] = CGPoint(x: s.x, y: s.y)
+                    points[4] = CGPoint(x: e.x, y: e.y)
+                    points[5] = CGPoint(x: s.x, y: s.y)
                 }
-                self.snapshot.nearSide = sample.nearSide
+            }
+
+            // snapshot の nearSide を更新 (判定が成功したときのみ更新して安定させる)
+            if let side = sample?.nearSide {
+                self.snapshot.nearSide = side
             }
 
             // 3. 状態更新
@@ -228,21 +244,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func updateState(presence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil, points: [CGPoint] = []) {
         // メインスレッドで動作することが保証されている
+        let wasDetected = self.snapshot.isPersonDetected
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
 
         if self.snapshot.phase == .calibrating {
-            // キャリブレーションロジックに投入
+            // キャリブレーションロジックに投入 (可視化ポイントも渡す)
             let progress = self.calibrationLogic.ingest(
                 sample: sample,
                 presence: presence,
-                now: CACurrentMediaTime()
+                now: CACurrentMediaTime(),
+                points: points
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let average) = progress {
+            if case .completed(let average, let refPoints) = progress {
                 self.snapshot.phase = .monitoring
                 self.snapshot.referenceAngle = average
+                self.snapshot.referencePoints = refPoints
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定

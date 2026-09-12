@@ -91,6 +91,7 @@ struct SessionSnapshot: Equatable {
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil
+    var referencePoints: [CGPoint]? = nil
     var currentThreshold: Double = 0.0
     var visualizationPoints: [CGPoint] = []
     var nearSide: Side? = nil

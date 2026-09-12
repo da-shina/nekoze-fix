@@ -18,6 +18,19 @@ struct MonitorView: View {
 
     var body: some View {
         ZStack {
+            // 背景にカメラプレビューを表示
+            CameraPreviewView(session: sessionManager.cameraManager.captureSession)
+                .ignoresSafeArea()
+
+            // 姿勢ポイントの可視化
+            PostureOverlayView(
+                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                currentPoints: sessionManager.snapshot.visualizationPoints,
+                threshold: sessionManager.snapshot.currentThreshold,
+                nearSide: sessionManager.snapshot.nearSide
+            )
+            .ignoresSafeArea()
+
             // メインコンテンツ
             VStack(spacing: 24) {
                 // ステータス表示
@@ -37,13 +50,6 @@ struct MonitorView: View {
                 controlButtons
             }
             .padding()
-
-            // 正しい画角への誘導ガイド
-            if sessionManager.snapshot.showGuideline {
-                PostureGuidelineOverlay()
-                    .ignoresSafeArea()
-                    .transition(.opacity)
-            }
 
             // デイムモードオーバーレイ
             if sessionManager.snapshot.isDimmed {
