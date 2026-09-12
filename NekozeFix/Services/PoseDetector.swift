@@ -100,9 +100,6 @@ final class PoseDetector: @unchecked Sendable {
             }
             poseResult = .pose(frame)
         }
-        // なで肩の実測で .balanced では Body Pose 観測自体が空になる姿勢あり（Q7: d1 採用）。
-        // 電池・fps への影響は実機確認で受入判断（NFR 1時間15%以内）。
-        poseRequest.detectionModel = .accurate
 
         do {
             try handler.perform([poseRequest])
@@ -147,7 +144,9 @@ final class PoseDetector: @unchecked Sendable {
             leftShoulder: leftShoulder,
             rightShoulder: rightShoulder,
             rawLeftShoulderConfidence: rawConfidence(.leftShoulder),
-            rawRightShoulderConfidence: rawConfidence(.rightShoulder)
+            rawRightShoulderConfidence: rawConfidence(.rightShoulder),
+            rawLeftEarConfidence: rawConfidence(.leftEar),
+            rawRightEarConfidence: rawConfidence(.rightEar)
         )
     }
 }

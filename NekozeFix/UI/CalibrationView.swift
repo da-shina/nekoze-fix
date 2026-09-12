@@ -50,11 +50,13 @@ struct CalibrationView: View {
                 Spacer()
 
                 #if DEBUG
-                // 肩 confidence 実測（採用閾値 0.3。. = 未取得 / 観測なし）
+                // キーポイント confidence 実測（採用閾値 0.3。. = 未取得 / 観測なし）
                 if isPersonDetected {
-                    Text("shoulder conf  L \(debugConf(sessionManager.snapshot.debugLeftShoulderConfidence)) / R \(debugConf(sessionManager.snapshot.debugRightShoulderConfidence))")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.yellow)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("sh L \(debugConf(sessionManager.snapshot.debugLeftShoulderConfidence)) R \(debugConf(sessionManager.snapshot.debugRightShoulderConfidence))   ear L \(debugConf(sessionManager.snapshot.debugLeftEarConfidence)) R \(debugConf(sessionManager.snapshot.debugRightEarConfidence))")
+                    }
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(.yellow)
                 }
                 #endif
 
