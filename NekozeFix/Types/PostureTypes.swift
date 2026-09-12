@@ -100,5 +100,5 @@ struct SessionSnapshot: Equatable {
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。
-// 設計仕様: confidence < 0.5 → 猫背検出から除外。
-let minimumKeypointConfidence: Double = 0.5
+// 設計仕様: confidence < 0.3 → 猫背検出から除外（なで肩等の低信頼度帯を救うため 0.5 → 0.3 に改訂）。
+let minimumKeypointConfidence: Double = 0.3

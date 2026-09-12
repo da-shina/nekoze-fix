@@ -96,10 +96,10 @@ final class PostureAnalyzerTests: XCTestCase {
         // 前提: 有効なキーがない
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 100, y: 200, confidence: 0.4), // しきい値以下
-            rightEar: Keypoint(x: 300, y: 200, confidence: 0.4),
-            leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.4),
-            rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.4)
+            leftEar: Keypoint(x: 100, y: 200, confidence: 0.2), // しきい値(0.3)以下
+            rightEar: Keypoint(x: 300, y: 200, confidence: 0.2),
+            leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.2),
+            rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.2)
         )
 
         // 手順

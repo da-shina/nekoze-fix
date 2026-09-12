@@ -3,33 +3,36 @@ import QuartzCore
 
 /// Vision ベースの人体ポーズキーポイント抽出。
 ///
-/// VNDetectHumanBodyPoseRequest を用いてキーポイントを抽出し、
-/// 信頼度閾値 (0.5) でフィルタリング、空の観測結果 (personMissing) の場合は
-/// nil を返します。
+/// VNDetectHumanBodyPoseRequest でキーポイントを抽出する。
+/// 人物検出の有無は Body Pose 観測 **または** 顔検出のいずれかで判定する:
+/// 前面カメラ接写で頭を下げると（猫背姿勢そのもの）Body Pose の観測が
+/// 空になる実測結果を受け、顔のフォールバックを追加した（2026-09-12）。
+/// 顔のみ検出の場合は全キーポイントが nil の PoseFrame を返す
+/// （= 人物はいるが角度は計算できない）。
 ///
 /// 設計参照: design.md の "PoseDetector" セクション。
 final class PoseDetector: @unchecked Sendable {
+    // MARK: - 検出結果
+
+    enum Detection {
+        case pose(PoseFrame)   // 人物検出 + キーポイントあり
+        case personOnly        // 顔のみ等、人物はいるがキーポイントなし
+        case absent            // 人物なし
+    }
+
     // MARK: - プロパティ
 
-    private var request: VNDetectHumanBodyPoseRequest
     private let visionQueue = DispatchQueue(label: "com.nekozefix.vision.queue")
-
-    // MARK: - 初期化
-
-    init() {
-        self.request = VNDetectHumanBodyPoseRequest()
-        // VNDetectHumanBodyPoseRequestRevision1 は iOS 14.0 から利用可
-        // iOS 16.0+ 互換のためデフォルトリビジョン使用
-    }
 
     // MARK: - 検出
 
-    func detect(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> PoseFrame? {
-        var result: PoseFrame?
+    func detect(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> Detection {
+        var poseResult: Detection = .absent
+        var faceDetected = false
 
         let semaphore = DispatchSemaphore(value: 0)
 
-        let detectionRequest = VNDetectHumanBodyPoseRequest { [weak self] request, error in
+        let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
             defer { semaphore.signal() }
 
             if let error = error {
@@ -38,16 +41,16 @@ final class PoseDetector: @unchecked Sendable {
             }
 
             guard let observation = request.results?.first as? VNHumanBodyPoseObservation else {
-                // 空の観測結果: nil は personMissing を示す
-                result = nil
                 return
             }
 
-            let frame = self?.extractPoseFrame(from: observation)
-            if frame == nil {
-                print("Vision: Person detected, but required keypoints were missing or low confidence")
+            if let frame = self.extractPoseFrame(from: observation) {
+                poseResult = .pose(frame)
             }
-            result = frame
+        }
+
+        let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
+            faceDetected = !(request.results?.isEmpty ?? true)
         }
 
         let handler = VNImageRequestHandler(
@@ -56,14 +59,23 @@ final class PoseDetector: @unchecked Sendable {
         )
 
         do {
-            try handler.perform([detectionRequest])
+            try handler.perform([poseRequest, faceRequest])
         } catch {
             print("Vision Handler Error: \(error)")
-            return nil
+            return .absent
         }
 
         semaphore.wait()
-        return result
+
+        switch poseResult {
+        case .pose(let frame):
+            return .pose(frame)
+        case .absent:
+            // Body Pose が空でも顔が映っていれば人物あり扱い
+            return faceDetected ? .personOnly : .absent
+        case .personOnly:
+            return .personOnly
+        }
     }
 
     // MARK: - プライベートメソッド
@@ -79,7 +91,6 @@ final class PoseDetector: @unchecked Sendable {
             return Keypoint(x: Double(point.location.x), y: Double(point.location.y), confidence: Double(point.confidence))
         }
 
-        // キューのバックログ時は最新フレームのみをディスパッチ
         let leftEar = extractKeypoint(.leftEar)
         let rightEar = extractKeypoint(.rightEar)
         let leftShoulder = extractKeypoint(.leftShoulder)
