@@ -12,6 +12,8 @@ struct PostureOverlayView: View {
     let currentPoints: [CGPoint]
     let threshold: Double
     let nearSide: Side?
+    /// キャプチャ画像のアスペクト比（AspectFill クロップ補正用）
+    var imageAspectRatio: CGFloat = 4.0 / 3.0
 
     var body: some View {
         GeometryReader { geometry in
@@ -84,7 +86,7 @@ struct PostureOverlayView: View {
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
         let visionX = point.x
         let visionY = 1.0 - point.y
-        let imageAR: CGFloat = 4.0 / 3.0
+        let imageAR = imageAspectRatio
         let viewAR = size.width / size.height
         var sx: CGFloat = 1.0
         var sy: CGFloat = 1.0

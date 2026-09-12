@@ -94,6 +94,8 @@ struct SessionSnapshot: Equatable {
     var referencePoints: [CGPoint]? = nil
     var currentThreshold: Double = 0.0
     var visualizationPoints: [CGPoint] = []
+    /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
+    var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
 }
 

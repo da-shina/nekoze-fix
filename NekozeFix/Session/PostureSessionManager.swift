@@ -168,27 +168,20 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // 1. カメラ位置に基づいた正確な画像向きの決定
-        let videoOrientation = connection.videoOrientation
+        // バッファ実寸から画像アスペクト比を算出（可視化のクロップ補正に使用）
+        let imageAR: CGFloat
+        if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            imageAR = CGFloat(CVPixelBufferGetWidth(pb)) / CGFloat(CVPixelBufferGetHeight(pb))
+        } else {
+            imageAR = 4.0 / 3.0
+        }
 
         Task { @MainActor in
-            let isFrontCamera = self.settingsStore.cameraPosition == .front
-            let orientation: CGImagePropertyOrientation
-
-            // Visionの CGImagePropertyOrientation はセンサーの物理的な向きに基づいた指定が必要
-            // 前面カメラと背面カメラでマッピングが異なる
-            switch videoOrientation {
-            case .portrait:
-                orientation = isFrontCamera ? .left : .right
-            case .portraitUpsideDown:
-                orientation = isFrontCamera ? .right : .left
-            case .landscapeLeft:
-                orientation = isFrontCamera ? .up : .down
-            case .landscapeRight:
-                orientation = isFrontCamera ? .down : .up
-            @unknown default:
-                orientation = isFrontCamera ? .left : .right
-            }
+            self.snapshot.videoAspectRatio = imageAR
+            // iPadOS 18 以降、videoDataOutput のバッファはインターフェース向きに
+            // 自動回転して配信される（connection.videoOrientation は参考値にすぎない）。
+            // したがって Vision には常に .up を渡す。
+            let orientation: CGImagePropertyOrientation = .up
 
             // 2. ポーズ検出
             guard let frame = self.poseDetector.detect(sampleBuffer: sampleBuffer, orientation: orientation) else {
