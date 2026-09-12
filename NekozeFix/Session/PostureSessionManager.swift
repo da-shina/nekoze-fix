@@ -25,11 +25,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private var guidelineTimer: Timer?
 
-    // Q3: 古いフレームの除外 — マインキューにタスクが溜まった場合、最新フレームのみ処理する
-    // ponytail: nonisolated(unsafe) — 書き込み(capture queue)/読み取り(main queue)は1回ずつ、
-    // 最悪1フレーム遅延のみなのでロックは不要
-    private nonisolated(unsafe) var latestSampleBuffer: CMSampleBuffer?
-
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
@@ -170,13 +165,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        latestSampleBuffer = sampleBuffer
         // 1. カメラ位置に基づいた正確な画像向きの決定
         let videoOrientation = connection.videoOrientation
 
         Task { @MainActor in
-            // Q3: 古いフレームは破棄し、最新フレームのみ処理
-            guard sampleBuffer === self.latestSampleBuffer else { return }
             let isFrontCamera = self.settingsStore.cameraPosition == .front
             let orientation: CGImagePropertyOrientation
 

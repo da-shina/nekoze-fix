@@ -105,18 +105,6 @@ struct CalibrationView: View {
                     .padding()
                     .background(Color(.systemBackground).opacity(0.8))
                     .cornerRadius(16)
-
-                    // アクションボタン
-                    Button(action: recalibrate) {
-                        Text("再実行")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                    }
-                    .buttonStyle(.borderless)
                 }
                 .padding()
                 .background(Color(.systemBackground).opacity(0.8))
@@ -162,13 +150,6 @@ struct CalibrationView: View {
                 }
             }
             .store(in: &cancellables)
-    }
-
-    private func recalibrate() {
-        timerRemaining = 3.0
-        isPersonDetected = false
-        showingPersonMissing = false
-        progressMessage = "3秒間姿勢を保持してください"
     }
 }
 
