@@ -51,7 +51,7 @@ struct CalibrationView: View {
 
                 // 肩が映っていない場合の運用ガイド（顔のみ検出状態）
                 if isPersonDetected && isShoulderMissing {
-                    Label("肩が認識できません。端末を目線より高く、やや見下ろす位置に置いてください", systemImage: "camera.metering.center.weighted")
+                    Label("肩が認識できません。端末を少し離して肩まで画面に収めてください", systemImage: "camera.metering.center.weighted")
                         .font(.subheadline)
                         .foregroundColor(.orange)
                         .padding()

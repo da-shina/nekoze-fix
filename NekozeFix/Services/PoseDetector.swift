@@ -49,27 +49,10 @@ final class PoseDetector: @unchecked Sendable {
         }
         faceSemaphore.wait()
 
-        guard let face = faceBounds else {
-            return .absent
-        }
-
-        // パス2: 顔周囲を ROI として Body Pose（人物を拡大して見せ、
-        // 低アングルでの肩の検出率を上げる）。顔の下に肩が来るよう範囲を取る。
-        // Vision 正規化座標は左下原点なので「下」= y 減少方向。
-        var poseResult: Detection = .personOnly
+        // パス2: Body Pose（フルフレーム。顔周囲 ROI を与えると人体全体像を
+        // 認識できず観測が空になるため使わない）
+        var poseResult: Detection?
         let poseSemaphore = DispatchSemaphore(value: 0)
-        // ROI: 横幅 2 倍、縦は顔高さの 3 倍（上 0.5 / 下 2.5）に拡張。
-        // 範囲外 ROI は Vision がエラーを返し検出が全滅するため [0,1] にクランプする。
-        let rawMinX = face.midX - face.width
-        let rawMinY = face.minY - face.height * 2.5
-        let rawMaxX = face.midX + face.width
-        let rawMaxY = face.minY + face.height * 3.5
-        let clampedRoi = CGRect(
-            x: min(max(rawMinX, 0), 1),
-            y: min(max(rawMinY, 0), 1),
-            width: max(min(rawMaxX, 1) - max(rawMinX, 0), 0.01),
-            height: max(min(rawMaxY, 1) - max(rawMinY, 0), 0.01)
-        )
         let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
             defer { poseSemaphore.signal() }
             if let error = error {
@@ -77,12 +60,11 @@ final class PoseDetector: @unchecked Sendable {
                 return
             }
             guard let observation = request.results?.first as? VNHumanBodyPoseObservation,
-                  let frame = self.extractPoseFrame(from: observation, roi: clampedRoi) else {
+                  let frame = self.extractPoseFrame(from: observation) else {
                 return
             }
             poseResult = .pose(frame)
         }
-        poseRequest.regionOfInterest = clampedRoi
 
         do {
             try handler.perform([poseRequest])
@@ -91,14 +73,14 @@ final class PoseDetector: @unchecked Sendable {
         }
         poseSemaphore.wait()
 
-        return poseResult
+        // Body Pose でキーポイントが取れなくても、顔が映っていれば人物あり
+        // （接写で俯いた際など、Body Pose 観測が空になるケースのフォールバック）
+        return poseResult ?? (faceBounds != nil ? .personOnly : .absent)
     }
 
     // MARK: - プライベートメソッド
 
-    /// ROI を使った観測の座標は ROI 基準の正規化座標で返されるため、
-    /// 全画像座標 (0-1) へ写像し直す。
-    private func extractPoseFrame(from observation: VNHumanBodyPoseObservation, roi: CGRect) -> PoseFrame? {
+    private func extractPoseFrame(from observation: VNHumanBodyPoseObservation) -> PoseFrame? {
         let keypointThreshold: Float = 0.3 // 0.5から0.3に緩和して検出率を向上
 
         func extractKeypoint(_ jointName: VNHumanBodyPoseObservation.JointName) -> Keypoint? {
@@ -106,9 +88,7 @@ final class PoseDetector: @unchecked Sendable {
                   point.confidence >= keypointThreshold else {
                 return nil
             }
-            let x = roi.minX + Double(point.location.x) * roi.width
-            let y = roi.minY + Double(point.location.y) * roi.height
-            return Keypoint(x: x, y: y, confidence: Double(point.confidence))
+            return Keypoint(x: Double(point.location.x), y: Double(point.location.y), confidence: Double(point.confidence))
         }
 
         let leftEar = extractKeypoint(.leftEar)
