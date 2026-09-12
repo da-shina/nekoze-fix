@@ -79,6 +79,13 @@ struct CalibrationLogic {
             if !points.isEmpty {
                 accumulatedPoints.append(points)
             }
+        } else {
+            // 角度サンプルなし（肩未検出など）: 蓄積をリセット。
+            // 実時間経過だけを頼りに完了へ進まないようにする。
+            accumulatedAngles = []
+            accumulatedPoints = []
+            isAccumulating = false
+            return .waitingForPerson
         }
 
         // 蓄積が完了に十分かチェック（requiredStableDuration 間の安定した姿勢）

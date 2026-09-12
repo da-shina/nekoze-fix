@@ -291,6 +291,27 @@ final class CalibrationLogicTests: XCTestCase {
         }
     }
 
+    func testNullSampleDuringAccumulation_ResetsProgress() {
+        // 前提: 0.5秒間安定して蓄積中（肩が映っている）
+        sut.start()
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        var progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertGreaterThan(elapsed, 0)
+        } else {
+            XCTFail("蓄積中の .accumulating が期待されたが、\(progress) を取得")
+        }
+
+        // 手順: 肩が見えなくなり 5 秒超サンプルなし（presence は人物検出のまま）
+        for step in 1...10 {
+            let t = 0.5 + Double(step) * 0.6
+            progress = sut.ingest(sample: nil, presence: .personDetected, now: t)
+        }
+
+        // 検証: 完了へは進まず待機に復旧（実時間経過だけで進行するバグの回帰テスト）
+        XCTAssertEqual(progress, .waitingForPerson)
+    }
+
     // MARK: - エッジケース
 
     func testAngleExactlyFiveDegrees_ContinuesAccumulating() {
