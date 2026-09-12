@@ -291,6 +291,35 @@ final class CalibrationLogicTests: XCTestCase {
         }
     }
 
+    func testShortDropoutDuringAccumulation_FreezesWithoutReset() {
+        // 前提: 0.5秒間安定して蓄積中
+        sut.start()
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        var progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+        guard case .accumulating(let elapsedBefore) = progress else {
+            XCTFail("蓄積中の .accumulating が期待されたが、\(progress) を取得")
+            return
+        }
+
+        // 手順: 脱落許容時間（1.0秒）以内で sample nil が数frame挟まる（Vision チラつき）
+        progress = sut.ingest(sample: nil, presence: .personDetected, now: 0.7)
+        if case .accumulating(let frozen) = progress {
+            XCTAssertEqual(frozen, elapsedBefore, accuracy: 0.001, "脱落中は elapsed が凍結（逆行も進行もしない）")
+        } else {
+            XCTFail("許容内脱落では .accumulating が期待されたが、\(progress) を取得")
+        }
+
+        // 手順: 0.9秒（許容内）で有効サンプル復帰
+        progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 1.4)
+        if case .accumulating(let elapsedAfter) = progress {
+            // 復帰後の elapsed は「0.9秒分の脱落を跨いだが、有効サンプル間の経過 0.9秒」は
+            // 脱落区間なので加算されず、復帰サンプル直前の 0.5s→0.5s のみ。
+            XCTAssertEqual(elapsedAfter, 0.5, accuracy: 0.001, "脱落区間の時間は蓄積に計上されない")
+        } else {
+            XCTFail("復帰後も .accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
     func testNullSampleDuringAccumulation_ResetsProgress() {
         // 前提: 0.5秒間安定して蓄積中（肩が映っている）
         sut.start()
