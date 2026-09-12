@@ -282,7 +282,7 @@ struct SessionSnapshot: Equatable {
 
 **信頼度閾値**: 定数 `minimumKeypointConfidence = 0.5` とする。
 
-**閾値**: 判定閾値は `SettingsStore.slouchThresholdDegrees`（5〜20度、デフォルト 8.0）を単一ソースとして View/Session とも直接参照する。感度（0.0-1.0）を経由する変換層は廃止（2026-09-12 改訂）。
+**閾値**: 判定閾値は `SettingsStore.slouchThresholdDegrees`（3〜20度、デフォルト 5.0）を単一ソースとして View/Session とも直接参照する。感度（0.0-1.0）を経由する変換層は廃止（2026-09-12 改訂）。
 
 ### PostureAnalyzer
 
@@ -447,14 +447,14 @@ protocol DeviceOrientationMonitoring {
 
 ```swift
 protocol SettingsStoring: AnyObject {
-    var slouchThresholdDegrees: Double { get set }  // 5.0...20.0、デフォルト 8.0
+    var slouchThresholdDegrees: Double { get set }  // 3.0...20.0、デフォルト 5.0
     var isMonitoringEnabled: Bool { get set }
 }
 ```
 
 UserDefaults に閾値（度数）と監視フラグのみ保存する。基準姿勢は **プロセス内メモリに保持し、永続化しない**（Q4 決定：Out of Scope）。
 
-**閾値ストレージ（2026-09-12 改訂）**: 感度（0.0-1.0）は廃止し、判定閾値を度数そのもの (`slouchThresholdDegrees: 5.0...20.0`、デフォルト 8.0、ステップ 0.5) で永続化する。旧感度キー (`com.nekozefix.sensitivity`) は初回起動時に旧マッピング `20 - sensitivity * 15` で一度だけ変換して引き継ぎ、以降削除する。 registered default を閾値キーに登録すると移行判定がマスクされるため、デフォルト値は `init` 側で担保する。
+**閾値ストレージ（2026-09-12 改訂）**: 感度（0.0-1.0）は廃止し、判定閾値を度数そのもの (`slouchThresholdDegrees: 3.0...20.0`、デフォルト 5.0、ステップ 0.5) で永続化する。旧感度キー (`com.nekozefix.sensitivity`) は初回起動時に旧マッピング `20 - sensitivity * 15` で一度だけ変換して引き継ぎ、以降削除する。 registered default を閾値キーに登録すると移行判定がマスクされるため、デフォルト値は `init` 側で担保する。
 
 ### PostureSessionManager
 

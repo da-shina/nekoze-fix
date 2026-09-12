@@ -18,11 +18,11 @@ final class SettingsStore: ObservableObject {
     // MARK: - 定数
 
     /// 閾値の下限（度）
-    static let thresholdMinDegrees: Double = 5.0
+    static let thresholdMinDegrees: Double = 3.0
     /// 閾値の上限（度）
     static let thresholdMaxDegrees: Double = 20.0
     /// デフォルト閾値（度）。少々の前方頭出しも通知する厳しめ設定
-    static let thresholdDefaultDegrees: Double = 8.0
+    static let thresholdDefaultDegrees: Double = 5.0
 
     // MARK: - プロパティ
 
@@ -62,7 +62,7 @@ final class SettingsStore: ObservableObject {
     // MARK: - 公開プロパティ
 
     /// 猫背判定閾値（度）。基準姿勢からの角度増加量がこの値以上で猫背候補。
-    /// 範囲: 5.0〜20.0、デフォルト: 8.0
+    /// 範囲: 3.0〜20.0、デフォルト: 5.0
     @Published var slouchThresholdDegrees: Double {
         didSet {
             let clamped = SettingsStore.clamp(slouchThresholdDegrees)

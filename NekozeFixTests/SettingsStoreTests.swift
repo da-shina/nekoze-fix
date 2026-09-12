@@ -21,8 +21,8 @@ final class SettingsStoreTests: XCTestCase {
 
     // MARK: - 閾値（度数）
 
-    func testDefaultThreshold_is8Degrees() {
-        XCTAssertEqual(sut.slouchThresholdDegrees, 8.0, accuracy: 0.001)
+    func testDefaultThreshold_is5Degrees() {
+        XCTAssertEqual(sut.slouchThresholdDegrees, 5.0, accuracy: 0.001)
     }
 
     func testThreshold_clampedToRange() {
@@ -30,7 +30,7 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(sut.slouchThresholdDegrees, 20.0, accuracy: 0.001)
 
         sut.slouchThresholdDegrees = -10.0
-        XCTAssertEqual(sut.slouchThresholdDegrees, 5.0, accuracy: 0.001)
+        XCTAssertEqual(sut.slouchThresholdDegrees, 3.0, accuracy: 0.001)
     }
 
     func testThreshold_persistsAcrossInstances() {
