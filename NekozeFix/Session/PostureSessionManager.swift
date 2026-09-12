@@ -154,8 +154,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func startCameraPipeline() async {
         do {
-            try await cameraManager.start(position: settingsStore.cameraPosition.avPosition)
+            // デリゲートは start() より先に設定する。
+            // 両メソッドは同一の sessionQueue に async 投入されるため、
+            // configureSession が必ず非 nil のデリゲートを参照する順序が保証される。
             cameraManager.setSampleBufferDelegate(self)
+            try await cameraManager.start(position: settingsStore.cameraPosition.avPosition)
         } catch {
             print("Camera pipeline start failed: \(error)")
             snapshot.phase = .permissionDenied
