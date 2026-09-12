@@ -93,8 +93,15 @@ final class DeviceOrientationMonitor: ObservableObject {
         case .landscapeRight:
             newOrientation = .landscapeLeft
         default:
-            // 不明な向き (face up/down) の場合は現在値を保持し、変化なしを通知
-            return false
+            // 起動直後など .unknown の場合は windowScene から推定
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+               let raw = AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) {
+                newOrientation = raw
+            } else {
+                return false
+            }
         }
 
         currentVideoOrientation = newOrientation

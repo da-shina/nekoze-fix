@@ -103,6 +103,26 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
+    // MARK: - ヘルパー
+
+    /// 現在のデバイス向きから AVCaptureVideoOrientation を推定する。
+    /// UIDevice.orientation が .unknown の場合は windowScene からフォールバック。
+    private func currentDeviceVideoOrientation() -> AVCaptureVideoOrientation {
+        switch UIDevice.current.orientation {
+        case .portrait:           return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft:     return .landscapeRight
+        case .landscapeRight:    return .landscapeLeft
+        default:
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) {
+                return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
+            }
+            return .portrait
+        }
+    }
+
     // MARK: - サンプルバッファデリゲート
 
     func setSampleBufferDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
@@ -153,10 +173,10 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
             captureSession.addOutput(output)
             self.videoOutput = output
 
-            // ビデオ向きをポートレートに設定
+            // ビデオ向きを現在のデバイス向きに設定
             if let connection = output.connection(with: .video) {
                 if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = .portrait
+                    connection.videoOrientation = currentDeviceVideoOrientation()
                 }
                 // 前面カメラの時のみミラー処理を有効にする
                 if connection.isVideoMirroringSupported {

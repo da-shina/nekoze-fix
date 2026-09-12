@@ -53,6 +53,15 @@ internal class CameraPreviewUIView: UIView {
         CATransaction.commit()
     }
 
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        // ビューがウィンドウに追加されたタイミングで向きを確定
+        // （init 時点では window が nil の場合がある）
+        if self.window != nil {
+            updatePreviewOrientation()
+        }
+    }
+
     @objc private func orientationDidChange() {
         updatePreviewOrientation()
     }
@@ -60,13 +69,19 @@ internal class CameraPreviewUIView: UIView {
     private func updatePreviewOrientation() {
         guard let connection = previewLayer.connection,
               connection.isVideoOrientationSupported else { return }
+        let orientation: AVCaptureVideoOrientation
         switch UIDevice.current.orientation {
-        case .portrait:           connection.videoOrientation = .portrait
-        case .portraitUpsideDown: connection.videoOrientation = .portraitUpsideDown
-        case .landscapeLeft:     connection.videoOrientation = .landscapeRight
-        case .landscapeRight:    connection.videoOrientation = .landscapeLeft
-        default: break
+        case .portrait:           orientation = .portrait
+        case .portraitUpsideDown: orientation = .portraitUpsideDown
+        case .landscapeLeft:     orientation = .landscapeRight
+        case .landscapeRight:    orientation = .landscapeLeft
+        default:
+            // 起動直後など UIDevice.orientation が未知の場合は
+            // windowScene の interfaceOrientation から推定する
+            guard let scene = self.window?.windowScene else { return }
+            orientation = .init(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
         }
+        connection.videoOrientation = orientation
     }
 }
 
