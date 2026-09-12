@@ -36,12 +36,12 @@ struct PostureAnalyzer {
             let hysteresisThreshold = 0.02 // 座標系(0-1)における2%のバッファ
 
             if let prev = previousNearSide {
-                if prev == .left && (rx - lx) < hysteresisThreshold {
-                    nearSide = .left
-                } else if prev == .right && (lx - rx) < hysteresisThreshold {
-                    nearSide = .right
+                let diff = rx - lx
+                if abs(diff) < hysteresisThreshold {
+                    // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
+                    nearSide = prev
                 } else {
-                    nearSide = lx < rx ? .left : .right
+                    nearSide = diff > 0 ? .left : .right
                 }
             } else {
                 nearSide = lx < rx ? .left : .right
