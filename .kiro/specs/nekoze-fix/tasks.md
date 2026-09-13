@@ -189,3 +189,72 @@
   - Observable completion: measured battery consumption meets NFR 9.1/9.2
   - _Requirements: 9.1, 9.2_
   - _Depends: 6.1_
+## 8. 前出し距離指標 第2段: 本採用（角度 OR 距離、FQ1〜FQ8）
+
+注: 8.1〜8.3 は `PostureTypes.swift` を共有するため逐次実行（`(P)` なし）。
+
+- [ ] 8.1 Types: 距離指標の契約追加（呼び出し側の機械的追従含む、挙動不変）
+  - Add `DistanceMetric` struct (side + referenceDistance) per design.md PostureAnalyzer contract
+  - Add `referenceSide: Side?` to `SessionSnapshot`; extend `CalibrationProgress.completed` with `referenceSide`
+  - Thread new fields through existing call sites (CalibrationLogic returns `sample.nearSide`; PostureSessionManager stores to snapshot; tests pattern-match updated) — no behavior change yet
+  - Add `distanceMetric: DistanceMetric? = nil` and `slouchDistanceThresholdPercent: Double = 8.0` parameters to `PostureAnalyzer.analyze` signature (both ignored until 8.3)
+  - Observable completion: build green, all existing tests pass unchanged, new type/fields present per design contract
+  - _Boundary: Types, PostureTypes.swift_
+  - _Requirements: 4.1_
+
+- [ ] 8.2 CalibrationLogic: 校正中の近側切り替わりで蓄積リセット
+  - Reset accumulation when `sample.nearSide` differs from the side that started the current window (validate-design Issue 1; same immediate-reset class as angle >5°)
+  - Unit tests: 45度左側蓄積中に右側サンプル → elapsed=0 リセット、同一側継続 → 蓄積維持
+  - Observable completion: side-flip mid-calibration resets accumulation; reference window is single-side guaranteed
+  - _Boundary: CalibrationLogic_
+  - _Requirements: 2.3, 2.4, 4.1_
+  - _Depends: 8.1_
+
+- [ ] 8.3 PostureAnalyzer: 距離基準比の OR 判定とロック側フォールバック
+  - Verdict becomes: angle delta >= threshold OR (distanceMetric usable AND nearDistance >= referenceDistance * (1 + thresholdPercent/100)) → slouchCandidate
+  - Distance evaluated on `distanceMetric.side` pair regardless of angle's near-side selection; lock-side pair confidence < 0.3 or missing → distance condition skipped, angle-only verdict
+  - Unit tests: 角度 GOOD・距離 OVER → slouchCandidate / 角度 OVER・距離 GOOD → slouchCandidate / 両方 UNDER → good / ロック側欠測 → 距離スキップ / 基準比ちょうど閾値 → candidate（以上）
+  - Observable completion: OR-judgment test matrix passes in PostureAnalyzerTests
+  - _Boundary: PostureAnalyzer_
+  - _Requirements: 4.1, 4.5, 4.6_
+  - _Depends: 8.1_
+
+- [ ] 8.4 SettingsStore: 距離閾値の永続化（5〜15%、デフォルト 8%、ステップ 0.5）
+  - Add `slouchDistanceThresholdPercent` with clamping and UserDefaults persistence (new key, no legacy migration)
+  - Unit tests: 範囲外代入のクランプ、インスタンス横断の永続化、デフォルト 8.0
+  - Observable completion: SettingsStoreTests distance cases pass
+  - _Boundary: SettingsStore_
+  - _Requirements: 4.4_
+
+- [ ] 8.5 PostureSessionManager: DistanceMetric 構成と距離閾値の受け渡し（統合）
+  - On calibration completion build `DistanceMetric(side: referenceSide, referenceDistance:)`, keep in session state; pass with `slouchDistanceThresholdPercent` into `analyze` every monitoring frame
+  - Improvement transition (4.3) verified through OR result: gate clears only when both indicators under threshold
+  - Integration test: synthetic frames with growing lock-side distance ≥ 3s → displayedPosture .slouch → recovery → .good
+  - Observable completion: distance-path E2E-style session test passes; angle-only regression suite untouched-green
+  - _Boundary: PostureSessionManager_
+  - _Requirements: 4.1, 4.2, 4.3_
+  - _Depends: 8.1, 8.2, 8.3, 8.4_
+
+- [ ] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
+  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...15.0, step 0.5), label with current value like the angle control
+  - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
+  - _Boundary: MonitorView_
+  - _Requirements: 4.4_
+  - _Depends: 8.4, 8.5_
+
+- [ ] 8.7 全テストスイート実行と角度指標回帰確認
+  - `xcodebuild test -scheme NekozeFix` on iPhone 17 Pro simulator; all sections (Domain/Session/E2E) green
+  - Observable completion: TEST SUCCEEDED with distance tests included, zero angle-behavior regressions
+  - _Depends: 8.5, 8.6_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4_
+
+- [ ] 8.8 実機検収（手動・コード変更なし）— DEBUG 表示が生きている状態で行う
+  - iPad 9th 実機: 意図的前出し3秒で通知発音を確認 → 通常作業で自然前出しの最大基準比%を記録 → 8% 妥当性判定（伸びが薄い場合は 8.4/8.6 のデフォルト・範囲を調整してから次工程）
+  - Observable completion: 発音確認済み・自然前出し最大%が数値として記録され、閾値据え置きor調整が決定
+  - _Requirements: 4.1, 4.2_
+  - _Depends: 8.7_
+
+- [ ] 8.9 DEBUG 距離表示の削除（chore、検収 PASS 後）
+  - Remove `debugDistanceText` field, window buffer, and both view overlays (angle indicator precedent: commit 8205aba)
+  - Observable completion: grep for debugDistanceText yields nothing; build and tests green
+  - _Depends: 8.8_

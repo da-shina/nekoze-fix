@@ -1,13 +1,13 @@
 {
   "name": "nekoze-fix",
-  "phase": "completed",
+  "phase": "tasks-generated",
   "language": "ja",
   "createdAt": "2026-09-06T00:00:00+09:00",
-  "updated_at": "2026-09-06T22:00:00+09:00",
+  "updated_at": "2026-09-13T14:00:00+09:00",
   "approvals": {
     "requirements": true,
     "design": true,
-    "tasks": true,
+    "tasks": false,
     "requirements-generated": true,
     "design-generated": true,
     "tasks-generated": true

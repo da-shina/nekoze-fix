@@ -122,3 +122,41 @@
 
 requirements.md では機能要件「8 アプリのライフサイクル」と非機能要件「8 パフォーマンス」がいずれも 8.1 / 8.2 を使う。デザインでは ID を改変せず、トレース表上で「ライフサイクル」と「性能」を併記して区別した。タスク生成時も同様に扱う。
 
+
+## 第2段: 前出し距離指標（2026-09-13 追加）
+
+### Investigations
+- **第1段 DEBUG 実測（iPad 9th 実機、2026-09-13）**: 校正後30秒の 1s-median 揺れ幅 99.87〜100.81%（ノイズ ±1%）。意図的前出しは +11〜15% で3回再現、復帰は毎回 ~100%。S/N 検証 PASS（予測 1.5〜3% を上回る信号）。
+- **側固有差の発見**: 当初の段差（106→114%）は近傍側切り替わりによるもの。左右の耳ー肩距離に約8%の固有差があり、距離指標は側をまたいで比較できない。→ FQ1「校正側ロック」の根拠。
+- **自然前出し未実測**: 意図的前出しのみの実測のため、しきい値 8%（FQ2 暫定）は検収タスク（FQ8）で最終確認する。
+
+### Design Decisions
+- 距離指標は側ロック（FQ1）: `DistanceMetric`（side + referenceDistance）を Session 層が校正完了時に構成し監視中保持。Domain 層の PostureAnalyzer はロック側ペアと基準距離を入力に取る。
+- DEBUG 表示（`debugDistanceText`）は判定と無関係な表示専用足場とし、検収後に chore 削除（FQ5）。角度指標導入時の「DEBUG → 検収 PASS → chore 削除」慣例（コミット 8205aba）を踏襲。
+
+---
+
+## Gap Analysis: 前出し距離指標 第2段（2026-09-13、/kiro-validate-gap）
+
+### Requirement-to-Asset Map（実装現状との差分）
+
+| 要件 | 既存資産（第1段で実装済み） | ギャップ |
+|------|------------------------------|----------|
+| 4.1 角度 OR 距離 | `AngleSample.nearDistance`、`PostureAnalyzer` の `length` 再利用、`referenceDistance` 保存経路、`CalibrationLogic.accumulatedDistances` | **Missing**: `DistanceMetric` 型、`analyze` の距離条件・閾値引数（OR 判定）、`referenceSide`（Types の completed/snapshot 双方）、ロック側ペア距離の選択（現状 DEBUG は近傍側距離で、FQ1 未実装 = 側混在のまま） |
+| 4.1 フォールバック | 角度のみ判定は既存 | **Constraint**: 距離スキップは analyzer 側の分岐として新設（Session の sample nil 経路は角度全体スキップで粒度が違う） |
+| 4.3 改善即時（有効指標すべて） | `TimedConditionGate`、表示遷移 | **Missing**: OR 結果に紐づく改善条件の検証（Gate は verdict 入力なので変更不要、統合テストのみ） |
+| 4.4 距離閾値スライダー | `SettingsStore` の角度クランプ/永続化機構、MonitorView のスライダー雛形 | **Missing**: `slouchDistanceThresholdPercent`（5〜15%）、UI の横並びスライダー |
+| 2.3/2.4 校正側切替リセット | 角度>5度リセット機構、`nearSide` ヒステリシス | **Missing**: 側切り替わりリセット（機構は同一、条件1節追加） |
+| DEBUG（FQ5） | `debugDistanceText` 表示・1秒窓 | 削除のみ（8.9）。変更不要 |
+
+### Approach Options
+- **A. 既存拡張（推奨）**: 全ギャップが design の契約どおり既存5ファイル（Types/Analyzer/CalibrationLogic/SettingsStore/MonitorView/Session）に収まる。新規ファイル不要。層依存 Types→Domain→Session→UI の一方向は破られない（DistanceMetric は Types に置く）
+- B. 新規 DistanceAnalyzer コンポーネント: 耳ー肩距離は角度と同じペア・同じループで計算済み（`length`）。分離すると同一キーポイントを2回解決する冗長。棄却
+- C. ハイブリッド: 該当なし（A で十分小さい）
+
+### Effort & Risk
+- Effort: **S**（タスク 8.1〜8.7、各1〜3時間、新規パターンなし・既存機構の延長）
+- Risk: **Low**。唯一の実測不確定要素は自然前出しの伸び幅 → FQ8 の検収タスク（8.8）が閾値調整の逃げ道を確保済み。側切替リセットは角度リセットと同じクラスの変更で回帰面が狭い
+
+### Recommendations
+- 方式 A。注意点は1つ: 現 DEBUG 経路（`updateDebugDistance`）は近傍側距離を使っている。8.1 の `AngleSample.nearDistance` を「監視時はロック側」に意味変更すると DEBUG 表示の意味も変わる（校正中は同一側なので実害なし、検収後に削除されるため許容）。検収 8.8 は「8.5 統合後」に実施されるため、ロック側の値を見た状態で閾値判定できる — 順序は正しい

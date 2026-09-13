@@ -29,9 +29,9 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 
 - フロントカメラセッションの構成・開始・停止と権限要求
 - Vision による肩・耳キーポイント抽出と信頼度フィルタ（confidence < 0.3 を除外）
-- 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、キャリブレーション、猫背確定/改善判定
+- 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、校正ロック側の耳ー肩距離基準比計算、キャリブレーション、猫背確定/改善判定（角度 OR 距離）
 - 通知音の再生・再通知間隔・停止（前回の音は停止して次を再生）
-- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（3〜20度）、向き追従、フォアグラウンドライフサイクル
+- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（角度 3〜20度・距離 5〜15%）、向き追従、フォアグラウンドライフサイクル
 
 ### Out of Boundary
 
@@ -50,7 +50,8 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 ### Revalidation Triggers
 
 - 最低対応 OS を iOS 16 以外に変更する場合
-- 判定指標を角度以外（垂直距離、3D 姿勢推定など）に切り替える場合
+- 角度 + 校正ロック側耳ー肩距離の 2 指標（OR）構成を変更・解除する場合
+- 判定指標をこれら以外（3D 姿勢推定など）に切り替える場合
 - バックグラウンド監視や永続化をスコープに入れる場合
 - 通知手段を音以外（バイブレーション、システム通知）に拡張する場合
 - カメラプリセットを `.high` から変更する場合
@@ -155,6 +156,23 @@ graph TB
 
 詳細は各ADR（docs/adr/0008〜0013）に記載されている。
 
+### Grilling Decisions（第2ラウンド: 前出し距離指標）
+
+「首が前に出る（forward head）」を検出するため、角度指標に加えて耳ー肩距離の基準比を第2指標として導入する。FQ 番号は 2026-09-13 の grilling セッションの質問番号に対応する。
+
+| # | 決定項目 | 決定 |
+|---|---------|------|
+| FQ1 | 距離計算の側 | **校正時にロックした側**を使用する。角度の近側選択（Q9）とは独立。ロック側のペアが無効化したら距離をスキップし角度のみ継続（左右の耳ー肩距離には約8%の固有差があり、側混在はノイズではなく系统的誤差になる。第1段 DEBUG 実測で確認） |
+| FQ2 | 距離しきい値の初期値 | **暫定 +8%**。自然前出しの実測を検収タスクに組み込み、必要なら調整（第1段実測: 静止ノイズ ±1%、意図的前出し +11〜15%） |
+| FQ3 | 距離閾値の UI | **スライダー化**（角度スライダーの横に並列表示） |
+| FQ4 | 距離スライダーの範囲 | **5〜15%・ステップ 0.5・デフォルト 8%**（観測レンジに絞った狭い範囲） |
+| FQ5 | DEBUG 表示の運命 | 検収実測が終わるまで黄色 monospace 距離表示を残し、その後 chore コミットで削除（角度指標導入時と同じ慣例） |
+| FQ6 | 判定関係 | 角度偏差 **OR** 距離基準比増加で猫背候補。改善遷移は**有効な全指標**が閾値未満に戻った時（4.3。スキップ中の指標は条件集合から除外）。3秒確定ゲート（4.2）は OR 後の結果に掛かる |
+| FQ7 | 正規化 | 校正時耳ー肩距離の平均を `referenceDistance` として保存し、監視中は基準比%（素値+直近1秒中央値を DEBUG 表示）で比較。角度と同一タイミング・同一機構で保存 |
+| FQ8 | 検収と実測の順序 | 検収1セッションで両取り: 意図的前出しで発音確認 → 通常作業で自然前出しの最大%記録 → 閾値の妥当性判定 → DEBUG 削除 |
+
+物理前提: カメラは斜め正面45度設置が想定（要件 3.*）。前出しでは耳が前方+下方に動き、45度では前方変位が像面に横ずれとして現れるため耳ー肩投影距離は伸びる。角度指標は傾きと頭部下垂が打ち消し合い微弱信号になりやすい一方、距離は両成分が加算され補完的。すくめは距離が縮む方向なので誤発火しない。
+
 ## File Structure Plan
 
 すべて新規作成。Xcode プロジェクト `NekozeFix.xcodeproj` をルートに置く。
@@ -191,14 +209,14 @@ graph TB
 | Component | Domain | Intent | Requirements | Dependencies | Contracts |
 |-----------|--------|--------|--------------|--------------|-----------|
 | Types | Types | 共有値と状態の定義 | 3.3, 4.1, 4.4 | なし | State |
-| PostureAnalyzer | Domain | 近側角度から猫背候補を出す | 3.5, 4.1, 4.5, 4.6 | Types | Service |
+| PostureAnalyzer | Domain | 角度 OR 距離基準比から猫背候補を出す | 3.5, 4.1, 4.5, 4.6 | Types | Service |
 | TimedConditionGate | Domain | 連続条件の確定 | 2.3, 2.4, 4.2, 4.3 | Types | Service |
-| CalibrationLogic | Domain | 基準角度の確定規則 | 2.1-2.7 | Types | Service |
+| CalibrationLogic | Domain | 基準角度・基準距離・ロック側の確定規則 | 2.1-2.7, 4.1 | Types | Service |
 | CameraSessionManager | Services | カメラ権限とキャプチャ（.high 720p） | 1.1, 1.2, 3.1, 3.2, 7.1, 8.1, 8.2, 9.1 | AVFoundation | Service |
 | PoseDetector | Services | キーポイント抽出（confidence ≥ 0.3） | 2.5, 3.4, 4.5, 8.1 | Vision | Service |
 | AlertPlayer | Services | 通知音と再通知（前音停止・上書き） | 5.1-5.4, 8.2 | AVFAudio | Service |
 | DeviceOrientationMonitor | Services | 回転検知（5秒タイムアウト完了） | 7.1, 7.2 | UIKit | Event |
-| SettingsStore | Session | 閾値と監視フラグ（3〜20度） | 4.4, 8.2 | UserDefaults | State |
+| SettingsStore | Session | 閾値と監視フラグ（角度 3〜20度・距離 5〜15%） | 4.4, 8.2 | UserDefaults | State |
 | PostureSessionManager | Session | セッション状態の唯一の所有者 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
 | PermissionView | UI | 権限 UI | 1.1, 1.2 | Session | State |
 | CalibrationView | UI | 校正 UI | 2.1-2.6, 10.1 | Session | State |
@@ -244,6 +262,7 @@ struct AngleSample: Equatable {
     var nearSide: Side
     var nearAngleDegrees: Double
     var farSideDetected: Bool
+    var nearDistance: Double  // 近傍側の耳ー肩距離（正規化座標系、単位なし）。FQ1 により監視中はロック側の値が入る
 }
 
 enum PostureVerdict: Equatable {
@@ -278,7 +297,7 @@ struct SessionSnapshot: Equatable {
 
 **信頼度閾値**: 定数 `keypointThreshold = 0.3` とする（検出率向上のため 0.5 から緩和、2026-09-13 実装同期）。
 
-**閾値**: 判定閾値は `SettingsStore.slouchThresholdDegrees`（3〜20度、デフォルト 5.0）を単一ソースとして View/Session とも直接参照する。感度（0.0-1.0）を経由する変換層は廃止（2026-09-12 改訂）。
+**閾値**: 判定閾値は `SettingsStore.slouchThresholdDegrees`（3〜20度、デフォルト 5.0）と `SettingsStore.slouchDistanceThresholdPercent`（5〜15%、デフォルト 8.0）を単一ソースとして View/Session とも直接参照する。感度（0.0-1.0）を経由する変換層は廃止（2026-09-12 改訂）。
 
 ### PostureAnalyzer
 
@@ -306,15 +325,26 @@ struct SessionSnapshot: Equatable {
 - 結果は **鋭角 0〜90度**（Q10 決定）
 - **移動平均フィルタは適用しない**（Q12 決定：生の角度を 3秒ゲートに投入）
 
-**判定**: `nearAngleDegrees - referenceNearAngleDegrees >= slouchDeltaThresholdDegrees` なら `slouchCandidate`。カメラ設置角は基準値に含まれるため、絶対垂直との比較は行わない。
+**判定（OR 判定・FQ6）**: 角度条件 `nearAngleDegrees - referenceNearAngleDegrees >= slouchDeltaThresholdDegrees`、または距離条件 `referenceDistance > 0 かつ sample.nearDistance >= referenceDistance * (1 + slouchDistanceThresholdPercent / 100)` のいずれかが成立なら `slouchCandidate`。カメラ設置角は基準値に含まれるため、絶対垂直との比較は行わない。
+
+**距離の側ロック（FQ1）**: 監視中の距離計算は角度判定で選択された近側とは独立に、校正時に保存した `referenceSide` の耳ー肩ペアで行う。ロック側のペアが confidence < 0.3 等で使用できないフレームでは距離条件を評価せず（スキップ）、角度のみで判定を継続する。校正中は角度と同じ近側を距離にも記録する。
 
 ```swift
 struct PostureAnalyzer {
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
-        slouchDeltaThresholdDegrees: Double
+        slouchDeltaThresholdDegrees: Double,
+        distanceMetric: DistanceMetric?,   // ロック側ペアと基準距離。nil またはペア欠測時は距離スキップ
+        slouchDistanceThresholdPercent: Double, // 距離閾値%（SettingsStore.slouchDistanceThresholdPercent を単一ソースとして渡す。角度の slouchDeltaThresholdDegrees と対称）
+        previousNearSide: Side?
     ) -> (sample: AngleSample?, verdict: PostureVerdict)
+}
+
+/// 距離指標の評価に必要データ（Session 層が校正完了時に構成し監視中保持）
+struct DistanceMetric {
+    var side: Side              // 校正時にロックした側
+    var referenceDistance: Double // 校正時耳ー肩距離の平均（正規化座標系）
 }
 ```
 
@@ -354,14 +384,15 @@ struct CalibrationLogic {
 enum CalibrationProgress: Equatable {
     case waitingForPerson
     case accumulating(elapsed: TimeInterval)
-    case completed(referenceNearAngleDegrees: Double, referencePoints: [CGPoint])
+    case completed(referenceNearAngleDegrees: Double, referenceDistance: Double, referenceSide: Side, referencePoints: [CGPoint])
 }
 ```
 
-完了時は蓄積期間中の近側角度の平均を基準姿勢として返し、最終フレームの可視化ポイント列を `referencePoints` として返す（2.3, 2.7）。再実行は `start()` により基準を上書きする（2.6）。人物なしは完了しない（2.5）。
+完了時は蓄積期間中の近側角度の平均を基準姿勢として返し、最終フレームの可視化ポイント列を `referencePoints` として返す（2.3, 2.7）。角度と同一タイミング・同一窓で、蓄積距離の平均を `referenceDistance`、**完了フレームの近側**（`sample.nearSide`）を `referenceSide`（距離のロック側・FQ1）として返す。近側は姿勢崩れ規則（下記）で5秒間切り替わりなしが保証されているため、窓内は単一侧のみ。再実行は `start()` により基準を上書きする（2.6）。人物なしは完了しない（2.5）。
 
 **姿勢崩れ判定規則**:
 - 直前の近側角度と今回の近側角度の差分が 5度以上 → 蓄積をリセット
+- **近側の切り替わり（`sample.nearSide` 変化）→ 蓄積をリセット**（2026-09-13 追加: validate-design Issue 1。角度と距離で単位が違う安定条件だが、左右の耳ー肩距離に約8%の固有差があるため側またぎの距離窓は系统的に汚染される。側が安定していること自体が校正の安定条件の一部）
 - `presence == .personMissing` → キーポイント脱落と同一扱い。直近の有効サンプルからの経過が `dropoutTolerance`（1.0 秒）以内なら蓄積を保持し時間を凍結、超過でリセット（2026-09-13 変更: 即座リセットから猶予付きに。Q21 の 0.5 秒デバウンスと合わせ、Session 確定済みの personMissing も脱落許容の範囲で吸収する）
 - それ以外 → 蓄積を継続
 
@@ -452,6 +483,7 @@ protocol DeviceOrientationMonitoring {
 ```swift
 protocol SettingsStoring: AnyObject {
     var slouchThresholdDegrees: Double { get set }  // 3.0...20.0、デフォルト 5.0
+    var slouchDistanceThresholdPercent: Double { get set }  // 5.0...15.0、デフォルト 8.0（FQ2/FQ4）
     var isMonitoringEnabled: Bool { get set }
 }
 ```
@@ -459,6 +491,8 @@ protocol SettingsStoring: AnyObject {
 UserDefaults に閾値（度数）と監視フラグのみ保存する。基準姿勢は **プロセス内メモリに保持し、永続化しない**（Q4 決定：Out of Scope）。
 
 **閾値ストレージ（2026-09-12 改訂）**: 感度（0.0-1.0）は廃止し、判定閾値を度数そのもの (`slouchThresholdDegrees: 3.0...20.0`、デフォルト 5.0、ステップ 0.5) で永続化する。旧感度キー (`com.nekozefix.sensitivity`) は初回起動時に旧マッピング `20 - sensitivity * 15` で一度だけ変換して引き継ぎ、以降削除する。 registered default を閾値キーに登録すると移行判定がマスクされるため、デフォルト値は `init` 側で担保する。
+
+**距離閾値ストレージ（FQ3/FQ4 追加）**: `slouchDistanceThresholdPercent`（5.0...15.0、ステップ 0.5、デフォルト 8.0）を角度と同じ UserDefaults 機構で永続化する。新規キーのため旧キー移行は不要。範囲外値は角度と同様にクランプする。
 
 ### PostureSessionManager
 
@@ -504,11 +538,13 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> good
-    good --> slouchCandidate: angleOverThreshold
-    slouchCandidate --> good: angleRecovered
+    good --> slouchCandidate: angleOrDistanceOverThreshold
+    slouchCandidate --> good: bothRecovered
     slouchCandidate --> confirmedSlouch: heldThreeSeconds
-    confirmedSlouch --> good: angleRecoveredImmediate
+    confirmedSlouch --> good: bothRecoveredImmediate
 ```
+
+`angleOrDistanceOverThreshold` は OR 判定（FQ6）。`bothRecovered` は**有効な全指標**が閾値未満に戻ったこと（4.3）。ロック側ペアが読めないフレームでは距離は条件評価に参加しない（FQ1）— スキップ中の指標は条件集合から除外されるため、距離不使用時は角度のみの旧挙動に自然に退化する。
 
 - `confirmedSlouch` 入場で `playOnce` とリピート開始（間隔は音声ループ長）
 - `good` 入場で `stop`
@@ -524,9 +560,11 @@ stateDiagram-v2
 - **RootView**: snapshot.phase で Permission / Calibration / Monitor を切替える。起動から監視開始までを権限 → 校正 → 開始の 3 ステップに収める（10.1）
 - **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内と「再試行」ボタンを出す（1.1, 1.2, Q7 決定）
 - **CalibrationView**: 5秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）。可視化は `PostureOverlayView(mode: .current)` を使用し、肩・耳・判定ラインをリアルタイム表示
-- **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
+- **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値（角度スライダーと距離スライダーを横並び。FQ3）、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
 - **PostureOverlayView**: 校正・監視共通のオーバーレイ。`mode: .reference` はグレーで固定表示、`mode: .current` はカラーでリアルタイム表示。肩・耳・判定ライン・基準線を描画
 - **CameraPreviewView**: `UIViewRepresentable`。校正画面のみで使用。暗転中は非表示（3.2, 6.2）
+
+**DEBUG 距離表示（FQ5・一時機能）**: 校正・監視画面に黄色 monospace で耳ー肩距離の基準比%（素値 + 直近1秒中央値）を表示する足場。検収実測（自然前出しの最大%記録）完了後、chore コミットで削除する。判定ロジックとは無関係（SessionSnapshot の表示専用フィールド `debugDistanceText`）。
 
 **暗転モードの実装詳細**:
 - `enterDimMode()` で:
@@ -609,6 +647,7 @@ sequenceDiagram
 
 **不変条件**
 - 基準角度が無い状態では monitoring に入れない
+- 基準距離（`referenceDistance`）・ロック側（`referenceSide`）は基準角度と同一タイミング（校正完了時）に保存され、プロセス内メモリのみ（Q4 と同じ扱い）
 - confidence < 0.3 のキーポイントは AngleSample に入らない
 - 確定猫背中のみ通知タイマーが存在する
 - 暗転は monitoring または rotating でのみ true になり得る
@@ -623,6 +662,7 @@ sequenceDiagram
 | カメラ構成失敗 | CameraSessionManager | 使用不可メッセージ | 再起動を促す |
 | 人物なし | PoseDetector | フレーム内へ誘導（暗転・回転中は表示抑制） | 検出再開で自動復帰 |
 | キーポイント不足 | PostureAnalyzer | 人物なし相当の警告 | 近側再検出 |
+| 距離ロック側ペア欠測 | PostureAnalyzer | 距離スキップ（角度のみで判定継続・FQ1）。復帰で自動復活 | 側ロックは維持したまま距離条件が再評価される |
 | オーディオセッション失敗 | AlertPlayer | 判定は継続、音なし | 次回再生時に再構成 |
 | 回転中の不安定フレーム | DeviceOrientationMonitor | 判定一時停止（5秒タイムアウトで再開） | 5秒静止で完了 |
 
@@ -642,6 +682,9 @@ sequenceDiagram
   - confidence 0.29 のキーポイントは除外される
   - 閾値前後の判定（基準 + 9度 = good、基準 + 11度 = slouchCandidate）
   - 鋭角 0-90度範囲の確認（Q10 決定）
+  - **距離 OR 判定（FQ6）**: 角度は閾値未満だが距離基準比が閾値以上 → slouchCandidate。逆も同様。両方閾値未満 → good
+  - **距離の側ロック（FQ1）**: ロック側と異なる側が近側になったフレームでも、距離はロック側ペアで計算される。ロック側ペアが confidence < 0.3 のフレームでは距離条件が評価されず角度のみで判定される
+  - **距離しきい値境界**: 基準比がちょうど閾値%で slouchCandidate（以上）、閾値未満で good
 - **TimedConditionGate**:
   - 3秒未満で解除したら未確定
   - 3秒連続で確定
@@ -649,7 +692,9 @@ sequenceDiagram
   - 人物なし（`isConditionMet == false`）即座リセット（Q6 決定）
 - **CalibrationLogic**:
   - 5秒安定で平均角度保存
+  - 完了時に平均距離と完了フレームの近側が角度と同一タイミングで返る（FQ1/FQ7）
   - 角度変化 > 5度で蓄積リセット（Q22 決定）
+  - 校正中の近側切り替わり（left↔right）で蓄積リセット（FQ1 基準汚染防止）
   - 人物検出途絶で蓄積リセット（Q22 決定）
   - 人物なしで未完了
   - 再実行で上書き
@@ -659,6 +704,7 @@ sequenceDiagram
 - 開始/停止でカメラ start/stop が対になる（3.1）
 - 開始時に AlertPlayer をプリロード（Q17 決定）
 - 停止時に AlertPlayer.stop() を即座に呼ぶ（Q20 決定）
+- 距離閾値 `slouchDistanceThresholdPercent` の範囲クランプ（5〜15%）と UserDefaults 永続化（新規キーのため旧キー移行なし）（4.4/FQ4）
 - 確定入場で playOnce、継続でリピート（Q23 決定：間隔は音声ループ長に追従）
 - 改善で stop（5.3）
 - 同時再生ポリシー：前の音停止→次を再生（Q18 決定）
@@ -714,10 +760,10 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3
 | 3.3 | 良好/猫背表示 | PostureSessionManager, MonitorView | displayedPosture | 監視 |
 | 3.4 | 人物なし警告 | PoseDetector, MonitorView | personMissing（暗転・回転中は抑制） | 監視 |
 | 3.5 | 片側のみで継続 | PostureAnalyzer | analyze（検出側を近側扱い） | 判定 |
-| 4.1 | 基準からの角度増加 | PostureAnalyzer | slouchCandidate（鋭角 0-90度） | 判定 |
+| 4.1 | 基準からの角度増加 OR 距離基準比増加（側ロック、フォールバック） | PostureAnalyzer, CalibrationLogic | slouchCandidate、DistanceMetric | 判定 |
 | 4.2 | 3秒連続で確定 | TimedConditionGate | requiredDuration 3 | 判定 |
-| 4.3 | 改善は即時 | PostureSessionManager | confirmedSlouch to good | 判定 |
-| 4.4 | 閾値調整（3〜20度、ステップ0.5） | SettingsStore, MonitorView | slouchThresholdDegrees | 監視 |
+| 4.3 | 改善は即時（有効な全指標が閾値未満） | PostureSessionManager | confirmedSlouch to good | 判定 |
+| 4.4 | 閾値調整（角度 3〜20度・距離 5〜15%、ステップ0.5、横並び表示） | SettingsStore, MonitorView | slouchThresholdDegrees, slouchDistanceThresholdPercent | 監視 |
 | 4.5 | confidence 0.3 未満除外 | PoseDetector, PostureAnalyzer | keypointThreshold | 判定 |
 | 4.6 | 近側主、遠側は合否のみ | PostureAnalyzer | AngleSample | 判定 |
 | 5.1 | 確定時に1回再生 | AlertPlayer | playOnce | 通知 |

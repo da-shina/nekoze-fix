@@ -74,7 +74,7 @@ struct CalibrationView: View {
                         Image(systemName: isPersonDetected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                             .foregroundColor(isPersonDetected ? .green : .red)
 
-                        Text(isPersonDetected ? "検出中" : "人を検出できません")
+                        Text(isPersonDetected ? "人を検出中" : "人を検出できません")
                             .font(.headline)
                             .foregroundColor(isPersonDetected ? .green : .red)
 
@@ -135,7 +135,7 @@ struct CalibrationView: View {
                 self.isPersonDetected = detected
                 self.isShoulderMissing = snapshot.isShoulderMissing
                 self.showingPersonMissing = !detected
-                self.progressMessage = detected ? "姿勢を保持中..." : "姿勢を保持してください"
+                self.progressMessage = detected ? "人物が検出されました" : "人物が検出されません"
 
                 // 2. キャリブレーション進捗の更新
                 switch snapshot.calibrationProgress {
