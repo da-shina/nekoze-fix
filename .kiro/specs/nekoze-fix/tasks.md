@@ -256,7 +256,7 @@
   - _Requirements: 4.1, 4.2_
   - _Depends: 8.7_
 
-- [ ] 8.9 DEBUG 距離表示の削除（chore、検収 PASS 後）
+- [x] 8.9 DEBUG 距離表示の削除（chore、検収 PASS 後）
   - Remove `debugDistanceText` field, window buffer, and both view overlays (angle indicator precedent: commit 8205aba)
   - Observable completion: grep for debugDistanceText yields nothing; build and tests green
   - _Depends: 8.8_

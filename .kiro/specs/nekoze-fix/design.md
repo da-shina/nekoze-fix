@@ -564,7 +564,7 @@ stateDiagram-v2
 - **PostureOverlayView**: 校正・監視共通のオーバーレイ。`mode: .reference` はグレーで固定表示、`mode: .current` はカラーでリアルタイム表示。肩・耳・判定ライン・基準線を描画
 - **CameraPreviewView**: `UIViewRepresentable`。校正画面のみで使用。暗転中は非表示（3.2, 6.2）
 
-**DEBUG 距離表示（FQ5・一時機能）**: 校正・監視画面に黄色 monospace で耳ー肩距離の基準比%（素値 + 直近1秒中央値）を表示する足場。検収実測（自然前出しの最大%記録）完了後、chore コミットで削除する。判定ロジックとは無関係（SessionSnapshot の表示専用フィールド `debugDistanceText`）。
+**DEBUG 距離表示（FQ5・削除済み）**: 検収 PASS（2026-09-13）に伴い、黄色 monospace の基準比%表示足場（SessionSnapshot の `debugDistanceText` と窓バッファ）は chore で削除した。判定ロジック（`DistanceMetric`・OR 判定）は独立して残る。
 
 **暗転モードの実装詳細**:
 - `enterDimMode()` で:

@@ -106,8 +106,6 @@ struct SessionSnapshot: Equatable {
     /// 校正時にロックした側（FQ1）。監視中の距離評価はこの側の耳-肩ペアで行う。
     var referenceSide: Side? = nil
     var referencePoints: [CGPoint]? = nil
-    /// DEBUG: 耳-肩距離の実測表示行（素値% / 直近1秒中央値%）。閾値設計後の削除対象。
-    var debugDistanceText: String? = nil
     var visualizationPoints: [CGPoint] = []
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
