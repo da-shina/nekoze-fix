@@ -212,13 +212,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 人物なし（Body Pose 観測空 かつ 顔なし）
             if case .absent = detection {
                 self.snapshot.isShoulderMissing = false
-                #if DEBUG
-                self.snapshot.debugLeftShoulderConfidence = nil
-                self.snapshot.debugRightShoulderConfidence = nil
-                self.snapshot.debugLeftEarConfidence = nil
-                self.snapshot.debugRightEarConfidence = nil
-                self.snapshot.debugRawPoints = []
-                #endif
                 self.updateState(presence: .personMissing, sample: nil)
                 return
             }
@@ -227,29 +220,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 「肩が映っていません」案内を灯す（復帰は pose 検出フレームで消える）。
             guard case .pose(let frame) = detection else {
                 self.snapshot.isShoulderMissing = true
-                #if DEBUG
-                self.snapshot.debugLeftShoulderConfidence = nil
-                self.snapshot.debugRightShoulderConfidence = nil
-                self.snapshot.debugLeftEarConfidence = nil
-                self.snapshot.debugRightEarConfidence = nil
-                self.snapshot.debugRawPoints = []
-                #endif
                 self.updateState(presence: .personDetected, sample: nil)
                 return
             }
             self.snapshot.isShoulderMissing = false
-            #if DEBUG
-            self.snapshot.debugLeftShoulderConfidence = frame.rawLeftShoulderConfidence
-            self.snapshot.debugRightShoulderConfidence = frame.rawRightShoulderConfidence
-            self.snapshot.debugLeftEarConfidence = frame.rawLeftEarConfidence
-            self.snapshot.debugRightEarConfidence = frame.rawRightEarConfidence
-            self.snapshot.debugRawPoints = [
-                frame.rawLeftShoulderPoint ?? .zero,
-                frame.rawRightShoulderPoint ?? .zero,
-                frame.rawLeftEarPoint ?? .zero,
-                frame.rawRightEarPoint ?? .zero,
-            ]
-            #endif
 
             // 2. 姿勢分析
             let refAngle = self.getReferenceAngle()
