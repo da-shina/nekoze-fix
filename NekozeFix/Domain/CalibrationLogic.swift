@@ -19,6 +19,7 @@ struct CalibrationLogic {
     // MARK: - 状態
 
     private var accumulatedAngles: [Double] = []
+    private var accumulatedDistances: [Double] = []
     private var accumulatedPoints: [[CGPoint]] = []
     private var isAccumulating = false
     /// 有効サンプルが蓄積された時間の合計（秒）。脱落中は加算されない。
@@ -34,6 +35,7 @@ struct CalibrationLogic {
     /// 以前の基準値は上書きされる。
     mutating func start() {
         accumulatedAngles = []
+        accumulatedDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0
@@ -60,6 +62,7 @@ struct CalibrationLogic {
             if !isAccumulating {
                 // 最初の有効サンプルで蓄積を開始
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedDistances = [sample.nearDistance]
                 accumulatedPoints = [points]
                 isAccumulating = true
                 accumulatedDuration = 0
@@ -74,6 +77,7 @@ struct CalibrationLogic {
             if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees {
                 // 不安定な場合は蓄積をリセット（角度崩れは脱落と違い即時リセット）
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedDistances = [sample.nearDistance]
                 accumulatedPoints = [points]
                 accumulatedDuration = 0
                 lastSampleTime = now
@@ -86,6 +90,7 @@ struct CalibrationLogic {
             if dropoutActive {
                 if now - lastSampleTime > Self.dropoutTolerance {
                     accumulatedAngles = [sample.nearAngleDegrees]
+                    accumulatedDistances = [sample.nearDistance]
                     accumulatedPoints = [points]
                     accumulatedDuration = 0
                     lastSampleTime = now
@@ -100,6 +105,7 @@ struct CalibrationLogic {
 
             // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
+            accumulatedDistances.append(sample.nearDistance)
             if !points.isEmpty {
                 accumulatedPoints.append(points)
             }
@@ -109,8 +115,9 @@ struct CalibrationLogic {
             if accumulatedDuration >= Self.requiredStableDuration - 1e-9 {
                 // 蓄積された角度の平均を計算
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
+                let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
                 let finalPoints = accumulatedPoints.last ?? []
-                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referencePoints: finalPoints)
+                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referencePoints: finalPoints)
 
                 resetAccumulation()
                 return completedProgress
@@ -136,6 +143,7 @@ struct CalibrationLogic {
 
     private mutating func resetAccumulation() {
         accumulatedAngles = []
+        accumulatedDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0

@@ -38,6 +38,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }()
     // slouchGate の deltaTime 算出用（メインアクタからのみアクセス）
     private var lastGateTickTime: TimeInterval?
+    /// DEBUG 距離計測: 直近の (時刻, 基準比%) サンプル窓。1秒中央値算出用。閾値設計後の削除対象。
+    private var distanceRatioWindow: [(time: TimeInterval, pct: Double)] = []
 
     // MARK: - 初期化
 
@@ -296,6 +298,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
+        updateDebugDistance(sample: sample, now: now)
 
         if self.snapshot.phase == .calibrating {
             // キャリブレーションロジックに投入 (可視化ポイントも渡す)
@@ -307,9 +310,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let average, let refPoints) = progress {
+            if case .completed(let average, let averageDistance, let refPoints) = progress {
                 self.snapshot.phase = .monitoring
                 self.snapshot.referenceAngle = average
+                self.snapshot.referenceDistance = averageDistance
                 self.snapshot.referencePoints = refPoints
             }
         } else if self.snapshot.phase == .monitoring {
@@ -338,6 +342,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func getReferenceAngle() -> Double? {
         snapshot.referenceAngle
+    }
+
+    /// DEBUG 距離計測: 校正済み基準距離に対する耳-肩距離の比（%）を表示文字列化する。
+    /// 素値（今回のフレーム）と直近1秒の中央値を併記し、前出し時の伸び率とノイズ幅を実測するためだけの足場。
+    private func updateDebugDistance(sample: AngleSample?, now: TimeInterval) {
+        guard let sample = sample, let ref = snapshot.referenceDistance, ref > 0 else {
+            snapshot.debugDistanceText = nil
+            return
+        }
+        let pct = sample.nearDistance / ref * 100.0
+        distanceRatioWindow.append((now, pct))
+        distanceRatioWindow.removeAll { now - $0.time > 1.0 }
+        let values = distanceRatioWindow.map(\.pct).sorted()
+        let median = values[values.count / 2]
+        snapshot.debugDistanceText = String(format: "dist %.2f%% (1s-median %.2f%%)", pct, median)
     }
 
     private func verdictFor(sample: AngleSample) -> PostureVerdict {

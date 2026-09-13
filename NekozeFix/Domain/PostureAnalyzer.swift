@@ -76,6 +76,9 @@ struct PostureAnalyzer {
         let thetaDegrees = thetaRadians * 180.0 / .pi
         let acuteAngle = min(thetaDegrees, 180.0 - thetaDegrees)
 
+        // ステップ3b: 近傍側の耳-肩距離（前出し検出の第2指標。DEBUG 計測用）
+        let nearDistance = length
+
         // ステップ4: 判定を決定
         let referenceAngle = referenceNearAngleDegrees ?? 0.0
         let delta = acuteAngle - referenceAngle
@@ -85,7 +88,8 @@ struct PostureAnalyzer {
             AngleSample(
                 nearSide: nearSide!,
                 nearAngleDegrees: acuteAngle,
-                farSideDetected: farSideDetected
+                farSideDetected: farSideDetected,
+                nearDistance: nearDistance
             ),
             verdict
         )
