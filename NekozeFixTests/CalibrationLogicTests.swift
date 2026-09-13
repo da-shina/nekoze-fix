@@ -384,6 +384,71 @@ final class CalibrationLogicTests: XCTestCase {
         }
     }
 
+    // MARK: - 2.4: 姿勢不安定リセット - 近側の切り替わり（validate-design Issue 1）
+
+    /// 左右の耳-肩距離には約8%の固有差があり、側をまたいだ距離窓は系统的に汚染される。
+    /// 角度が安定していても近側が切り替わったら即時リセット（角度崩れと同クラス）。
+    func testNearSideFlipDuringAccumulation_ResetsAccumulation() {
+        sut.start()
+
+        // 45度・左側で1秒蓄積
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        // 手順: 角度は同じ 45 度のまま近側が右に切り替わる
+        let progress = sut.ingest(sample: makeSample(nearSide: .right, angle: 45.0), presence: .personDetected, now: 1.0)
+
+        // 検証: elapsed=0 にリセット
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertEqual(elapsed, 0, accuracy: 0.01, "近側の切り替わりで蓄積はリセットされるはず")
+        } else {
+            XCTFail("リセット後に .accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    func testSameNearSideContinuation_MaintainsAccumulation() {
+        sut.start()
+
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        // 手順: 同一側・同一角度を継続
+        let progress = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: 1.0)
+
+        // 検証: 蓄積は維持される（elapsed > 0）
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertGreaterThan(elapsed, 0, "同一側の継続では蓄積が維持されるはず")
+        } else {
+            XCTFail(".accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    /// 側リセット後の完了窓は新側の単一侧が保証され、referenceSide も完了フレームの側になる
+    func testCompletionAfterSideFlip_ReferenceSideIsPostFlipSide() {
+        sut.start()
+
+        // 左側で1秒 → 右側へ切り替え → 右側で5秒継続 → 完了
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+        var lastProgress: CalibrationProgress = .waitingForPerson
+        for frameIndex in 60...360 {
+            let t = Double(frameIndex) / 60.0
+            lastProgress = sut.ingest(sample: makeSample(nearSide: .right, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        guard case .completed(_, _, let refSide, _) = lastProgress else {
+            XCTFail(".completed が期待されたが、\(lastProgress) を取得")
+            return
+        }
+        XCTAssertEqual(refSide, .right)
+    }
+
     // MARK: - オブザーバブル完了の検証
 
     /// DEBUG 距離計測: 完了時に耳-肩距離の平均が基準として保存される（角度と同一タイミング）

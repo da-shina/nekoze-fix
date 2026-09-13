@@ -204,7 +204,7 @@
   - _Boundary: Types + 呼び出し側の機械的配線（Integration: threading task。挙動変更を含まないため単一責任として許容）_
   - _Requirements: 4.1_
 
-- [ ] 8.2 CalibrationLogic: 校正中の近側切り替わりで蓄積リセット
+- [x] 8.2 CalibrationLogic: 校正中の近側切り替わりで蓄積リセット
   - Reset accumulation when `sample.nearSide` differs from the side that started the current window (validate-design Issue 1; same immediate-reset class as angle >5°)
   - Unit tests: 45度左側蓄積中に右側サンプル → elapsed=0 リセット、同一側継続 → 蓄積維持
   - Observable completion: side-flip mid-calibration resets accumulation; reference window is single-side guaranteed

@@ -29,6 +29,9 @@ struct CalibrationLogic {
     private var lastSampleTime: TimeInterval = 0
     /// 許容時間内の脱落中か。true の間は有効サンプルが復帰しても脱落区間の時間を計上しない
     private var dropoutActive = false
+    /// 現在の蓄積窓を開始した近側（FQ1・validate-design Issue 1）。
+    /// 左右の耳-肩距離には約8%の固有差があるため、側が切り替わったら窓をまたげない。
+    private var windowSide: Side? = nil
 
     // MARK: - 公開API
 
@@ -42,6 +45,7 @@ struct CalibrationLogic {
         accumulatedDuration = 0
         lastSampleTime = 0
         dropoutActive = false
+        windowSide = nil
     }
 
     /// 人物検出状態を処理する。
@@ -63,20 +67,24 @@ struct CalibrationLogic {
                 isAccumulating = true
                 accumulatedDuration = 0
                 lastSampleTime = now
+                windowSide = sample.nearSide
                 return .accumulating(elapsed: 0)
             }
 
             // 安定性チェック: 直近 windowSize サンプルの中央値比。
             // フレーム単位の Vision ジッタは吸収し、実際の姿勢移動のみ検出する。
+            // 近側の切り替わりは角度が安定していても即時リセット（FQ1: 側をまたぐ距離窓は汚染される）
             let window = Array(accumulatedAngles.suffix(Self.stabilityWindowSize))
             let median = Self.median(of: window)
-            if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees {
-                // 不安定な場合は蓄積をリセット（角度崩れは脱落と違い即時リセット）
+            if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees || sample.nearSide != windowSide {
+                // 不安定な場合は蓄積をリセット（角度崩れ・側切り替わりは脱落と違い即時リセット）
                 accumulatedAngles = [sample.nearAngleDegrees]
                 accumulatedDistances = [sample.nearDistance]
                 accumulatedPoints = [points]
                 accumulatedDuration = 0
                 lastSampleTime = now
+                dropoutActive = false
+                windowSide = sample.nearSide
                 return .accumulating(elapsed: 0)
             }
 
@@ -91,6 +99,7 @@ struct CalibrationLogic {
                     accumulatedDuration = 0
                     lastSampleTime = now
                     dropoutActive = false
+                    windowSide = sample.nearSide
                     return .accumulating(elapsed: 0)
                 }
                 dropoutActive = false
@@ -145,6 +154,7 @@ struct CalibrationLogic {
         accumulatedDuration = 0
         lastSampleTime = 0
         dropoutActive = false
+        windowSide = nil
     }
 
     // MARK: - プライベートメソッド
