@@ -210,74 +210,89 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
-
-            // 人物なし（Body Pose 観測空 かつ 顔なし）
-            if case .absent = detection {
-                self.snapshot.isShoulderMissing = false
-                self.updateState(presence: .personMissing, sample: nil)
-                return
-            }
-
-            // 顔のみの検出: 人物はいるが角度は計算できない。
-            // 「肩が映っていません」案内を灯す（復帰は pose 検出フレームで消える）。
-            guard case .pose(let frame) = detection else {
-                self.snapshot.isShoulderMissing = true
-                self.updateState(presence: .personDetected, sample: nil)
-                return
-            }
-            self.snapshot.isShoulderMissing = false
-
-            // 2. 姿勢分析
-            let refAngle = self.getReferenceAngle()
-            let threshold = self.settingsStore.slouchThresholdDegrees
-
-            let (sample, verdict) = self.postureAnalyzer.analyze(
-                frame: frame,
-                referenceNearAngleDegrees: refAngle,
-                slouchDeltaThresholdDegrees: threshold,
-                previousNearSide: self.snapshot.nearSide
-            )
-
-            // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
-            var points = [CGPoint](repeating: .zero, count: 6)
-
-            // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片側は出す)
-            if let ls = frame.leftShoulder {
-                points[0] = CGPoint(x: ls.x, y: ls.y)
-            }
-            if let rs = frame.rightShoulder {
-                points[1] = CGPoint(x: rs.x, y: rs.y)
-            }
-
-            // 2. 耳の描画 (側ごとに信頼度 0.3 以上で表示)
-            if let le = frame.leftEar {
-                points[2] = CGPoint(x: le.x, y: le.y)
-            }
-            if let re = frame.rightEar {
-                points[3] = CGPoint(x: re.x, y: re.y)
-            }
-
-            // 3. 判定用ラインの描画 (近傍側を決定して描画)
-            // まず、今回のフレームで判定された近傍側を優先し、なければ前回の状態を継承する
-            let activeNearSide = sample?.nearSide ?? self.snapshot.nearSide
-
-            if let side = activeNearSide {
-                let ear = (side == .left) ? frame.leftEar : frame.rightEar
-                let shoulder = (side == .left) ? frame.leftShoulder : frame.rightShoulder
-                if let e = ear, let s = shoulder {
-                    points[4] = CGPoint(x: e.x, y: e.y)
-                    points[5] = CGPoint(x: s.x, y: s.y)
-                }
-            }
-
-            // snapshot の nearSide を更新 (判定が成功したときのみ更新して安定させる)
-            if let side = sample?.nearSide {
-                self.snapshot.nearSide = side
-            }
-
-            // 3. 状態更新
-            self.updateState(presence: .personDetected, sample: sample, verdict: verdict, points: points)
+            self.processDetection(detection)
         }
+    }
+
+    /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
+    /// captureOutput の Task 本体。テストは合成フレームの Detection を直接投入できる。
+    func processDetection(_ detection: PoseDetector.Detection) {
+        // 人物なし（Body Pose 観測空 かつ 顔なし）
+        if case .absent = detection {
+            snapshot.isShoulderMissing = false
+            updateState(presence: .personMissing, sample: nil)
+            return
+        }
+
+        // 顔のみの検出: 人物はいるが角度は計算できない。
+        // 「肩が映っていません」案内を灯す（復帰は pose 検出フレームで消える）。
+        guard case .pose(let frame) = detection else {
+            snapshot.isShoulderMissing = true
+            updateState(presence: .personDetected, sample: nil)
+            return
+        }
+        snapshot.isShoulderMissing = false
+
+        // 2. 姿勢分析
+        let refAngle = self.getReferenceAngle()
+        let threshold = self.settingsStore.slouchThresholdDegrees
+
+        // 校正ロック側の距離指標（FQ1）。referenceSide/referenceDistance は校正完了時のみ設定される。
+        let distanceMetric: DistanceMetric?
+        if let side = snapshot.referenceSide, let ref = snapshot.referenceDistance {
+            distanceMetric = DistanceMetric(side: side, referenceDistance: ref)
+        } else {
+            distanceMetric = nil
+        }
+
+        let (sample, verdict) = self.postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: refAngle,
+            slouchDeltaThresholdDegrees: threshold,
+            distanceMetric: distanceMetric,
+            slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
+            previousNearSide: snapshot.nearSide
+        )
+
+        // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
+        var points = [CGPoint](repeating: .zero, count: 6)
+
+        // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片側は出す)
+        if let ls = frame.leftShoulder {
+            points[0] = CGPoint(x: ls.x, y: ls.y)
+        }
+        if let rs = frame.rightShoulder {
+            points[1] = CGPoint(x: rs.x, y: rs.y)
+        }
+
+        // 2. 耳の描画 (側ごとに信頼度 0.3 以上で表示)
+        if let le = frame.leftEar {
+            points[2] = CGPoint(x: le.x, y: le.y)
+        }
+        if let re = frame.rightEar {
+            points[3] = CGPoint(x: re.x, y: re.y)
+        }
+
+        // 3. 判定用ラインの描画 (近傍側を決定して描画)
+        // まず、今回のフレームで判定された近傍側を優先し、なければ前回の状態を継承する
+        let activeNearSide = sample?.nearSide ?? snapshot.nearSide
+
+        if let side = activeNearSide {
+            let ear = (side == .left) ? frame.leftEar : frame.rightEar
+            let shoulder = (side == .left) ? frame.leftShoulder : frame.rightShoulder
+            if let e = ear, let s = shoulder {
+                points[4] = CGPoint(x: e.x, y: e.y)
+                points[5] = CGPoint(x: s.x, y: s.y)
+            }
+        }
+
+        // snapshot の nearSide を更新 (判定が成功したときのみ更新して安定させる)
+        if let side = sample?.nearSide {
+            snapshot.nearSide = side
+        }
+
+        // 3. 状態更新
+        updateState(presence: .personDetected, sample: sample, verdict: verdict, points: points)
     }
 
     private func updateState(presence rawPresence: DetectionPresence, sample: AngleSample?, verdict: PostureVerdict? = nil, points rawPoints: [CGPoint] = []) {
@@ -311,11 +326,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             self.snapshot.calibrationProgress = progress
 
             if case .completed(let average, let averageDistance, let refSide, let refPoints) = progress {
-                self.snapshot.phase = .monitoring
-                self.snapshot.referenceAngle = average
-                self.snapshot.referenceDistance = averageDistance
-                self.snapshot.referenceSide = refSide
-                self.snapshot.referencePoints = refPoints
+                self.applyCalibrationCompletion(
+                    referenceNearAngleDegrees: average,
+                    referenceDistance: averageDistance,
+                    referenceSide: refSide,
+                    referencePoints: refPoints
+                )
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
@@ -339,6 +355,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.alertPlayer?.stop()
             }
         }
+    }
+
+    /// 校正完了時に基準値をスナップショットへ反映し監視フェーズへ遷移する。
+    /// テストは直接呼んで校正済み状態をシードできる。
+    func applyCalibrationCompletion(
+        referenceNearAngleDegrees: Double,
+        referenceDistance: Double,
+        referenceSide: Side,
+        referencePoints: [CGPoint]
+    ) {
+        snapshot.phase = .monitoring
+        snapshot.referenceAngle = referenceNearAngleDegrees
+        snapshot.referenceDistance = referenceDistance
+        snapshot.referenceSide = referenceSide
+        snapshot.referencePoints = referencePoints
     }
 
     private func getReferenceAngle() -> Double? {

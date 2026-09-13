@@ -228,7 +228,7 @@
   - _Boundary: SettingsStore_
   - _Requirements: 4.4_
 
-- [ ] 8.5 PostureSessionManager: DistanceMetric 構成と距離閾値の受け渡し（統合）
+- [x] 8.5 PostureSessionManager: DistanceMetric 構成と距離閾値の受け渡し（統合）
   - On calibration completion build `DistanceMetric(side: referenceSide, referenceDistance:)`, keep in session state; pass with `slouchDistanceThresholdPercent` into `analyze` every monitoring frame
   - Improvement transition (4.3) verified through OR result: gate clears only when both indicators under threshold
   - Integration test: synthetic frames with growing lock-side distance ≥ 3s → displayedPosture .slouch → recovery → .good
