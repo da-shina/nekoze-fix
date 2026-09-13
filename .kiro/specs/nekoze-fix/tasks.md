@@ -212,7 +212,7 @@
   - _Requirements: 2.3, 2.4, 4.1_
   - _Depends: 8.1_
 
-- [ ] 8.3 PostureAnalyzer: 距離基準比の OR 判定とロック側フォールバック
+- [x] 8.3 PostureAnalyzer: 距離基準比の OR 判定とロック側フォールバック
   - Verdict becomes: angle delta >= threshold OR (distanceMetric usable AND nearDistance >= referenceDistance * (1 + thresholdPercent/100)) → slouchCandidate
   - Distance evaluated on `distanceMetric.side` pair regardless of angle's near-side selection; lock-side pair confidence < 0.3 or missing → distance condition skipped, angle-only verdict
   - Unit tests: 角度 GOOD・距離 OVER → slouchCandidate / 角度 OVER・距離 GOOD → slouchCandidate / 両方 UNDER → good / ロック側欠測 → 距離スキップ / 基準比ちょうど閾値 → candidate（以上）

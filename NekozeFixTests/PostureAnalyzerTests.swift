@@ -171,4 +171,142 @@ final class PostureAnalyzerTests: XCTestCase {
         // 検証: 小差では前回の判定を維持
         XCTAssertEqual(sample?.nearSide, .left)
     }
+
+    // MARK: - 前出し距離指標: OR 判定（FQ1/FQ6）
+
+    /// 角度 GOOD・距離 OVER → slouchCandidate。距離はロック側（右）ペアで評価され、
+    /// sample.nearDistance にはロック側の値が入る（design「nearDistance は監視中はロック側」）。
+    func testDistanceOver_AngleUnder_SlouchCandidate() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),    // 近側（左）: 角度0度・距離0.1
+            rightEar: Keypoint(x: 0.7, y: 0.4, confidence: 0.9),   // ロック側（右）: 距離0.2
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18) // 閾値 0.18*1.08=0.1944 < 0.2
+
+        let (sample, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+
+        XCTAssertEqual(sample?.nearSide, .left)                        // 角度は近側（左）で評価継続
+        XCTAssertEqual(sample?.nearDistance ?? 0, 0.2, accuracy: 0.001) // 距離はロック側（右）の値
+        XCTAssertEqual(verdict, .slouchCandidate)
+    }
+
+    /// 角度 OVER・距離 GOOD → slouchCandidate（OR の反対辺）
+    func testAngleOver_DistanceUnder_SlouchCandidate() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.35, y: 0.5, confidence: 0.9),   // 角度約26.6度 > 10
+            rightEar: Keypoint(x: 0.7, y: 0.42, confidence: 0.9),  // 距離0.18 < 0.1944
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
+
+        let (_, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+
+        XCTAssertEqual(verdict, .slouchCandidate)
+    }
+
+    /// 両方 UNDER → good
+    func testAngleAndDistanceBothUnder_Good() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),    // 角度0度
+            rightEar: Keypoint(x: 0.7, y: 0.41, confidence: 0.9),  // 距離0.19 < 0.1944
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
+
+        let (_, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+
+        XCTAssertEqual(verdict, .good)
+    }
+
+    /// ロック側ペア欠測（信頼度 < 0.3）→ 距離スキップ、角度のみで判定（FQ1）
+    func testLockSideMissing_DistanceSkipped_AngleOnlyVerdict() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),        // 角度0度 → good
+            rightEar: Keypoint(x: 0.7, y: 0.3, confidence: 0.1),        // ロック側無効（距離0.3 なら OVER 相当）
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
+
+        let (sample, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+
+        // ロック側が読めなくても角度サンプルは出る。nearDistance はロック側が取れないため近側の素値
+        XCTAssertEqual(sample?.nearDistance ?? 0, 0.1, accuracy: 0.001)
+        XCTAssertEqual(verdict, .good) // 角度0度、距離スキップ
+    }
+
+    /// 基準比ちょうど閾値 → candidate（以上で発火）
+    func testDistanceExactlyAtThreshold_SlouchCandidate() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),     // 角度0度
+            rightEar: Keypoint(x: 0.7, y: 0.35, confidence: 0.9),   // 距離0.25
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        // 2進数で厳密に一致する値: 0.2 * 1.25 = 0.25（pct 25 は境界検証用の仮値、UI 範囲外）
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.2)
+
+        let (_, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 25.0
+        )
+
+        XCTAssertEqual(verdict, .slouchCandidate)
+    }
+
+    /// distanceMetric nil（校正中・第1段相当）→ 近側距離がそのまま記録され角度のみ判定
+    func testNilDistanceMetric_KeepsNearSideDistanceAndAngleOnly() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.2, confidence: 0.9),  // 右は極端に遠いが無視される
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+
+        let (sample, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10
+        )
+
+        XCTAssertEqual(sample?.nearDistance ?? 0, 0.1, accuracy: 0.001) // 近側（左）距離
+        XCTAssertEqual(verdict, .good)
+    }
 }
