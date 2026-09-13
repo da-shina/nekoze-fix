@@ -66,23 +66,52 @@ struct PostureOverlayView: View {
                 }
 
                 // 基準となる直線 (Reference モードでは非表示)
-                if !isRef && currentPoints.count >= 6 && currentPoints[5] != .zero {
-                    Path { path in
-                        let startPoint = normalizePoint(currentPoints[5], in: geometry.size)
-                        let length: CGFloat = 200
-                        let radians = referenceAngle * .pi / 180.0
-                        let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
-                        let end = CGPoint(
-                            x: startPoint.x + (xDirection * length * sin(radians)),
-                            y: startPoint.y - length * cos(radians)
-                        )
-                        path.move(to: startPoint)
-                        path.addLine(to: end)
-                    }
-                    .stroke(Color.green, lineWidth: 6)
+                if !isRef && currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
+                    referenceArc(in: geometry.size)
                 }
             }
         }
+    }
+
+    /// 緑の基準線と、黄（現在）〜緑（基準）のなす角を示す弧
+    @ViewBuilder
+    private func referenceArc(in size: CGSize) -> some View {
+        let startPoint = normalizePoint(currentPoints[5], in: size)
+        let length: CGFloat = 200
+        let radians = referenceAngle * .pi / 180.0
+        let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
+        let end = CGPoint(
+            x: startPoint.x + (xDirection * length * sin(radians)),
+            y: startPoint.y - length * cos(radians)
+        )
+        Path { path in
+            path.move(to: startPoint)
+            path.addLine(to: end)
+        }
+        .stroke(Color.green, lineWidth: 6)
+
+        let pE = normalizePoint(currentPoints[4], in: size)
+        let yellowAngle = atan2(pE.y - startPoint.y, pE.x - startPoint.x)
+        let greenAngle = atan2(end.y - startPoint.y, end.x - startPoint.x)
+        let delta = wrappedDelta(yellowAngle - greenAngle)
+        Path { arc in
+            arc.addArc(
+                center: startPoint,
+                radius: 80,
+                startAngle: .radians(greenAngle),
+                endAngle: .radians(yellowAngle),
+                clockwise: delta < 0
+            )
+        }
+        .stroke(Color.green, lineWidth: 4)
+    }
+
+    /// 角度差を (-pi, pi] に正規化。符号が短距離回る方向を示す
+    private func wrappedDelta(_ angle: CGFloat) -> CGFloat {
+        var a = angle
+        while a > .pi { a -= 2 * .pi }
+        while a < -.pi { a += 2 * .pi }
+        return a
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {

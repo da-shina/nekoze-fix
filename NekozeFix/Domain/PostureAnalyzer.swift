@@ -15,6 +15,8 @@ struct PostureAnalyzer {
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
         slouchDeltaThresholdDegrees: Double,
+        distanceMetric: DistanceMetric? = nil,          // ロック側ペアと基準距離（8.3 までは未使用）
+        slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
         previousNearSide: Side? = nil
     ) -> (sample: AngleSample?, verdict: PostureVerdict) {
 
@@ -76,16 +78,35 @@ struct PostureAnalyzer {
         let thetaDegrees = thetaRadians * 180.0 / .pi
         let acuteAngle = min(thetaDegrees, 180.0 - thetaDegrees)
 
-        // ステップ4: 判定を決定
+        // ステップ3b: 耳-肩距離（前出し検出の第2指標）。
+        // 監視中（distanceMetric あり）は角度の近側選択と独立にロック側ペアで評価する（FQ1）。
+        // ロック側ペアが信頼度未満等で使用できないフレームでは距離条件をスキップし、
+        // 角度のみで判定を継続する。校正中（nil）は近側の素値を記録するだけ。
+        var reportedDistance = length
+        var distanceOverThreshold = false
+        if let metric = distanceMetric, metric.referenceDistance > 0 {
+            let lockEar = (metric.side == .left) ? frame.leftEar : frame.rightEar
+            let lockShoulder = (metric.side == .left) ? frame.leftShoulder : frame.rightShoulder
+            if isValidPair(ear: lockEar, shoulder: lockShoulder) {
+                let dx = lockEar!.x - lockShoulder!.x
+                let dy = lockEar!.y - lockShoulder!.y
+                let lockDistance = sqrt(dx * dx + dy * dy)
+                reportedDistance = lockDistance
+                distanceOverThreshold = lockDistance >= metric.referenceDistance * (1.0 + slouchDistanceThresholdPercent / 100.0)
+            }
+        }
+
+        // ステップ4: 判定を決定（角度 OR 距離基準比・FQ6）
         let referenceAngle = referenceNearAngleDegrees ?? 0.0
         let delta = acuteAngle - referenceAngle
-        let verdict: PostureVerdict = delta >= slouchDeltaThresholdDegrees ? .slouchCandidate : .good
+        let verdict: PostureVerdict = (delta >= slouchDeltaThresholdDegrees || distanceOverThreshold) ? .slouchCandidate : .good
 
         return (
             AngleSample(
                 nearSide: nearSide!,
                 nearAngleDegrees: acuteAngle,
-                farSideDetected: farSideDetected
+                farSideDetected: farSideDetected,
+                nearDistance: reportedDistance
             ),
             verdict
         )

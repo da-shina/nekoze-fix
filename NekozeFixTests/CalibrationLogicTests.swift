@@ -35,7 +35,7 @@ final class CalibrationLogicTests: XCTestCase {
         angle: Double = 45.0,
         farSideDetected: Bool = false
     ) -> AngleSample {
-        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, farSideDetected: farSideDetected)
+        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, farSideDetected: farSideDetected, nearDistance: 0.3)
     }
 
     // MARK: - 2.5: 人物未検出 - 完了不可
@@ -84,7 +84,7 @@ final class CalibrationLogicTests: XCTestCase {
         }
 
         // 検証: 完了
-        if case .completed(let refAngle, _) = progress {
+        if case .completed(let refAngle, _, _, _) = progress {
             // リファレンスは蓄積された角度の平均
             XCTAssertEqual(refAngle, stableAngle, accuracy: 0.5)
         } else {
@@ -117,7 +117,7 @@ final class CalibrationLogicTests: XCTestCase {
         // 5.0秒での最終プログレスを取得
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
-        if case .completed(let refAngle, _) = finalProgress {
+        if case .completed(let refAngle, _, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 50.0, accuracy: 0.5)
         } else {
             // すでに完了済み、内部状態を確認
@@ -189,27 +189,49 @@ final class CalibrationLogicTests: XCTestCase {
 
     // MARK: - 2.4: 姿勢不安定リセット - 人物未検出
 
-    func testPersonMissingDuringAccumulation_ResetsAccumulation() {
+    /// personMissing はキーポイント脱落と同一扱い: 許容時間（1.0秒）以内は凍結、超過でリセット
+    func testPersonMissingDuringAccumulation_WithinTolerance_FreezesWithoutReset() {
         // 前提: 安定したフレームを蓄積中
         sut.start()
 
-        // 45度で1秒蓄積
-        for frameIndex in 0..<60 {
-            let t = Double(frameIndex) / 60.0
-            _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: t)
+        // 45度で0.5秒蓄積
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        var progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+        guard case .accumulating(let elapsedBefore) = progress else {
+            XCTFail("蓄積中の .accumulating が期待されたが、\(progress) を取得")
+            return
         }
 
-        // 手順: 人物がいなくなる
-        let progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.0)
+        // 手順: 脱落許容時間以内で人物がいなくなる
+        progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.0)
 
-        // 検証: 蓄積がリセット (accumulatedAngles が空になり elapsed=0)
-        if case .accumulating(let elapsed) = progress {
-            XCTAssertEqual(elapsed, 0, accuracy: 0.01, "人物未検出後は elapsed=0 にリセット")
-        } else if case .waitingForPerson = progress {
-            // これも許容可能 - 待機状態に戻った
+        // 検証: elapsed は凍結されリセットしない
+        if case .accumulating(let frozen) = progress {
+            XCTAssertEqual(frozen, elapsedBefore, accuracy: 0.001, "許容内 personMissing は時間凍結")
         } else {
-            XCTFail("人物未検出後は .accumulating(elapsed: 0) または .waitingForPerson が期待されたが、\(progress) を取得")
+            XCTFail("許容内 personMissing では .accumulating が期待されたが、\(progress) を取得")
         }
+
+        // 手順: 復帰した有効サンプルも蓄積継続（personMissing 区間は計上されない）
+        progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 1.2)
+        if case .accumulating(let elapsedAfter) = progress {
+            XCTAssertEqual(elapsedAfter, 0.5, accuracy: 0.001, "復帰後も蓄積が継続（消失区間の時間は計上されない）")
+        } else {
+            XCTFail("復帰後も .accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    func testPersonMissingDuringAccumulation_ExceedsTolerance_ResetsAccumulation() {
+        // 前提: 安定したフレームを蓄積中
+        sut.start()
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+
+        // 手順: 人物がいなくなる（直近の有効サンプルから許容時間超）
+        let progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.6)
+
+        // 検証: リセットされて待機状態
+        XCTAssertEqual(progress, .waitingForPerson, "許容超 personMissing は蓄積リセット")
     }
 
     // MARK: - 2.6: 再実行で前回のリファレンスを上書き
@@ -240,7 +262,7 @@ final class CalibrationLogicTests: XCTestCase {
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
         // 検証: リファレンスは新しい値（約60）
-        if case .completed(let refAngle, _) = finalProgress {
+        if case .completed(let refAngle, _, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 60.0, accuracy: 1.0)
         } else {
             // 蓄積中に完了したか確認
@@ -259,7 +281,7 @@ final class CalibrationLogicTests: XCTestCase {
 
         // 検証: 最初の ingest は waitingForPerson または accumulating を返す
         let progress = sut.ingest(sample: nil, presence: .personDetected, now: 0.0)
-        XCTAssertNotEqual(progress, .completed(referenceNearAngleDegrees: 0, referencePoints: []))
+        XCTAssertNotEqual(progress, .completed(referenceNearAngleDegrees: 0, referenceDistance: 0, referenceSide: .left, referencePoints: []))
     }
 
     // MARK: - Nullサンプルの処理
@@ -362,7 +384,90 @@ final class CalibrationLogicTests: XCTestCase {
         }
     }
 
+    // MARK: - 2.4: 姿勢不安定リセット - 近側の切り替わり（validate-design Issue 1）
+
+    /// 左右の耳-肩距離には約8%の固有差があり、側をまたいだ距離窓は系统的に汚染される。
+    /// 角度が安定していても近側が切り替わったら即時リセット（角度崩れと同クラス）。
+    func testNearSideFlipDuringAccumulation_ResetsAccumulation() {
+        sut.start()
+
+        // 45度・左側で1秒蓄積
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        // 手順: 角度は同じ 45 度のまま近側が右に切り替わる
+        let progress = sut.ingest(sample: makeSample(nearSide: .right, angle: 45.0), presence: .personDetected, now: 1.0)
+
+        // 検証: elapsed=0 にリセット
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertEqual(elapsed, 0, accuracy: 0.01, "近側の切り替わりで蓄積はリセットされるはず")
+        } else {
+            XCTFail("リセット後に .accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    func testSameNearSideContinuation_MaintainsAccumulation() {
+        sut.start()
+
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        // 手順: 同一側・同一角度を継続
+        let progress = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: 1.0)
+
+        // 検証: 蓄積は維持される（elapsed > 0）
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertGreaterThan(elapsed, 0, "同一側の継続では蓄積が維持されるはず")
+        } else {
+            XCTFail(".accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    /// 側リセット後の完了窓は新側の単一侧が保証され、referenceSide も完了フレームの側になる
+    func testCompletionAfterSideFlip_ReferenceSideIsPostFlipSide() {
+        sut.start()
+
+        // 左側で1秒 → 右側へ切り替え → 右側で5秒継続 → 完了
+        for frameIndex in 0..<60 {
+            let t = Double(frameIndex) / 60.0
+            _ = sut.ingest(sample: makeSample(nearSide: .left, angle: 45.0), presence: .personDetected, now: t)
+        }
+        var lastProgress: CalibrationProgress = .waitingForPerson
+        for frameIndex in 60...360 {
+            let t = Double(frameIndex) / 60.0
+            lastProgress = sut.ingest(sample: makeSample(nearSide: .right, angle: 45.0), presence: .personDetected, now: t)
+        }
+
+        guard case .completed(_, _, let refSide, _) = lastProgress else {
+            XCTFail(".completed が期待されたが、\(lastProgress) を取得")
+            return
+        }
+        XCTAssertEqual(refSide, .right)
+    }
+
     // MARK: - オブザーバブル完了の検証
+
+    /// DEBUG 距離計測: 完了時に耳-肩距離の平均が基準として保存される（角度と同一タイミング）
+    func testCompletion_AlsoStoresAverageReferenceDistance() {
+        sut.start()
+
+        var lastProgress: CalibrationProgress = .waitingForPerson
+        for frameIndex in 0...300 {
+            let t = Double(frameIndex) / 60.0
+            let sample = AngleSample(nearSide: .left, nearAngleDegrees: 45.0, farSideDetected: false, nearDistance: 0.25)
+            lastProgress = sut.ingest(sample: sample, presence: .personDetected, now: t)
+        }
+
+        guard case .completed(_, let refDistance, _, _) = lastProgress else {
+            XCTFail(".completed が期待されたが、\(lastProgress) を取得")
+            return
+        }
+        XCTAssertEqual(refDistance, 0.25, accuracy: 0.001)
+    }
 
     /// 重要ユニットテスト: 5秒安定 → 完了
     /// コアのキャリブレーション完了動作を検証

@@ -57,6 +57,26 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertNil(suite.object(forKey: "com.nekozefix.sensitivity"))
     }
 
+    // MARK: - 距離閾値（%）
+
+    func testDefaultDistanceThreshold_is8Percent() {
+        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 8.0, accuracy: 0.001)
+    }
+
+    func testDistanceThreshold_clampedToRange() {
+        sut.slouchDistanceThresholdPercent = 50.0
+        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 15.0, accuracy: 0.001)
+
+        sut.slouchDistanceThresholdPercent = 0.0
+        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 5.0, accuracy: 0.001)
+    }
+
+    func testDistanceThreshold_persistsAcrossInstances() {
+        sut.slouchDistanceThresholdPercent = 12.5
+        let reloaded = SettingsStore(defaults: suite)
+        XCTAssertEqual(reloaded.slouchDistanceThresholdPercent, 12.5, accuracy: 0.001)
+    }
+
     // MARK: - 監視有効フラグ
 
     func testDefaultMonitoringEnabled_isFalse() {

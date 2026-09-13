@@ -50,6 +50,8 @@ struct AngleSample: Equatable {
     var nearSide: Side
     var nearAngleDegrees: Double
     var farSideDetected: Bool
+    /// 近傍側の耳-肩距離（Vision 正規化座標系、単位の基準なし）。前出し検出の第2指標（DEBUG 計測中）。
+    var nearDistance: Double
 }
 
 enum PostureVerdict: Equatable {
@@ -76,7 +78,13 @@ enum DisplayedPosture: Equatable {
 enum CalibrationProgress: Equatable {
     case waitingForPerson
     case accumulating(elapsed: TimeInterval)
-    case completed(referenceNearAngleDegrees: Double, referencePoints: [CGPoint])
+    case completed(referenceNearAngleDegrees: Double, referenceDistance: Double, referenceSide: Side, referencePoints: [CGPoint])
+}
+
+/// 距離指標の評価に必要データ（Session 層が校正完了時に構成し監視中保持・FQ1）。
+struct DistanceMetric: Equatable {
+    var side: Side                // 校正時にロックした側
+    var referenceDistance: Double // 校正時耳-肩距離の平均（正規化座標系）
 }
 
 struct SessionSnapshot: Equatable {
@@ -93,6 +101,10 @@ struct SessionSnapshot: Equatable {
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil
+    /// 校正時耳-肩距離の平均（正規化座標系）。前出し距離指標の基準比算出に使用。
+    var referenceDistance: Double? = nil
+    /// 校正時にロックした側（FQ1）。監視中の距離評価はこの側の耳-肩ペアで行う。
+    var referenceSide: Side? = nil
     var referencePoints: [CGPoint]? = nil
     var visualizationPoints: [CGPoint] = []
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。

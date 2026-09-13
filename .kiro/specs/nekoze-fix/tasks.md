@@ -21,7 +21,7 @@
   - Implement concrete `PostureAnalyzer` struct (not protocol): `analyze(frame:referenceNearAngleDegrees:slouchDeltaThresholdDegrees:)`
   - Near-side selection by shoulder x-coordinate (left < right → .left)
   - Angle calculation: vector from shoulder to ear vs vertical (0,1), acute 0-90 degrees
-  - Confidence < 0.5 filtered out; insufficient keypoints returns `insufficientKeypoints`
+  - Confidence 未満（最小信頼度は現在 0.3。design.md「信頼度閾値」参照）を除外、キーポイント不足は `insufficientKeypoints`
   - One-side detection: detected side treated as near-side automatically
   - Observable completion: unit test verifies near-side selection and acute angle calculation
   - _Boundary: PostureAnalyzer_
@@ -31,7 +31,7 @@
 - [x] 2.2 (P) TimedConditionGate — N-second continuous condition gate
   - Implement concrete `TimedConditionGate` struct with `requiredDuration`, `tick(isConditionMet:now:)`, `reset()`
   - `isConditionMet == true` only accumulates; false resets to zero immediately
-  - Calibration instance: 3.0s required; Slouch instance: 5.0s required
+  - Calibration instance: 5.0s required; Slouch confirm instance: 3.0s required
   - Observable completion: unit test verifies 5s continuous triggers true, <5s does not
   - _Boundary: TimedConditionGate_
   - _Requirements: 2.3, 2.4, 4.2, 4.3_
@@ -40,10 +40,10 @@
 - [x] 2.3 (P) CalibrationLogic — stable reference posture acquisition
   - Implement concrete `CalibrationLogic` struct with `start()`, `ingest(sample:presence:now:points:)`, `CalibrationProgress`
   - Accumulate only when `personDetected` and `AngleSample` is valid; accumulate visualization points alongside angles
-  - Posture instability reset: angle delta > 5 degrees or `personMissing` resets accumulation
+  - Posture instability reset: angle delta > 5 degrees or near-side flip or person dropout over 1.0s resets accumulation（dropoutTolerance 内の脱落は蓄積時間を凍結。design.md「キーポイント脱落の許容」）
   - Completion: average of near-side angles becomes reference posture; final frame points returned as `referencePoints`
   - Re-run: `start()` overwrites previous reference
-  - Observable completion: unit test verifies 3s stable → completed, angle change > 5° → reset
+  - Observable completion: unit test verifies 5s stable → completed, angle change > 5° → reset
   - _Boundary: CalibrationLogic_
   - _Requirements: 2.1-2.7_
   - _Depends: 1.2, 2.1_
@@ -62,18 +62,19 @@
 
 - [x] 3.2 (P) PoseDetector — Vision body pose keypoint extraction
   - Implement concrete `PoseDetector` class: `detect(sampleBuffer:orientation:) -> PoseFrame?`
-  - Uses `VNDetectHumanBodyPoseRequest`; confidence < 0.5 → nil keypoint
-  - Empty observation → nil (Session treats as personMissing)
+  - Uses `VNDetectHumanBodyPoseRequest`; confidence < 0.3 → nil keypoint（0.5 から緩和、design.md 信頼度閾値）
+  - Empty observation → nil（Session は 0.5 秒猶予 `personMissingGracePeriod` 経過後に personMissing 確定。Q21 改訂）
   - Latest-frame-only dispatch when queue backlogged (target 15fps+)
+  - 複数人物時は画面中央に最も近いバウンディングボックスの人物のみ選択（FR 4.7）。頭部クロズアップ時の人体矩形 ROI 再試行（c 案）も本コンポーネント
   - Observable completion: unit test verifies keypoint filtering and nil on empty observation
   - _Boundary: PoseDetector_
-  - _Requirements: 2.5, 3.4, 4.5, 8.1_
+  - _Requirements: 2.5, 3.4, 4.5, 4.7, 8.1_
   - _Depends: 1.2_
 
 - [x] 3.3 (P) AlertPlayer — sound notification with playback category
   - Implement concrete `AlertPlayer` class with `configureSession()`, `playOnce()`, `startRepeating()`, `stop()`
   - `.playback` category + `.duckOthers`; preloads sound on `configureSession()`
-  - `playOnce` on confirmed slouch; `startRepeating` at 30s interval from last notification
+  - `playOnce` on confirmed slouch; `startRepeating` at one-audio-loop interval from last notification（Q23 改訂: 音源 `duration` 追従、約14.2秒）
   - Next notification stops previous sound if still playing (overwrite policy)
   - `stop()` on improvement or monitoring stop (immediate)
   - Observable completion: unit test verifies playOnce fires within 0.5s of confirmed slouch
@@ -90,20 +91,21 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 1.2_
 
-- [x] 3.5 (P) AppLifecycleObserver — foreground/background state
-  - Implement as concrete class with `isActive` property, notification center subscription
+- [x] 3.5 (P) ライフサイクル自動停止・復帰（FR 機能 8.1/8.2）
+  - 旧 AppLifecycleObserver は一度も接続されず 2026-09-13 に削除。design.md「ライフサイクル（未実装）」の通り Session 内で完結実装
+  - 実装: PostureSessionManager.handleDidEnterBackground/handleWillEnterForeground、RootView の scenePhase で接続。監視フラグの単一ソースは SettingsStore.isMonitoringEnabled（start/stop/校正完了で更新）
   - Background → camera stop, audio stop, brightness not restored, `isIdleTimerDisabled = false`
   - Foreground → resume monitoring if `SettingsStore.isMonitoringEnabled` true and calibrated
-  - Observable completion: unit test verifies background stops and foreground resumes correctly
-  - _Boundary: AppLifecycleObserver_
+  - Observable completion: unit test verifies background stops and foreground resumes correctly（PostureSessionManagerTests 5本、実機の前面/背面遷移は要手動確認）
+  - _Boundary: PostureSessionManager_
   - _Requirements: 8.1, 8.2_
-  - _Depends: 1.2, 3.1, 3.3_
+  - _Depends: 1.2, 3.1, 3.3, 4.1_
 
-- [x] 3.6 (P) SettingsStore — sensitivity and monitoring flag persistence
-  - Implement concrete `SettingsStore` class with `sensitivity`, `isMonitoringEnabled`, `slouchDeltaThresholdDegrees()`
-  - UserDefaults persistence for sensitivity + monitoring flag only
-  - Sensitivity 0.0-1.0 → threshold 20-5 degrees linear mapping (20 - sensitivity * 15)
-  - Observable completion: unit test verifies sensitivity-to-threshold mapping
+- [x] 3.6 (P) SettingsStore — threshold and monitoring flag persistence
+  - Implement concrete `SettingsStore` class with `slouchThresholdDegrees`, `isMonitoringEnabled`
+  - UserDefaults persistence for threshold degrees (3.0...20.0) + monitoring flag only
+  - 感度マッピングは廃止済み（2026-09-12 改訂）。旧感度キーは初回起動時に `20 - sensitivity * 15` で一度だけ変換して引き継ぎ、以降削除
+  - Observable completion: unit test verifies clamping and legacy-sensitivity migration
   - _Boundary: SettingsStore_
   - _Requirements: 4.4, 8.2_
   - _Depends: 1.2_
@@ -114,9 +116,9 @@
   - Implement concrete `PostureSessionManager: ObservableObject` with `snapshot: SessionSnapshot`
   - State machine: awaitingPermission → calibrating → idle → monitoring → rotating
   - Dim mode as flag (not phase); monitoring continues when dimmed
-  - PersonMissing immediate判定; gate reset; dim/rotating suppress display
+  - PersonMissing は 0.5 秒猶予（`personMissingGracePeriod`）経過後に確定、確定時点でゲート即リセット; dim/rotating suppress display
   - Permission denied → settings guide + retry button; retry calls `requestAuthorization()` again
-  - Background → stop; foreground → resume per `isMonitoringEnabled`
+  - Background → stop; foreground → resume（3.5 で実装済み。復帰判定の単一ソースは SettingsStore.isMonitoringEnabled）
   - Observable completion: unit test verifies all state transitions and personMissing suppression in dim/rotating
   - _Boundary: PostureSessionManager_
   - _Requirements: 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.*_
@@ -169,7 +171,7 @@
 ## 6. Integration: E2E flows
 
 - [x] 6.1 E2E critical path integration test
-  - Verify: permission → 3s calibration → monitoring start → 5s slouch → notification → improvement stop → dim mode → tap restore → background stop → foreground restore
+  - Verify: permission → 5s calibration → monitoring start → 3s slouch held → notification → improvement stop → dim mode → tap restore（背面停止→前面復帰は本 E2E では未検証。3.5 の単体テストで担保、実機遷移は手動確認）
   - Observable completion: full flow completes without errors in integration test
   - _Requirements: 1.1-10.1_
   - _Depends: 5.1, 5.2, 5.3, 5.4, 5.5_
@@ -189,3 +191,77 @@
   - Observable completion: measured battery consumption meets NFR 9.1/9.2
   - _Requirements: 9.1, 9.2_
   - _Depends: 6.1_
+## 8. 前出し距離指標 第2段: 本採用（角度 OR 距離、FQ1〜FQ8）
+
+注: 8.1〜8.3 は `PostureTypes.swift` を共有するため逐次実行（`(P)` なし）。
+
+- [x] 8.1 Types: 距離指標の契約追加（呼び出し側の機械的追従含む、挙動不変）
+  - Add `DistanceMetric` struct (side + referenceDistance) per design.md PostureAnalyzer contract
+  - Add `referenceSide: Side?` to `SessionSnapshot`; extend `CalibrationProgress.completed` with `referenceSide`
+  - Thread new fields through existing call sites (CalibrationLogic returns `sample.nearSide`; PostureSessionManager stores to snapshot; tests pattern-match updated) — no behavior change yet
+  - Add `distanceMetric: DistanceMetric? = nil` and `slouchDistanceThresholdPercent: Double = 8.0` parameters to `PostureAnalyzer.analyze` signature (both ignored until 8.3)
+  - Observable completion: build green, all existing tests pass unchanged, new type/fields present per design contract
+  - _Boundary: Types + 呼び出し側の機械的配線（Integration: threading task。挙動変更を含まないため単一責任として許容）_
+  - _Requirements: 4.1_
+
+- [x] 8.2 CalibrationLogic: 校正中の近側切り替わりで蓄積リセット
+  - Reset accumulation when `sample.nearSide` differs from the side that started the current window (validate-design Issue 1; same immediate-reset class as angle >5°)
+  - Unit tests: 45度左側蓄積中に右側サンプル → elapsed=0 リセット、同一側継続 → 蓄積維持
+  - Observable completion: side-flip mid-calibration resets accumulation; reference window is single-side guaranteed
+  - _Boundary: CalibrationLogic_
+  - _Requirements: 2.3, 2.4, 4.1_
+  - _Depends: 8.1_
+
+- [x] 8.3 PostureAnalyzer: 距離基準比の OR 判定とロック側フォールバック
+  - Verdict becomes: angle delta >= threshold OR (distanceMetric usable AND nearDistance >= referenceDistance * (1 + thresholdPercent/100)) → slouchCandidate
+  - Distance evaluated on `distanceMetric.side` pair regardless of angle's near-side selection; lock-side pair confidence < 0.3 or missing → distance condition skipped, angle-only verdict
+  - Unit tests: 角度 GOOD・距離 OVER → slouchCandidate / 角度 OVER・距離 GOOD → slouchCandidate / 両方 UNDER → good / ロック側欠測 → 距離スキップ / 基準比ちょうど閾値 → candidate（以上）
+  - Observable completion: OR-judgment test matrix passes in PostureAnalyzerTests
+  - _Boundary: PostureAnalyzer_
+  - _Requirements: 4.1, 4.5, 4.6_
+  - _Depends: 8.1_
+
+- [x] 8.4 SettingsStore: 距離閾値の永続化（5〜15%、デフォルト 8%、ステップ 0.5）
+  - Add `slouchDistanceThresholdPercent` with clamping and UserDefaults persistence (new key, no legacy migration)
+  - Unit tests: 範囲外代入のクランプ、インスタンス横断の永続化、デフォルト 8.0
+  - Observable completion: SettingsStoreTests distance cases pass
+  - _Boundary: SettingsStore_
+  - _Requirements: 4.4_
+
+- [x] 8.5 PostureSessionManager: DistanceMetric 構成と距離閾値の受け渡し（統合）
+  - On calibration completion build `DistanceMetric(side: referenceSide, referenceDistance:)`, keep in session state; pass with `slouchDistanceThresholdPercent` into `analyze` every monitoring frame
+  - Improvement transition (4.3) verified through OR result: gate clears only when both indicators under threshold
+  - Integration test: synthetic frames with growing lock-side distance ≥ 3s → displayedPosture .slouch → recovery → .good
+  - Observable completion: distance-path E2E-style session test passes; angle-only regression suite untouched-green
+  - _Boundary: PostureSessionManager_
+  - _Requirements: 4.1, 4.2, 4.3_
+  - _Depends: 8.1, 8.2, 8.3, 8.4_
+
+- [x] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
+  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...15.0, step 0.5), label with current value like the angle control
+  - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
+  - _Boundary: MonitorView_
+  - _Requirements: 4.4_
+  - _Depends: 8.4, 8.5_
+
+- [x] 8.7 全テストスイート実行と角度指標回帰確認
+  - `xcodebuild test -scheme NekozeFix` on iPhone 17 Pro simulator; all sections (Domain/Session/E2E) green
+  - Observable completion: TEST SUCCEEDED with distance tests included, zero angle-behavior regressions
+  - _Depends: 8.5, 8.6_
+  - _Requirements: 4.1, 4.2, 4.3, 4.4_
+
+- [x] 8.8 実機検収（手動・コード変更なし）— DEBUG 表示が生きている状態で行う
+  - iPad 9th 実機: 意図的前出し3秒で通知発音を確認 → 通常作業で自然前出しの最大基準比%を記録 → 8% 妥当性判定（伸びが薄い場合は 8.4/8.6 のデフォルト・範囲を調整してから次工程）
+  - Observable completion: 発音確認済み・自然前出し最大%が数値として記録され、閾値据え置きor調整が決定
+  - _Requirements: 4.1, 4.2_
+  - _Depends: 8.7_
+
+- [x] 8.9 DEBUG 距離表示の削除（chore、検収 PASS 後）
+  - Remove `debugDistanceText` field, window buffer, and both view overlays (angle indicator precedent: commit 8205aba)
+  - Observable completion: grep for debugDistanceText yields nothing; build and tests green
+  - _Depends: 8.8_
+
+## Implementation Notes
+
+- 8.8 実機検収（2026-09-13、iPad 9th）: 意図的前出し110%で発音確認。自然前出しの 1s-median 最大も110%で、8%閾値（108%超発火）では両者が分離しない。ユーザー判断により「作業中の前出し110%は矯正対象」とみなし 8% 据え置きで PASS。FQ2 の暫定値は確定値として有効。
+- 8.5 で `PostureSessionManager.processDetection(_:)` / `applyCalibrationCompletion(...)` を internal 抽出。カメラ不要の合成フレーム統合テスト（DistanceMetricIntegrationTests）がこのシームを使う。

@@ -12,13 +12,15 @@ struct CalibrationLogic {
     private static let stabilityWindowSize = 7
     /// 中央値からの角度変化がこの度数を超えたら姿勢崩れとみなす
     private static let angleResetThresholdDegrees: Double = 5.0
-    /// キーポイント脱落（sample nil）の許容時間（秒）。Vision 観測のチラつきは
-    /// この間だけ経過時間の加算を凍結し、蓄積は保持する。超えたら姿勢崩れ扱いでリセット。
+    /// キーポイント脱落（sample nil）および personMissing の許容時間（秒）。
+    /// Vision 観測のチラつき・一時的な人物消失は、この間だけ経過時間の加算を凍結し、
+    /// 蓄積は保持する。超えたら姿勢崩れ扱いでリセット。
     static let dropoutTolerance: TimeInterval = 1.0
 
     // MARK: - 状態
 
     private var accumulatedAngles: [Double] = []
+    private var accumulatedDistances: [Double] = []
     private var accumulatedPoints: [[CGPoint]] = []
     private var isAccumulating = false
     /// 有効サンプルが蓄積された時間の合計（秒）。脱落中は加算されない。
@@ -27,6 +29,9 @@ struct CalibrationLogic {
     private var lastSampleTime: TimeInterval = 0
     /// 許容時間内の脱落中か。true の間は有効サンプルが復帰しても脱落区間の時間を計上しない
     private var dropoutActive = false
+    /// 現在の蓄積窓を開始した近側（FQ1・validate-design Issue 1）。
+    /// 左右の耳-肩距離には約8%の固有差があるため、側が切り替わったら窓をまたげない。
+    private var windowSide: Side? = nil
 
     // MARK: - 公開API
 
@@ -34,14 +39,16 @@ struct CalibrationLogic {
     /// 以前の基準値は上書きされる。
     mutating func start() {
         accumulatedAngles = []
+        accumulatedDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0
         lastSampleTime = 0
         dropoutActive = false
+        windowSide = nil
     }
 
-    /// 姿勢サンプルと人物検出状態を処理する。
+    /// 人物検出状態を処理する。
     /// - Parameters:
     ///   - sample: PostureAnalyzer からの角度サンプル（有効な角度がない場合は nil）
     ///   - presence: 人物検出状態（デバウンス確定済みの値を渡す。猶予期間中は .personDetected）
@@ -49,34 +56,35 @@ struct CalibrationLogic {
     ///   - points: 可視化ポイント（6点: 0左肩 1右肩 2左耳 3右耳 4近傍耳 5近傍肩）
     /// - Returns: キャリブレーション進捗状態
     mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval, points: [CGPoint] = []) -> CalibrationProgress {
-        // 人物が見つからない場合 - 即座にリセット
-        if presence == .personMissing {
-            resetAccumulation()
-            return .waitingForPerson
-        }
-
-        // サンプルの有無を処理
-        if let sample = sample {
+        // 有効サンプルがある場合は通常蓄積。personMissing はキーポイント脱落と同一扱いで
+        // 脱落許容時間（dropoutTolerance）内は時間凍結、超過でリセット（else 節）。
+        if let sample = sample, presence == .personDetected {
             if !isAccumulating {
                 // 最初の有効サンプルで蓄積を開始
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedDistances = [sample.nearDistance]
                 accumulatedPoints = [points]
                 isAccumulating = true
                 accumulatedDuration = 0
                 lastSampleTime = now
+                windowSide = sample.nearSide
                 return .accumulating(elapsed: 0)
             }
 
             // 安定性チェック: 直近 windowSize サンプルの中央値比。
             // フレーム単位の Vision ジッタは吸収し、実際の姿勢移動のみ検出する。
+            // 近側の切り替わりは角度が安定していても即時リセット（FQ1: 側をまたぐ距離窓は汚染される）
             let window = Array(accumulatedAngles.suffix(Self.stabilityWindowSize))
             let median = Self.median(of: window)
-            if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees {
-                // 不安定な場合は蓄積をリセット（角度崩れは脱落と違い即時リセット）
+            if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees || sample.nearSide != windowSide {
+                // 不安定な場合は蓄積をリセット（角度崩れ・側切り替わりは脱落と違い即時リセット）
                 accumulatedAngles = [sample.nearAngleDegrees]
+                accumulatedDistances = [sample.nearDistance]
                 accumulatedPoints = [points]
                 accumulatedDuration = 0
                 lastSampleTime = now
+                dropoutActive = false
+                windowSide = sample.nearSide
                 return .accumulating(elapsed: 0)
             }
 
@@ -86,10 +94,12 @@ struct CalibrationLogic {
             if dropoutActive {
                 if now - lastSampleTime > Self.dropoutTolerance {
                     accumulatedAngles = [sample.nearAngleDegrees]
+                    accumulatedDistances = [sample.nearDistance]
                     accumulatedPoints = [points]
                     accumulatedDuration = 0
                     lastSampleTime = now
                     dropoutActive = false
+                    windowSide = sample.nearSide
                     return .accumulating(elapsed: 0)
                 }
                 dropoutActive = false
@@ -100,6 +110,7 @@ struct CalibrationLogic {
 
             // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
+            accumulatedDistances.append(sample.nearDistance)
             if !points.isEmpty {
                 accumulatedPoints.append(points)
             }
@@ -109,15 +120,16 @@ struct CalibrationLogic {
             if accumulatedDuration >= Self.requiredStableDuration - 1e-9 {
                 // 蓄積された角度の平均を計算
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
+                let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
                 let finalPoints = accumulatedPoints.last ?? []
-                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referencePoints: finalPoints)
+                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referenceSide: sample.nearSide, referencePoints: finalPoints)
 
                 resetAccumulation()
                 return completedProgress
             }
             return .accumulating(elapsed: min(accumulatedDuration, Self.requiredStableDuration))
         } else {
-            // 角度サンプルなし（肩未検出など）。人物はいる前提なので脱落として扱う:
+            // 角度サンプルなし、または人物未検出（personMissing）。キーポイント脱落と同一扱い:
             // 直近の有効サンプルからの経過が許容時間以内なら蓄積を保持し時間だけを凍結、
             // 許容を超えたら姿勢崩れとしてリセットする。
             if isAccumulating && now - lastSampleTime > Self.dropoutTolerance {
@@ -136,11 +148,13 @@ struct CalibrationLogic {
 
     private mutating func resetAccumulation() {
         accumulatedAngles = []
+        accumulatedDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0
         lastSampleTime = 0
         dropoutActive = false
+        windowSide = nil
     }
 
     // MARK: - プライベートメソッド
