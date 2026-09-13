@@ -47,6 +47,14 @@ struct CalibrationView: View {
                     .foregroundColor(.primary)
                     .shadow(radius: 4)
 
+                // DEBUG 距離計測（前出し検出の閾値設計用。未校正時は基準比なし）
+                if let t = sessionManager.snapshot.debugDistanceText {
+                    Text(t)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.yellow)
+                        .shadow(radius: 2)
+                }
+
                 Spacer()
 
                 // 肩が映っていない場合の運用ガイド（顔のみ検出状態）

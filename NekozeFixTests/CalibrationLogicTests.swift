@@ -35,7 +35,7 @@ final class CalibrationLogicTests: XCTestCase {
         angle: Double = 45.0,
         farSideDetected: Bool = false
     ) -> AngleSample {
-        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, farSideDetected: farSideDetected)
+        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, farSideDetected: farSideDetected, nearDistance: 0.3)
     }
 
     // MARK: - 2.5: 人物未検出 - 完了不可
@@ -84,7 +84,7 @@ final class CalibrationLogicTests: XCTestCase {
         }
 
         // 検証: 完了
-        if case .completed(let refAngle, _) = progress {
+        if case .completed(let refAngle, _, _) = progress {
             // リファレンスは蓄積された角度の平均
             XCTAssertEqual(refAngle, stableAngle, accuracy: 0.5)
         } else {
@@ -117,7 +117,7 @@ final class CalibrationLogicTests: XCTestCase {
         // 5.0秒での最終プログレスを取得
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
-        if case .completed(let refAngle, _) = finalProgress {
+        if case .completed(let refAngle, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 50.0, accuracy: 0.5)
         } else {
             // すでに完了済み、内部状態を確認
@@ -240,7 +240,7 @@ final class CalibrationLogicTests: XCTestCase {
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
         // 検証: リファレンスは新しい値（約60）
-        if case .completed(let refAngle, _) = finalProgress {
+        if case .completed(let refAngle, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 60.0, accuracy: 1.0)
         } else {
             // 蓄積中に完了したか確認
@@ -259,7 +259,7 @@ final class CalibrationLogicTests: XCTestCase {
 
         // 検証: 最初の ingest は waitingForPerson または accumulating を返す
         let progress = sut.ingest(sample: nil, presence: .personDetected, now: 0.0)
-        XCTAssertNotEqual(progress, .completed(referenceNearAngleDegrees: 0, referencePoints: []))
+        XCTAssertNotEqual(progress, .completed(referenceNearAngleDegrees: 0, referenceDistance: 0, referencePoints: []))
     }
 
     // MARK: - Nullサンプルの処理
@@ -363,6 +363,24 @@ final class CalibrationLogicTests: XCTestCase {
     }
 
     // MARK: - オブザーバブル完了の検証
+
+    /// DEBUG 距離計測: 完了時に耳-肩距離の平均が基準として保存される（角度と同一タイミング）
+    func testCompletion_AlsoStoresAverageReferenceDistance() {
+        sut.start()
+
+        var lastProgress: CalibrationProgress = .waitingForPerson
+        for frameIndex in 0...300 {
+            let t = Double(frameIndex) / 60.0
+            let sample = AngleSample(nearSide: .left, nearAngleDegrees: 45.0, farSideDetected: false, nearDistance: 0.25)
+            lastProgress = sut.ingest(sample: sample, presence: .personDetected, now: t)
+        }
+
+        guard case .completed(_, let refDistance, _) = lastProgress else {
+            XCTFail(".completed が期待されたが、\(lastProgress) を取得")
+            return
+        }
+        XCTAssertEqual(refDistance, 0.25, accuracy: 0.001)
+    }
 
     /// 重要ユニットテスト: 5秒安定 → 完了
     /// コアのキャリブレーション完了動作を検証

@@ -47,6 +47,14 @@ struct MonitorView: View {
                 // ステータス表示
                 statusView
 
+                // DEBUG 距離計測（前出し検出の閾値設計用）。閾値設計後の削除対象。
+                if let t = sessionManager.snapshot.debugDistanceText {
+                    Text(t)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.yellow)
+                        .shadow(radius: 2)
+                }
+
                 Spacer()
 
                 // 姿勢インジケーター
