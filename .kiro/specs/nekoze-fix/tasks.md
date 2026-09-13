@@ -91,12 +91,12 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 1.2_
 
-- [ ] 3.5 (P) ライフサイクル自動停止・復帰（FR 機能 8.1/8.2）— **未実装・延期**
-  - 旧 AppLifecycleObserver は一度も接続されず 2026-09-13 に削除（design.md「ライフサイクル（未実装）」）。現状は iOS の AVCaptureSession 自動停止に依存
-  - 実装する場合は単独 Component を置かず PostureSessionManager 内で完結させる（design.md の決定）
+- [x] 3.5 (P) ライフサイクル自動停止・復帰（FR 機能 8.1/8.2）
+  - 旧 AppLifecycleObserver は一度も接続されず 2026-09-13 に削除。design.md「ライフサイクル（未実装）」の通り Session 内で完結実装
+  - 実装: PostureSessionManager.handleDidEnterBackground/handleWillEnterForeground、RootView の scenePhase で接続。監視フラグの単一ソースは SettingsStore.isMonitoringEnabled（start/stop/校正完了で更新）
   - Background → camera stop, audio stop, brightness not restored, `isIdleTimerDisabled = false`
   - Foreground → resume monitoring if `SettingsStore.isMonitoringEnabled` true and calibrated
-  - Observable completion: unit test verifies background stops and foreground resumes correctly
+  - Observable completion: unit test verifies background stops and foreground resumes correctly（PostureSessionManagerTests 5本、実機の前面/背面遷移は要手動確認）
   - _Boundary: PostureSessionManager_
   - _Requirements: 8.1, 8.2_
   - _Depends: 1.2, 3.1, 3.3, 4.1_
@@ -118,7 +118,7 @@
   - Dim mode as flag (not phase); monitoring continues when dimmed
   - PersonMissing は 0.5 秒猶予（`personMissingGracePeriod`）経過後に確定、確定時点でゲート即リセット; dim/rotating suppress display
   - Permission denied → settings guide + retry button; retry calls `requestAuthorization()` again
-  - ~~Background → stop; foreground → resume~~ ライフサイクル自動停止は未実装（3.5 延期を参照。復帰時の `isMonitoringEnabled` 反映のみ SettingsStore 側に実装）
+  - Background → stop; foreground → resume（3.5 で実装済み。復帰判定の単一ソースは SettingsStore.isMonitoringEnabled）
   - Observable completion: unit test verifies all state transitions and personMissing suppression in dim/rotating
   - _Boundary: PostureSessionManager_
   - _Requirements: 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.*_
@@ -171,7 +171,7 @@
 ## 6. Integration: E2E flows
 
 - [x] 6.1 E2E critical path integration test
-  - Verify: permission → 5s calibration → monitoring start → 3s slouch held → notification → improvement stop → dim mode → tap restore（背面停止→前面復帰は lifecycle 未実装のため対象外・3.5 参照）
+  - Verify: permission → 5s calibration → monitoring start → 3s slouch held → notification → improvement stop → dim mode → tap restore（背面停止→前面復帰は本 E2E では未検証。3.5 の単体テストで担保、実機遷移は手動確認）
   - Observable completion: full flow completes without errors in integration test
   - _Requirements: 1.1-10.1_
   - _Depends: 5.1, 5.2, 5.3, 5.4, 5.5_

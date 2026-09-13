@@ -18,7 +18,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private let poseDetector = PoseDetector()
     private let postureAnalyzer = PostureAnalyzer()
     private var calibrationLogic = CalibrationLogic()
-    private let settingsStore: SettingsStore
+    let settingsStore: SettingsStore
     private let orientationMonitor = DeviceOrientationMonitor()
 
     // 通知音（design.md "AlertPlayer" Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
@@ -117,6 +117,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.phase = .monitoring
         snapshot.isDimmed = false
         snapshot.isRotating = false
+        snapshot.isMonitoringEnabled = true
+        settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
@@ -125,14 +127,42 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
     }
 
-    /// 姿勢監視を停止する
+    /// 姿勢監視を停止する（ユーザーの明示操作）
     func stopMonitoring() {
         snapshot.phase = .idle
         snapshot.isDimmed = false
         snapshot.isRotating = false
+        snapshot.isMonitoringEnabled = false
+        settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
+    }
+
+    // MARK: - ライフサイクル（要求 8.1/8.2、タスク3.5）
+
+    /// バックグラウンド移行: 監視中/校正中なら idle へ退避しカメラ・音声を停止する。
+    /// 監視フラグ（SettingsStore）は維持 — ユーザーストップではないため復帰時に再開する。
+    /// 輝度は復元しない（暗転のまま。design.md のタスク記述通り）。
+    func handleDidEnterBackground() {
+        alertPlayer?.stop()
+        cameraManager.stop()
+        UIApplication.shared.isIdleTimerDisabled = false
+        if snapshot.phase == .monitoring || snapshot.phase == .calibrating || snapshot.phase == .rotating {
+            snapshot.phase = .idle
+        }
+        snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
+    }
+
+    /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
+    /// 明示停止（フラグ false）・未校正・権限なしは停止状態を維持する。
+    func handleWillEnterForeground() {
+        guard settingsStore.isMonitoringEnabled, snapshot.referenceAngle != nil else {
+            snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
+            return
+        }
+        guard snapshot.phase == .idle else { return } // 校正中等进行中フェーズは触らない
+        startMonitoring()
     }
 
     /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
@@ -363,6 +393,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         referencePoints: [CGPoint]
     ) {
         snapshot.phase = .monitoring
+        snapshot.isMonitoringEnabled = true
+        settingsStore.isMonitoringEnabled = true // 校正完了＝監視開始。復帰判定の単一ソース
         snapshot.referenceAngle = referenceNearAngleDegrees
         snapshot.referenceDistance = referenceDistance
         snapshot.referenceSide = referenceSide

@@ -474,9 +474,17 @@ protocol DeviceOrientationMonitoring {
 - **5秒間 orientation が変化しなければ完了** とみなす（Q14 決定：`isRotating = false`）
 - 完了後に Session が `applyVideoOrientation` を呼んでカメラ向きを更新し、`monitoring` に復帰
 
-### ライフサイクル（未実装）
+### ライフサイクル（歴史: 旧 AppLifecycleObserver は未接続のまま削除）
 
-背面停止・復帰再開（FR 8.1/8.2）を担当する `AppLifecycleObserver` は一度も接続されないまま 2026-09-13 に削除した。現状、ライフサイクル自動停止は**未実装**であり、バックグラウンド移行時のカメラ停止は iOS による AVCaptureSession の自動停止に依存する。将来実装する場合は Session 単体で完結させる（単独 Component を置かない）。
+背面停止・復帰再開（FR 8.1/8.2）を担当する `AppLifecycleObserver` は一度も接続されないまま 2026-09-13 に削除した。削除後は iOS による AVCaptureSession の自動停止に依存する状態が続いていたが、同日タスク 3.5 として下記を実装した。
+
+### ライフサイクル（実装: タスク 3.5）
+
+単独 Component は置かず `PostureSessionManager` 内で完結させる（上記決定通り）。
+- **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active`/`.inactive` で `handleWillEnterForeground()` を呼ぶ。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
+- **背面移行**: 通知音停止、カメラ停止、`isIdleTimerDisabled = false`。**輝度は復元しない**（復帰後に暗転表示が続く）。監視中/校正中/回転中は `idle` へ退避。監視フラグ（SettingsStore）は維持 — ユーザーストップではないため
+- **フォアグラウンド復帰**: `isMonitoringEnabled == true` **かつ**校正済み（`referenceAngle != nil`）なら `startMonitoring()` で再開。明示停止（false）・未校正・权限なしは停止維持。idle 以外のフェーズは触らない
+- **監視フラグの単一ソース**: `SettingsStore.isMonitoringEnabled` を `startMonitoring`/`stopMonitoring`/校正完了で更新（snapshot のフラグと同期）。復帰判定はこの永続フラグのみを参照
 
 ### SettingsStore
 
@@ -775,8 +783,8 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3
 | 6.3 | タップで復帰 | MonitorView | exitDimMode | 暗転 |
 | 7.1 | 向き追従 | DeviceOrientationMonitor, CameraSessionManager | applyVideoOrientation | 回転 |
 | 7.2 | 回転中は判定停止（5秒タイムアウト） | PostureSessionManager | phase rotating | 回転 |
-| 8.1 ライフサイクル | 背面で停止 | —（未実装。iOS のカメラ自動停止に依存） | — | ライフサイクル |
-| 8.2 ライフサイクル | 復帰時に状態へ従う（輝度復元しない） | —（未実装） | — | ライフサイクル |
+| 8.1 ライフサイクル | 背面で停止 | PostureSessionManager, RootView | handleDidEnterBackground | ライフサイクル |
+| 8.2 ライフサイクル | 復帰時に状態へ従う（輝度復元しない） | PostureSessionManager, SettingsStore | handleWillEnterForeground / isMonitoringEnabled | ライフサイクル |
 | 8.1 性能 | 15 fps 以上（.high プリセット） | PoseDetector, CameraSessionManager | detect | 性能 |
 | 8.2 性能 | 0.5 秒以内に再生（プリロード） | AlertPlayer | playOnce | 性能 |
 | 9.1 | 1時間 15% 以下 | CameraSessionManager | preset .high | 性能 |

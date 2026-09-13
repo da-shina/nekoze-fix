@@ -7,6 +7,7 @@ struct RootView: View {
     // MARK: - 環境
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
+    @Environment(\.scenePhase) private var scenePhase
 
     // MARK: - 本文
 
@@ -28,6 +29,17 @@ struct RootView: View {
         .onAppear {
             Task {
                 await sessionManager.bootstrap()
+            }
+        }
+        // ライフサイクル自動停止・復帰（要求 8.1/8.2、タスク3.5）
+        .onChange(of: scenePhase) { newPhase in
+            switch newPhase {
+            case .background:
+                sessionManager.handleDidEnterBackground()
+            case .active, .inactive:
+                sessionManager.handleWillEnterForeground()
+            @unknown default:
+                break
             }
         }
     }

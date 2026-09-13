@@ -4,13 +4,18 @@ import XCTest
 @MainActor
 final class PostureSessionManagerTests: XCTestCase {
     var sut: PostureSessionManager!
+    private var suite: UserDefaults!
 
     override func setUp() {
         super.setUp()
-        sut = PostureSessionManager()
+        suite = UserDefaults(suiteName: "PostureSessionManagerTests")!
+        suite.removePersistentDomain(forName: "PostureSessionManagerTests")
+        sut = PostureSessionManager(settingsStore: SettingsStore(defaults: suite))
     }
 
     override func tearDown() {
+        suite.removePersistentDomain(forName: "PostureSessionManagerTests")
+        suite = nil
         sut = nil
         super.tearDown()
     }
@@ -104,5 +109,60 @@ final class PostureSessionManagerTests: XCTestCase {
     func testUpdatePhase_permissionDenied() {
         sut.updatePhase(.permissionDenied)
         XCTAssertEqual(sut.snapshot.phase, .permissionDenied)
+    }
+
+    // MARK: - ライフサイクル自動停止・復帰（要求 8.1/8.2、タスク3.5）
+
+    /// 背面移行: 監視中なら idle に退避し、監視フラグ（復帰判定用）は維持する
+    func testDidEnterBackground_duringMonitoring_movesToIdleKeepingFlag() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        XCTAssertTrue(sut.settingsStore.isMonitoringEnabled, "校正完了で監視遷移時はフラグ true")
+
+        sut.handleDidEnterBackground()
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+        XCTAssertTrue(sut.settingsStore.isMonitoringEnabled, "自動停止はユーザーストップではないのでフラグ維持")
+    }
+
+    /// 復帰: 監視フラグ true かつ校正済みなら監視を再開
+    func testWillEnterForeground_resumesMonitoringWhenCalibrated() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        sut.handleDidEnterBackground()
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+    }
+
+    /// 復帰: ユーザーが明示停止（フラグ false）した場合は停止状態を維持（要求 8.2）
+    func testWillEnterForeground_keepsIdleAfterExplicitStop() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        sut.stopMonitoring()
+        XCTAssertFalse(sut.settingsStore.isMonitoringEnabled)
+
+        sut.handleDidEnterBackground()
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .idle, "明示停止後の復帰は停止維持")
+    }
+
+    /// 復帰: 未校正（referenceAngle なし）では監視へ戻さない
+    func testWillEnterForeground_withoutCalibration_staysIdle() {
+        sut.startMonitoring() // 未经校正：監視フラグは true だが referenceAngle は nil
+        sut.handleDidEnterBackground()
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+    }
+
+    /// 監視開始・停止が SettingsStore の監視フラグを反映する（復帰判定の単一ソース）
+    func testStartStopMonitoring_syncsSettingsFlag() {
+        sut.stopMonitoring()
+        XCTAssertFalse(sut.settingsStore.isMonitoringEnabled)
+        sut.startMonitoring()
+        XCTAssertTrue(sut.settingsStore.isMonitoringEnabled)
     }
 }
