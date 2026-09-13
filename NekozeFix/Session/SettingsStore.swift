@@ -11,6 +11,7 @@ final class SettingsStore: ObservableObject {
         /// 旧・感度キー（廃止済み。初回起動時に閾値へ一度だけ変換して削除）
         static let legacySensitivity = "com.nekozefix.sensitivity"
         static let slouchThresholdDegrees = "com.nekozefix.slouchThresholdDegrees"
+        static let slouchDistanceThresholdPercent = "com.nekozefix.slouchDistanceThresholdPercent"
         static let isMonitoringEnabled = "com.nekozefix.isMonitoringEnabled"
         static let cameraPosition = "com.nekozefix.cameraPosition"
     }
@@ -23,6 +24,12 @@ final class SettingsStore: ObservableObject {
     static let thresholdMaxDegrees: Double = 20.0
     /// デフォルト閾値（度）。少々の前方頭出しも通知する厳しめ設定
     static let thresholdDefaultDegrees: Double = 5.0
+    /// 距離閾値の下限（%）。FQ4
+    static let distanceThresholdMinPercent: Double = 5.0
+    /// 距離閾値の上限（%）。FQ4
+    static let distanceThresholdMaxPercent: Double = 15.0
+    /// 距離閾値のデフォルト（%）。FQ2/FQ4
+    static let distanceThresholdDefaultPercent: Double = 8.0
 
     // MARK: - プロパティ
 
@@ -44,6 +51,13 @@ final class SettingsStore: ObservableObject {
             self.slouchThresholdDegrees = SettingsStore.thresholdDefaultDegrees
         }
         defaults.removeObject(forKey: Keys.legacySensitivity)
+
+        // 距離閾値の読込。新キーなので旧キー移行は不要、未設定ならデフォルト（角度と同様の扱い）
+        if let saved = defaults.object(forKey: Keys.slouchDistanceThresholdPercent) as? Double {
+            self.slouchDistanceThresholdPercent = Self.clampDistance(saved)
+        } else {
+            self.slouchDistanceThresholdPercent = SettingsStore.distanceThresholdDefaultPercent
+        }
 
         self.isMonitoringEnabled = defaults.bool(forKey: Keys.isMonitoringEnabled)
 
@@ -74,6 +88,19 @@ final class SettingsStore: ObservableObject {
         }
     }
 
+    /// 前出し距離の判定閾値（基準比%）。ロック側の耳-肩距離が基準のこの%以上で猫背候補。
+    /// 範囲: 5.0〜15.0（ステップ 0.5 は UI 側）、デフォルト: 8.0
+    @Published var slouchDistanceThresholdPercent: Double {
+        didSet {
+            let clamped = SettingsStore.clampDistance(slouchDistanceThresholdPercent)
+            if clamped != slouchDistanceThresholdPercent {
+                slouchDistanceThresholdPercent = clamped // didSet 再入で保存
+                return
+            }
+            defaults.set(slouchDistanceThresholdPercent, forKey: Keys.slouchDistanceThresholdPercent)
+        }
+    }
+
     /// 監視が有効かどうか
     /// デフォルト: false
     @Published var isMonitoringEnabled: Bool {
@@ -90,6 +117,10 @@ final class SettingsStore: ObservableObject {
 
     private static func clamp(_ value: Double) -> Double {
         min(thresholdMaxDegrees, max(thresholdMinDegrees, value))
+    }
+
+    private static func clampDistance(_ value: Double) -> Double {
+        min(distanceThresholdMaxPercent, max(distanceThresholdMinPercent, value))
     }
 
     private func registerDefaults() {

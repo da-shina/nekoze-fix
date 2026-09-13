@@ -221,7 +221,7 @@
   - _Requirements: 4.1, 4.5, 4.6_
   - _Depends: 8.1_
 
-- [ ] 8.4 SettingsStore: 距離閾値の永続化（5〜15%、デフォルト 8%、ステップ 0.5）
+- [x] 8.4 SettingsStore: 距離閾値の永続化（5〜15%、デフォルト 8%、ステップ 0.5）
   - Add `slouchDistanceThresholdPercent` with clamping and UserDefaults persistence (new key, no legacy migration)
   - Unit tests: 範囲外代入のクランプ、インスタンス横断の永続化、デフォルト 8.0
   - Observable completion: SettingsStoreTests distance cases pass
