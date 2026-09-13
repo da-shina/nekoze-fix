@@ -147,7 +147,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// バックグラウンド移行: 監視中/校正中なら idle へ退避しカメラ・音声を停止する。
     /// 監視フラグ（SettingsStore）は維持 — ユーザーストップではないため復帰時に再開する。
-    /// 輝度は復元しない（暗転のまま。design.md のタスク記述通り）。
+    /// 輝度はこの時点では復元しない（復帰時に handleWillEnterForeground で解除。Q24 改訂）。
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
@@ -198,11 +198,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// ディムモードを終了する（輝度復元 + wake lock 解除）
     func exitDimMode() {
         guard snapshot.isDimmed else { return }
+        UIApplication.shared.isIdleTimerDisabled = false
         restoreBrightness()
         snapshot.isDimmed = false
     }
 
-    /// 元の輝度値へ復元する（暗転解除経路以外からも呼ぶ。バックグラウンド復帰時など）
+    /// 元の輝度値へ復元する（exitDimMode 経由でのみ呼ばれる）
     private func restoreBrightness() {
         if let brightness = savedBrightness {
             UIScreen.main.brightness = brightness

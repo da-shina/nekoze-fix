@@ -482,7 +482,7 @@ protocol DeviceOrientationMonitoring {
 ### ライフサイクル（実装: タスク 3.5）
 
 単独 Component は置かず `PostureSessionManager` 内で完結させる（上記決定通り）。
-- **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active`/`.inactive` で `handleWillEnterForeground()` を呼ぶ。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
+- **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active` で `handleWillEnterForeground()` を呼ぶ（`.inactive` — 通知シェード/コントロールセンター開等 — では呼ばない。フォアグラウンド滞留中の暗転を維持するため）。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
 - **背面移行**: 通知音停止、カメラ停止、`isIdleTimerDisabled = false`。暗転フラグ・輝度はこの時点では変更しない。監視中/校正中/回転中は `idle` へ退避。監視フラグ（SettingsStore）は維持 — ユーザーストップではないため
 - **フォアグラウンド復帰**: まず暗転を解除（`exitDimMode()` で保存輝度を復元、Q24 改訂）。その後 `isMonitoringEnabled == true` **かつ**校正済み（`referenceAngle != nil`）なら `startMonitoring()` で再開。明示停止（false）・未校正・権限なしは停止維持。idle 以外のフェーズは触らない
 - **監視フラグの単一ソース**: `SettingsStore.isMonitoringEnabled` を `startMonitoring`/`stopMonitoring`/校正完了で更新（snapshot のフラグと同期）。復帰判定はこの永続フラグのみを参照
