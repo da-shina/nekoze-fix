@@ -74,6 +74,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         orientationMonitor.$currentVideoOrientation
             .sink { [weak self] orientation in
                 self?.cameraManager.updateVideoOrientation(orientation)
+                // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
+                self?.snapshot.isLandscape = (
+                    orientation == .landscapeLeft || orientation == .landscapeRight
+                )
             }
             .store(in: &cancellables)
     }
