@@ -11,7 +11,7 @@ NekozeFix: iPhone/iPadフロントカメラで猫背をリアルタイム検知�
 ```bash
 # ビルド（Macに接続されたiOS DeviceをDestinationにする。接続端末名は
 # `xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -showdestinations` で確認）
-xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -destination 'platform=iOS,name=9th' build
+xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -destination 'platform=iOS,name=<device-name>' build
 
 # 全テスト実行
 xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
