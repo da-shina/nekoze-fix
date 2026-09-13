@@ -41,6 +41,6 @@ xcodebuild ... test -only-testing:NekozeFixTests/PostureAnalyzerTests/testAngleC
 
 ## 音声クレジット
 
-- 【8bit風】うさぎとかめ チップチューンアレンジBGM / カワモトンネルBMG（[https://booth.pm/ja/items/7388270）](https://booth.pm/ja/items/7388270）)  
+- 【8bit風】うさぎとかめ チップチューンアレンジBGM / カワモトンネルBMG（[https://booth.pm/ja/items/7388270](https://booth.pm/ja/items/7388270)）
 
 
