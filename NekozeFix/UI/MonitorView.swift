@@ -108,24 +108,48 @@ struct MonitorView: View {
     }
 
     private var thresholdSlider: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("閾値")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+        HStack(alignment: .top, spacing: 16) {
+            // 角度閾値スライダー
+            VStack(spacing: 8) {
+                HStack {
+                    Text("角度閾値")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-                Spacer()
+                    Spacer()
 
-                Text(String(format: "%.1f°", settingsStore.slouchThresholdDegrees))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    Text(String(format: "%.1f°", settingsStore.slouchThresholdDegrees))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Slider(
+                    value: $settingsStore.slouchThresholdDegrees,
+                    in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
+                    step: 0.5
+                )
             }
 
-            Slider(
-                value: $settingsStore.slouchThresholdDegrees,
-                in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
-                step: 0.5
-            )
+            // 距離閾値スライダー（前出し検出の第2指標・FQ3/FQ4）
+            VStack(spacing: 8) {
+                HStack {
+                    Text("距離閾値")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text(String(format: "%.1f%%", settingsStore.slouchDistanceThresholdPercent))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                Slider(
+                    value: $settingsStore.slouchDistanceThresholdPercent,
+                    in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
+                    step: 0.5
+                )
+            }
         }
         .padding(.horizontal)
     }

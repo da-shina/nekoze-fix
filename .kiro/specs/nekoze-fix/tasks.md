@@ -237,14 +237,14 @@
   - _Requirements: 4.1, 4.2, 4.3_
   - _Depends: 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
+- [x] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
   - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...15.0, step 0.5), label with current value like the angle control
   - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
   - _Boundary: MonitorView_
   - _Requirements: 4.4_
   - _Depends: 8.4, 8.5_
 
-- [ ] 8.7 全テストスイート実行と角度指標回帰確認
+- [x] 8.7 全テストスイート実行と角度指標回帰確認
   - `xcodebuild test -scheme NekozeFix` on iPhone 17 Pro simulator; all sections (Domain/Session/E2E) green
   - Observable completion: TEST SUCCEEDED with distance tests included, zero angle-behavior regressions
   - _Depends: 8.5, 8.6_
