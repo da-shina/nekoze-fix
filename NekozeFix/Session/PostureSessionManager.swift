@@ -115,7 +115,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 姿勢監視を開始する
     func startMonitoring() {
         snapshot.phase = .monitoring
-        snapshot.isDimmed = false
+        exitDimMode()
         snapshot.isRotating = false
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
@@ -130,7 +130,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 姿勢監視を停止する（ユーザーの明示操作）
     func stopMonitoring() {
         snapshot.phase = .idle
-        snapshot.isDimmed = false
+        exitDimMode()
         snapshot.isRotating = false
         snapshot.isMonitoringEnabled = false
         settingsStore.isMonitoringEnabled = false
@@ -157,22 +157,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
     /// 明示停止（フラグ false）・未校正・権限なしは停止状態を維持する。
     func handleWillEnterForeground() {
+        // 復帰後は暗転解除（輝度復元）。監視再開の有無に関わらず行う
+        exitDimMode()
         guard settingsStore.isMonitoringEnabled, snapshot.referenceAngle != nil else {
             snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
             return
         }
         guard snapshot.phase == .idle else { return } // 校正中等进行中フェーズは触らない
         startMonitoring()
-    }
-
-    /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
-    func enterDimMode() {
-        snapshot.isDimmed = true
-    }
-
-    /// ディムモードを終了する
-    func exitDimMode() {
-        snapshot.isDimmed = false
     }
 
     /// 表示される姿勢状態を更新する
@@ -183,6 +175,35 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 人検出状態を更新する
     func updatePersonDetected(_ detected: Bool) {
         snapshot.isPersonDetected = detected
+    }
+
+    // MARK: - 暗転モード（design.md Q2/Q24、ADR 0013）
+
+    /// 暗転前に保存した元の輝度値（プロセス内メモリのみ、永続化しない。Q24）
+    private var savedBrightness: CGFloat?
+
+    /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
+    func enterDimMode() {
+        guard !snapshot.isDimmed else { return }
+        savedBrightness = UIScreen.main.brightness
+        UIScreen.main.brightness = 0.0
+        UIApplication.shared.isIdleTimerDisabled = true
+        snapshot.isDimmed = true
+    }
+
+    /// ディムモードを終了する（輝度復元 + wake lock 解除）
+    func exitDimMode() {
+        guard snapshot.isDimmed else { return }
+        restoreBrightness()
+        snapshot.isDimmed = false
+    }
+
+    /// 元の輝度値へ復元する（暗転解除経路以外からも呼ぶ。バックグラウンド復帰時など）
+    private func restoreBrightness() {
+        if let brightness = savedBrightness {
+            UIScreen.main.brightness = brightness
+        }
+        savedBrightness = nil
     }
 
     /// フェーズを更新する（外部ステートマシン制御用）

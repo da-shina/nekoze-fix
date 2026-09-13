@@ -158,6 +158,20 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .idle)
     }
 
+    /// 復帰: 暗転中だった場合は監視再開の有無に関わらず暗転解除する（design.md Q24 改訂）
+    func testWillEnterForeground_whileDimmed_clearsDim() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        sut.enterDimMode()
+        XCTAssertTrue(sut.snapshot.isDimmed)
+
+        sut.handleDidEnterBackground()
+        XCTAssertTrue(sut.snapshot.isDimmed, "背面移行中は暗転フラグを維持")
+        sut.handleWillEnterForeground()
+        XCTAssertFalse(sut.snapshot.isDimmed, "復帰後に暗転解除")
+    }
+
     /// 監視開始・停止が SettingsStore の監視フラグを反映する（復帰判定の単一ソース）
     func testStartStopMonitoring_syncsSettingsFlag() {
         sut.stopMonitoring()
