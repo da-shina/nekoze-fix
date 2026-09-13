@@ -23,8 +23,8 @@ struct PostureOverlayView: View {
                 let earColor = isRef ? Color.gray.opacity(0.5) : Color.green
                 let lineColor = isRef ? Color.gray.opacity(0.3) : Color.yellow
 
+                // 肩のライン (両肩そろったときのみ)
                 if currentPoints.count >= 2 && currentPoints[0] != .zero && currentPoints[1] != .zero {
-                    // 肩のライン
                     Path { path in
                         let pL = normalizePoint(currentPoints[0], in: geometry.size)
                         let pR = normalizePoint(currentPoints[1], in: geometry.size)
@@ -32,9 +32,11 @@ struct PostureOverlayView: View {
                         path.addLine(to: pR)
                     }
                     .stroke(shoulderColor, lineWidth: 4)
+                }
 
-                    // 肩のポイント
-                    ForEach(0..<2) { i in
+                // 肩のポイント (左右それぞれ、検出できた方だけ表示)
+                ForEach(0..<2, id: \.self) { i in
+                    if i < currentPoints.count && currentPoints[i] != .zero {
                         Circle()
                             .fill(shoulderColor)
                             .frame(width: 12, height: 12)
