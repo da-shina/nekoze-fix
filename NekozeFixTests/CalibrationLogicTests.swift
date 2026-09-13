@@ -189,27 +189,49 @@ final class CalibrationLogicTests: XCTestCase {
 
     // MARK: - 2.4: 姿勢不安定リセット - 人物未検出
 
-    func testPersonMissingDuringAccumulation_ResetsAccumulation() {
+    /// personMissing はキーポイント脱落と同一扱い: 許容時間（1.0秒）以内は凍結、超過でリセット
+    func testPersonMissingDuringAccumulation_WithinTolerance_FreezesWithoutReset() {
         // 前提: 安定したフレームを蓄積中
         sut.start()
 
-        // 45度で1秒蓄積
-        for frameIndex in 0..<60 {
-            let t = Double(frameIndex) / 60.0
-            _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: t)
+        // 45度で0.5秒蓄積
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        var progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+        guard case .accumulating(let elapsedBefore) = progress else {
+            XCTFail("蓄積中の .accumulating が期待されたが、\(progress) を取得")
+            return
         }
 
-        // 手順: 人物がいなくなる
-        let progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.0)
+        // 手順: 脱落許容時間以内で人物がいなくなる
+        progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.0)
 
-        // 検証: 蓄積がリセット (accumulatedAngles が空になり elapsed=0)
-        if case .accumulating(let elapsed) = progress {
-            XCTAssertEqual(elapsed, 0, accuracy: 0.01, "人物未検出後は elapsed=0 にリセット")
-        } else if case .waitingForPerson = progress {
-            // これも許容可能 - 待機状態に戻った
+        // 検証: elapsed は凍結されリセットしない
+        if case .accumulating(let frozen) = progress {
+            XCTAssertEqual(frozen, elapsedBefore, accuracy: 0.001, "許容内 personMissing は時間凍結")
         } else {
-            XCTFail("人物未検出後は .accumulating(elapsed: 0) または .waitingForPerson が期待されたが、\(progress) を取得")
+            XCTFail("許容内 personMissing では .accumulating が期待されたが、\(progress) を取得")
         }
+
+        // 手順: 復帰した有効サンプルも蓄積継続（personMissing 区間は計上されない）
+        progress = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 1.2)
+        if case .accumulating(let elapsedAfter) = progress {
+            XCTAssertEqual(elapsedAfter, 0.5, accuracy: 0.001, "復帰後も蓄積が継続（消失区間の時間は計上されない）")
+        } else {
+            XCTFail("復帰後も .accumulating が期待されたが、\(progress) を取得")
+        }
+    }
+
+    func testPersonMissingDuringAccumulation_ExceedsTolerance_ResetsAccumulation() {
+        // 前提: 安定したフレームを蓄積中
+        sut.start()
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.0)
+        _ = sut.ingest(sample: makeSample(angle: 45.0), presence: .personDetected, now: 0.5)
+
+        // 手順: 人物がいなくなる（直近の有効サンプルから許容時間超）
+        let progress = sut.ingest(sample: nil, presence: .personMissing, now: 1.6)
+
+        // 検証: リセットされて待機状態
+        XCTAssertEqual(progress, .waitingForPerson, "許容超 personMissing は蓄積リセット")
     }
 
     // MARK: - 2.6: 再実行で前回のリファレンスを上書き
