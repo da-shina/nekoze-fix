@@ -14,6 +14,8 @@ struct PostureOverlayView: View {
     let nearSide: Side?
     /// キャプチャ画像のアスペクト比（AspectFill クロップ補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
+    /// DEBUG 診断用: 閾値適用前のキーポイント位置（左肩, 右肩, 左耳, 右耳の順。.zero は描画しない）
+    var debugRawPoints: [CGPoint] = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -79,6 +81,18 @@ struct PostureOverlayView: View {
                     }
                     .stroke(Color.green, lineWidth: 6)
                 }
+
+                #if DEBUG
+                // raw キーポイント（閾値未適用）。観測があるのに採用されない位置を判別するための輪郭ドット
+                ForEach(Array(debugRawPoints.enumerated()), id: \.offset) { _, point in
+                    if point != .zero {
+                        Circle()
+                            .stroke(Color.red, lineWidth: 2)
+                            .frame(width: 18, height: 18)
+                            .position(normalizePoint(point, in: geometry.size))
+                    }
+                }
+                #endif
             }
         }
     }

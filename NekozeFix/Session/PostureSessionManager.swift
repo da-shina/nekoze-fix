@@ -217,6 +217,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.debugRightShoulderConfidence = nil
                 self.snapshot.debugLeftEarConfidence = nil
                 self.snapshot.debugRightEarConfidence = nil
+                self.snapshot.debugRawPoints = []
                 #endif
                 self.updateState(presence: .personMissing, sample: nil)
                 return
@@ -231,6 +232,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.debugRightShoulderConfidence = nil
                 self.snapshot.debugLeftEarConfidence = nil
                 self.snapshot.debugRightEarConfidence = nil
+                self.snapshot.debugRawPoints = []
                 #endif
                 self.updateState(presence: .personDetected, sample: nil)
                 return
@@ -241,6 +243,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             self.snapshot.debugRightShoulderConfidence = frame.rawRightShoulderConfidence
             self.snapshot.debugLeftEarConfidence = frame.rawLeftEarConfidence
             self.snapshot.debugRightEarConfidence = frame.rawRightEarConfidence
+            self.snapshot.debugRawPoints = [
+                frame.rawLeftShoulderPoint ?? .zero,
+                frame.rawRightShoulderPoint ?? .zero,
+                frame.rawLeftEarPoint ?? .zero,
+                frame.rawRightEarPoint ?? .zero,
+            ]
             #endif
 
             // 2. 姿勢分析
