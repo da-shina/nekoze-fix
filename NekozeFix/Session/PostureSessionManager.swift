@@ -48,11 +48,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 最後に人物を検出した時刻（nil は未検出継続中）
     private var lastPersonSeenTime: TimeInterval?
 
-    // FIXME: 検出率測定用の一時 DIAG
-    nonisolated(unsafe) private var diagWindowStart: TimeInterval = 0
-    nonisolated(unsafe) private var diagTotal = 0
-    nonisolated(unsafe) private var diagHits = 0
-
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
@@ -78,7 +73,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private func setupOrientationObservation() {
         orientationMonitor.$currentVideoOrientation
             .sink { [weak self] orientation in
-                print("PostureSessionManager: Updating orientation to \(orientation)")
                 self?.cameraManager.updateVideoOrientation(orientation)
             }
             .store(in: &cancellables)
@@ -212,19 +206,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
         let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
 
-        // FIXME: 検出率測定用の一時 DIAG（10秒ごと、検証後に削除）
-        let detected: Bool
-        if case .absent = detection { detected = false } else { detected = true }
-        diagTotal += 1
-        if detected { diagHits += 1 }
-        let nowDiag = CACurrentMediaTime()
-        if nowDiag - diagWindowStart > 10.0 {
-            print("DIAG: detection rate \(diagHits)/\(diagTotal) in last \(Int(nowDiag - diagWindowStart))s")
-            diagWindowStart = nowDiag
-            diagTotal = 0
-            diagHits = 0
-        }
-
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
 
@@ -258,15 +239,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
             var points = [CGPoint](repeating: .zero, count: 6)
 
-            // 1. 両肩の描画 (信頼度 0.3 以上で表示)
-            if let ls = frame.leftShoulder, let rs = frame.rightShoulder {
+            // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片側は出す)
+            if let ls = frame.leftShoulder {
                 points[0] = CGPoint(x: ls.x, y: ls.y)
+            }
+            if let rs = frame.rightShoulder {
                 points[1] = CGPoint(x: rs.x, y: rs.y)
             }
 
-            // 2. 両耳の描画 (信頼度 0.3 以上で表示)
-            if let le = frame.leftEar, let re = frame.rightEar {
+            // 2. 耳の描画 (側ごとに信頼度 0.3 以上で表示)
+            if let le = frame.leftEar {
                 points[2] = CGPoint(x: le.x, y: le.y)
+            }
+            if let re = frame.rightEar {
                 points[3] = CGPoint(x: re.x, y: re.y)
             }
 

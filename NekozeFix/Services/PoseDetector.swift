@@ -64,7 +64,9 @@ final class PoseDetector: @unchecked Sendable {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation)
 
         // パス1: 顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
+        // と人体矩形検出（Body Pose 空振り時の ROI 再試行に使用）を同時に走らせる
         var faceBounds: CGRect?
+        var humanBounds: CGRect?
         let faceSemaphore = DispatchSemaphore(value: 0)
         let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
             defer { faceSemaphore.signal() }
@@ -72,41 +74,69 @@ final class PoseDetector: @unchecked Sendable {
                 .flatMap { Self.closestToCenter($0, box: \.boundingBox) }?
                 .boundingBox
         }
+        let humanRectRequest = VNDetectHumanRectanglesRequest()
         do {
-            try handler.perform([faceRequest])
+            try handler.perform([faceRequest, humanRectRequest])
         } catch {
             print("Vision Handler Error (face): \(error)")
             return .absent
         }
         faceSemaphore.wait()
+        humanBounds = (humanRectRequest.results as? [VNHumanObservation])
+            .flatMap { Self.closestToCenter($0, box: \.boundingBox) }?
+            .boundingBox
 
         // パス2: Body Pose（フルフレーム。顔周囲 ROI を与えると人体全体像を
         // 認識できず観測が空になるため使わない）
         var poseResult: Detection?
-        let poseSemaphore = DispatchSemaphore(value: 0)
-        let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
-            defer { poseSemaphore.signal() }
-            if let error = error {
-                print("Vision Error: \(error)")
-                return
+        func runBodyPose(roi: CGRect?) throws {
+            let poseSemaphore = DispatchSemaphore(value: 0)
+            let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
+                defer { poseSemaphore.signal() }
+                if let error = error {
+                    print("Vision Error: \(error)")
+                    return
+                }
+                // 複数人時は画面中央の人物のみ認識（FR 4.7）。
+                // VNHumanBodyPoseObservation に boundingBox は無いため、
+                // 抽出済みキーポイントの囲み矩形を人物位置の代理として中央距離で選ぶ。
+                let frames = (request.results as? [VNHumanBodyPoseObservation])?
+                    .compactMap { self.extractPoseFrame(from: $0) } ?? []
+                guard let frame = Self.closestToCenter(frames, box: Self.poseBoundingBox) else {
+                    return
+                }
+                poseResult = .pose(frame)
             }
-            // 複数人時は画面中央の人物のみ認識（FR 4.7）。
-            // VNHumanBodyPoseObservation に boundingBox は無いため、
-            // 抽出済みキーポイントの囲み矩形を人物位置の代理として中央距離で選ぶ。
-            let frames = (request.results as? [VNHumanBodyPoseObservation])?
-                .compactMap { self.extractPoseFrame(from: $0) } ?? []
-            guard let frame = Self.closestToCenter(frames, box: Self.poseBoundingBox) else {
-                return
+            // roi 未指定がデフォルト（CGRect.null 相当）。.zero を代入すると
+            // 「ゼロ面積に crop」と解釈され Code=3 で失敗するため設定しない。
+            if let roi {
+                poseRequest.regionOfInterest = roi
             }
-            poseResult = .pose(frame)
+            try handler.perform([poseRequest])
+            poseSemaphore.wait()
         }
 
         do {
-            try handler.perform([poseRequest])
+            try runBodyPose(roi: nil)
+            // 空振り時は人体矩形（顔ではなく胴体込みの bbox）を ROI に再試行。
+            // 脱力・なで肩で画角が頭部主体のとき Body Pose 観測が 0 になる実測あり、
+            // リクエストを1本追加するコストと引き換えに蘇らせる。
+            // 人体矩形は正規化空間 [0,1] を僅かに越えることがあるため、
+            // 単位矩形へクリップしてから渡す（越えたままだと Vision Code=14 で失敗）。
+            if poseResult == nil, let raw = humanBounds, raw != .zero {
+                let clipped = CGRect(
+                    x: max(0, raw.minX),
+                    y: max(0, raw.minY),
+                    width: min(1, raw.maxX) - max(0, raw.minX),
+                    height: min(1, raw.maxY) - max(0, raw.minY)
+                )
+                if clipped.width > 0, clipped.height > 0 {
+                    try runBodyPose(roi: clipped)
+                }
+            }
         } catch {
             print("Vision Handler Error (pose): \(error)")
         }
-        poseSemaphore.wait()
 
         // Body Pose でキーポイントが取れなくても、顔が映っていれば人物あり
         // （接写で俯いた際など、Body Pose 観測が空になるケースのフォールバック）

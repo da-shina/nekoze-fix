@@ -59,7 +59,6 @@ final class DeviceOrientationMonitor: ObservableObject {
 
         // 回転中としてマーク
         isRotating = true
-        print("DeviceOrientationMonitor: Orientation changed")
 
         // 現在の向きを更新
         let orientationChanged = updateOrientation()

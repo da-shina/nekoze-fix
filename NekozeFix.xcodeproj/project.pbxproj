@@ -12,7 +12,6 @@
 		20DBBB20304EEE9200B43650 /* PostureAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAEE304EEE2E00B43650 /* PostureAnalyzer.swift */; };
 		20DBBB21304EEE9200B43650 /* TimedConditionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAEF304EEE2E00B43650 /* TimedConditionGate.swift */; };
 		20DBBB22304EEE9B00B43650 /* AlertPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */; };
-		20DBBB23304EEE9B00B43650 /* AppLifecycleObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF5304EEE2E00B43650 /* AppLifecycleObserver.swift */; };
 		20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */; };
 		20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */; };
 		20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */; };
@@ -47,13 +46,11 @@
 		20DBBAF1304EEE2E00B43650 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
 		20DBBAF2304EEE2E00B43650 /* usagi-to-kame.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "usagi-to-kame.caf"; sourceTree = "<group>"; };
 		20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPlayer.swift; sourceTree = "<group>"; };
-		20DBBAF5304EEE2E00B43650 /* AppLifecycleObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLifecycleObserver.swift; sourceTree = "<group>"; };
 		20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionManager.swift; sourceTree = "<group>"; };
 		20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientationMonitor.swift; sourceTree = "<group>"; };
 		20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseDetector.swift; sourceTree = "<group>"; };
 		20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureSessionManager.swift; sourceTree = "<group>"; };
 		20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
-		20DBBAFD304EEE2E00B43650 /* PostureAnalyzerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureAnalyzerTests.swift; sourceTree = "<group>"; };
 		20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureTypes.swift; sourceTree = "<group>"; };
 		20DBBB01304EEE2E00B43650 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
 		20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
@@ -119,7 +116,6 @@
 			isa = PBXGroup;
 			children = (
 				20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */,
-				20DBBAF5304EEE2E00B43650 /* AppLifecycleObserver.swift */,
 				20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */,
 				20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */,
 				20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */,
@@ -134,14 +130,6 @@
 				20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */,
 			);
 			path = Session;
-			sourceTree = "<group>";
-		};
-		20DBBAFE304EEE2E00B43650 /* Tests */ = {
-			isa = PBXGroup;
-			children = (
-				20DBBAFD304EEE2E00B43650 /* PostureAnalyzerTests.swift */,
-			);
-			path = Tests;
 			sourceTree = "<group>";
 		};
 		20DBBB00304EEE2E00B43650 /* Types */ = {
@@ -174,7 +162,6 @@
 				20DBBAF3304EEE2E00B43650 /* Resources */,
 				20DBBAF9304EEE2E00B43650 /* Services */,
 				20DBBAFC304EEE2E00B43650 /* Session */,
-				20DBBAFE304EEE2E00B43650 /* Tests */,
 				20DBBB00304EEE2E00B43650 /* Types */,
 				20DBBB06304EEE2E00B43650 /* UI */,
 				20DBBB07304EEE2E00B43650 /* Info.plist */,
@@ -323,7 +310,6 @@
 				20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */,
 				20DBBB1F304EEE9200B43650 /* CalibrationLogic.swift in Sources */,
 				20DBBB22304EEE9B00B43650 /* AlertPlayer.swift in Sources */,
-				20DBBB23304EEE9B00B43650 /* AppLifecycleObserver.swift in Sources */,
 				20DBBB2F304EEFCE00B43650 /* PermissionView.swift in Sources */,
 				20DBBB30304EEFCE00B43650 /* RootView.swift in Sources */,
 				20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */,
