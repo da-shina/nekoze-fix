@@ -114,7 +114,7 @@ struct CalibrationView: View {
                 if !detected {
                     self.progressMessage = "人物が検出されません"
                 } else if snapshot.isShoulderMissing {
-                    self.progressMessage = "肩を認識できません。画面に肩まで収めてください"
+                    self.progressMessage = shoulderMissingGuidance(isLandscape: snapshot.isLandscape)
                 } else if pts.count >= 4 && pts[2] == .zero && pts[3] == .zero {
                     self.progressMessage = "耳を認識できません。顔全体を画面に収めてください"
                 } else {

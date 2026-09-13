@@ -32,12 +32,16 @@ struct RootView: View {
             }
         }
         // ライフサイクル自動停止・復帰（要求 8.1/8.2、タスク3.5）
+        // .inactive（通知シェード/コントロールセンター開等）では呼ばない —
+        // 復帰時と違い暗転解除・監視再開の対象外（PR #5 レビュー指摘2）
         .onChange(of: scenePhase) { newPhase in
             switch newPhase {
             case .background:
                 sessionManager.handleDidEnterBackground()
-            case .active, .inactive:
+            case .active:
                 sessionManager.handleWillEnterForeground()
+            case .inactive:
+                break
             @unknown default:
                 break
             }

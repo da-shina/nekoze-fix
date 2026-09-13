@@ -8,7 +8,8 @@
 
 - 暗転中: UIScreen.main.brightness = 0.0、UIApplication.shared.isIdleTimerDisabled = true
 - 復帰時: 元の輝度値を PostureSessionManager のプロセス内メモリに保持し復元
-- バックグラウンド移行時: isIdleTimerDisabled = false。輝度は復元せず、ユーザーの最終操作をそのまま反映
+- バックグラウンド移行時: isIdleTimerDisabled = false。輝度はこの時点では復元しない
+- フォアグラウンド復帰時: exitDimMode() で暗転を解除し保存した輝度を復元（2026-09-13 改訂。旧決定「暗転継続」は全黒画面で復帰する実害があるため変更）
 
 ## Considered Options
 

@@ -152,7 +152,7 @@ graph TB
 | Q21 | 人物検出の判定 | 即座（2026-09-13 改訂: null 観測から 0.5 秒猶予 `personMissingGracePeriod` 経過後に確定。瞬間的な検出抜けを吸収） |
 | Q22 | 姿勢崩れ判定 | 角度変化 > 5度 OR 人物検出途絶 |
 | Q23 | 再通知間隔 | 前回通知から音声1ループ分（音源長に追従、現音源は約14秒） |
-| Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持、バックグラウンド移行時は復元しない |
+| Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持。**フォアグラウンド復帰時は暗転を解除し保存した輝度を復元**（2026-09-13 改訂: 旧決定「復元せず暗転継続」は全黒画面で復帰する実害があるため変更） |
 
 詳細は各ADR（docs/adr/0008〜0013）に記載されている。
 
@@ -439,6 +439,7 @@ protocol PoseDetecting {
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
 - **複数人物時の選択基準（FR 4.7）**: 画面中央 (0.5, 0.5) に最も近いバウンディングボックスの人物のみ認識する。顔観測は `boundingBox`、Body Pose 観測はキーポイントの囲み矩形を代理 box とし、同一の `closestToCenter`（距離二乗比較）を使う。選択はフレーム単位（人物追跡・ID ロックは持たない）
 - **人体矩形 ROI 再試行（c 案）**: パス1で `VNDetectHumanRectanglesRequest` を顔検出と同時実行し、Body Pose がフルフレームで空振りした場合のみ、人体矩形（単位矩形へクリップ）を `regionOfInterest` として再試行する。頭部クロズアップで Body Pose 観測が 0 になる実測（face/humanRect は生存）への対処で、iPad 9th 実機で蘇生を確認済み。クリップを忘れると Vision Code=14、`.zero` を代入すると Code=3 で全失敗するため、未指定時はプロパティを設定しない
+- **ランドスケープ×なで肩の肩欠測（ADR 0014）**: iPad 9th 横置き・なで肩姿勢では Body Pose 観測がフルフレーム・ROI 再試行ともゼロ件になる（実測: 左右肩/耳 `--`、人体矩形 0.43x0.99 の生存のみ）。ランドスケープの縦画角がセンサー短辺に刈り込まれ肩が画角から落ちるのが物理原因で、検出側の救済（ROI 再試行拡張・閾値引き下げ）は不能と判定。`isShoulderMissing` のガイダンスを `SessionSnapshot.isLandscape`（向きの購読経路で更新、判定ロジックには関与しない）に応じて分岐し、ランドスケープでは「少し離してカメラが耳から肩のあたりに向くよう角度を調整する」を案内する（ガイダンス表示はキャリブレーション画面のみ。モニター画面では出さない）
 
 ### AlertPlayer
 
@@ -481,9 +482,9 @@ protocol DeviceOrientationMonitoring {
 ### ライフサイクル（実装: タスク 3.5）
 
 単独 Component は置かず `PostureSessionManager` 内で完結させる（上記決定通り）。
-- **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active`/`.inactive` で `handleWillEnterForeground()` を呼ぶ。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
-- **背面移行**: 通知音停止、カメラ停止、`isIdleTimerDisabled = false`。**輝度は復元しない**（復帰後に暗転表示が続く）。監視中/校正中/回転中は `idle` へ退避。監視フラグ（SettingsStore）は維持 — ユーザーストップではないため
-- **フォアグラウンド復帰**: `isMonitoringEnabled == true` **かつ**校正済み（`referenceAngle != nil`）なら `startMonitoring()` で再開。明示停止（false）・未校正・权限なしは停止維持。idle 以外のフェーズは触らない
+- **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active` で `handleWillEnterForeground()` を呼ぶ（`.inactive` — 通知シェード/コントロールセンター開等 — では呼ばない。フォアグラウンド滞留中の暗転を維持するため）。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
+- **背面移行**: 通知音停止、カメラ停止、`isIdleTimerDisabled = false`。暗転フラグ・輝度はこの時点では変更しない。監視中/校正中/回転中は `idle` へ退避。監視フラグ（SettingsStore）は維持 — ユーザーストップではないため
+- **フォアグラウンド復帰**: まず暗転を解除（`exitDimMode()` で保存輝度を復元、Q24 改訂）。その後 `isMonitoringEnabled == true` **かつ**校正済み（`referenceAngle != nil`）なら `startMonitoring()` で再開。明示停止（false）・未校正・権限なしは停止維持。idle 以外のフェーズは触らない
 - **監視フラグの単一ソース**: `SettingsStore.isMonitoringEnabled` を `startMonitoring`/`stopMonitoring`/校正完了で更新（snapshot のフラグと同期）。復帰判定はこの永続フラグのみを参照
 
 ### SettingsStore
@@ -582,10 +583,11 @@ stateDiagram-v2
 - `exitDimMode()` で:
   1. `UIApplication.shared.isIdleTimerDisabled = false`
   2. 保存した輝度値へ復元
-- バックグラウンド移行時の扱い（**未実装**、FR 8.1/8.2 対応時に実装する想定）:
+- バックグラウンド移行時の扱い（タスク 3.5 実装済み）:
   1. `isIdleTimerDisabled = false`
-  2. **輝度は復元しない**（Q24 決定：ユーザーの最終操作をそのまま反映）
+  2. 背面移行時点では輝度を復元しない（画面が消えているため実害なし）
   3. カメラ停止・通知音停止
+  4. フォアグラウンド復帰時に `exitDimMode()` を呼び暗転を解除、保存した輝度を復元する（Q24 改訂。旧決定の「復帰後も暗転継続」は輝度 0.0 の全黒画面で復帰する実害があるため変更）
 
 ## System Flows
 
@@ -784,7 +786,7 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3
 | 7.1 | 向き追従 | DeviceOrientationMonitor, CameraSessionManager | applyVideoOrientation | 回転 |
 | 7.2 | 回転中は判定停止（5秒タイムアウト） | PostureSessionManager | phase rotating | 回転 |
 | 8.1 ライフサイクル | 背面で停止 | PostureSessionManager, RootView | handleDidEnterBackground | ライフサイクル |
-| 8.2 ライフサイクル | 復帰時に状態へ従う（輝度復元しない） | PostureSessionManager, SettingsStore | handleWillEnterForeground / isMonitoringEnabled | ライフサイクル |
+| 8.2 ライフサイクル | 復帰時に状態へ従う（復帰時に暗転解除・輝度復元） | PostureSessionManager, SettingsStore | handleWillEnterForeground / isMonitoringEnabled | ライフサイクル |
 | 8.1 性能 | 15 fps 以上（.high プリセット） | PoseDetector, CameraSessionManager | detect | 性能 |
 | 8.2 性能 | 0.5 秒以内に再生（プリロード） | AlertPlayer | playOnce | 性能 |
 | 9.1 | 1時間 15% 以下 | CameraSessionManager | preset .high | 性能 |

@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// UI レイヤー: 監視表示、デイムモード、閾値調整。
 /// design.md の "UI Components" - MonitorView を参照。
@@ -9,10 +8,6 @@ struct MonitorView: View {
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
     @EnvironmentObject private var settingsStore: SettingsStore
-
-    // MARK: - 状態
-
-    @State private var originalBrightness: CGFloat = UIScreen.main.brightness
 
     // MARK: - 本文
 
@@ -195,7 +190,7 @@ struct MonitorView: View {
         Color.black
             .ignoresSafeArea()
             .onTapGesture {
-                exitDimMode()
+                sessionManager.exitDimMode()
             }
             .overlay(
                 Text("タップして解除")
@@ -277,23 +272,10 @@ struct MonitorView: View {
 
     private func toggleDimMode() {
         if sessionManager.snapshot.isDimmed {
-            exitDimMode()
+            sessionManager.exitDimMode()
         } else {
-            enterDimMode()
+            sessionManager.enterDimMode()
         }
-    }
-
-    private func enterDimMode() {
-        originalBrightness = UIScreen.main.brightness
-        UIScreen.main.brightness = 0.0
-        UIApplication.shared.isIdleTimerDisabled = true
-        sessionManager.enterDimMode()
-    }
-
-    private func exitDimMode() {
-        UIScreen.main.brightness = originalBrightness
-        UIApplication.shared.isIdleTimerDisabled = false
-        sessionManager.exitDimMode()
     }
 }
 
