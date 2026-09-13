@@ -15,9 +15,7 @@ struct CalibrationView: View {
 
     @State private var timerRemaining = CalibrationLogic.requiredStableDuration
     @State private var isPersonDetected = false
-    @State private var isShoulderMissing = false
-    @State private var showingPersonMissing = false
-    @State private var progressMessage = "5秒間姿勢を保持してください"
+    @State private var progressMessage = ""
     @State private var cancellables = Set<AnyCancellable>()
 
     // MARK: - 本文
@@ -56,16 +54,6 @@ struct CalibrationView: View {
                 }
 
                 Spacer()
-
-                // 肩が映っていない場合の運用ガイド（顔のみ検出状態）
-                if isPersonDetected && isShoulderMissing {
-                    Label("肩が認識できません。端末を少し離して肩まで画面に収めてください", systemImage: "camera.metering.center.weighted")
-                        .font(.subheadline)
-                        .foregroundColor(.orange)
-                        .padding()
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(12)
-                }
 
                 // カメラ操作カード（ステータス・進捗メッセージ・カメラ切替を統合）
                 VStack(spacing: 16) {
@@ -119,9 +107,6 @@ struct CalibrationView: View {
                 }
             }
         }
-        .onDisappear {
-            // Timer removed
-        }
     }
 
     // MARK: - プライベートメソッド
@@ -133,9 +118,16 @@ struct CalibrationView: View {
                 // 1. 人物検出状態の更新
                 let detected = snapshot.isPersonDetected
                 self.isPersonDetected = detected
-                self.isShoulderMissing = snapshot.isShoulderMissing
-                self.showingPersonMissing = !detected
-                self.progressMessage = detected ? "人物が検出されました" : "人物が検出されません"
+                let pts = snapshot.visualizationPoints
+                if !detected {
+                    self.progressMessage = "人物が検出されません"
+                } else if snapshot.isShoulderMissing {
+                    self.progressMessage = "肩を認識できません。画面に肩まで収めてください"
+                } else if pts.count >= 4 && pts[2] == .zero && pts[3] == .zero {
+                    self.progressMessage = "耳を認識できません。顔全体を画面に収めてください"
+                } else {
+                    self.progressMessage = ""
+                }
 
                 // 2. キャリブレーション進捗の更新
                 switch snapshot.calibrationProgress {
