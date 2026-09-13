@@ -15,6 +15,8 @@ struct PostureAnalyzer {
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
         slouchDeltaThresholdDegrees: Double,
+        distanceMetric: DistanceMetric? = nil,          // ロック側ペアと基準距離（8.3 までは未使用）
+        slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
         previousNearSide: Side? = nil
     ) -> (sample: AngleSample?, verdict: PostureVerdict) {
 

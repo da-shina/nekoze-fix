@@ -310,10 +310,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let average, let averageDistance, let refPoints) = progress {
+            if case .completed(let average, let averageDistance, let refSide, let refPoints) = progress {
                 self.snapshot.phase = .monitoring
                 self.snapshot.referenceAngle = average
                 self.snapshot.referenceDistance = averageDistance
+                self.snapshot.referenceSide = refSide
                 self.snapshot.referencePoints = refPoints
             }
         } else if self.snapshot.phase == .monitoring {

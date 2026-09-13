@@ -195,7 +195,7 @@
 
 注: 8.1〜8.3 は `PostureTypes.swift` を共有するため逐次実行（`(P)` なし）。
 
-- [ ] 8.1 Types: 距離指標の契約追加（呼び出し側の機械的追従含む、挙動不変）
+- [x] 8.1 Types: 距離指標の契約追加（呼び出し側の機械的追従含む、挙動不変）
   - Add `DistanceMetric` struct (side + referenceDistance) per design.md PostureAnalyzer contract
   - Add `referenceSide: Side?` to `SessionSnapshot`; extend `CalibrationProgress.completed` with `referenceSide`
   - Thread new fields through existing call sites (CalibrationLogic returns `sample.nearSide`; PostureSessionManager stores to snapshot; tests pattern-match updated) — no behavior change yet

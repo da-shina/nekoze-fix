@@ -113,7 +113,7 @@ struct CalibrationLogic {
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
                 let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
                 let finalPoints = accumulatedPoints.last ?? []
-                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referencePoints: finalPoints)
+                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referenceSide: sample.nearSide, referencePoints: finalPoints)
 
                 resetAccumulation()
                 return completedProgress
