@@ -90,7 +90,7 @@ final class PoseDetector: @unchecked Sendable {
         // 認識できず観測が空になるため使わない）
         var poseResult: Detection?
         var poseObservationCount = 0
-        func runBodyPose(roi: CGRect) throws {
+        func runBodyPose(roi: CGRect?) throws {
             let poseSemaphore = DispatchSemaphore(value: 0)
             let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
                 defer { poseSemaphore.signal() }
@@ -109,17 +109,20 @@ final class PoseDetector: @unchecked Sendable {
                 }
                 poseResult = .pose(frame)
             }
-            poseRequest.regionOfInterest = roi
+            // roi 未指定がデフォルト（CGRect.null 相当）。.zero を代入すると
+            // 「ゼロ面積に crop」と解釈され Code=3 で失敗するため設定しない。
+            if let roi {
+                poseRequest.regionOfInterest = roi
+            }
             try handler.perform([poseRequest])
             poseSemaphore.wait()
         }
 
         do {
-            try runBodyPose(roi: .zero)
+            try runBodyPose(roi: nil)
             // 空振り時は人体矩形（顔ではなく胴体込みの bbox）を ROI に再試行。
             // 脱力・なで肩で画角が頭部主体のとき Body Pose 観測が 0 になる実測あり、
             // リクエストを1本追加するコストと引き換えに蘇らせる。
-            // .zero は「ROI 無し」の値なので再試行対象外。
             if poseResult == nil, let roi = humanBounds, roi != .zero {
                 try runBodyPose(roi: roi)
             }
