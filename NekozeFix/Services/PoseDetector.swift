@@ -123,8 +123,18 @@ final class PoseDetector: @unchecked Sendable {
             // 空振り時は人体矩形（顔ではなく胴体込みの bbox）を ROI に再試行。
             // 脱力・なで肩で画角が頭部主体のとき Body Pose 観測が 0 になる実測あり、
             // リクエストを1本追加するコストと引き換えに蘇らせる。
-            if poseResult == nil, let roi = humanBounds, roi != .zero {
-                try runBodyPose(roi: roi)
+            // 人体矩形は正規化空間 [0,1] を僅かに越えることがあるため、
+            // 単位矩形へクリップしてから渡す（越えたままだと Vision Code=14 で失敗）。
+            if poseResult == nil, let raw = humanBounds, raw != .zero {
+                let clipped = CGRect(
+                    x: max(0, raw.minX),
+                    y: max(0, raw.minY),
+                    width: min(1, raw.maxX) - max(0, raw.minX),
+                    height: min(1, raw.maxY) - max(0, raw.minY)
+                )
+                if clipped.width > 0, clipped.height > 0 {
+                    try runBodyPose(roi: clipped)
+                }
             }
         } catch {
             print("Vision Handler Error (pose): \(error)")
