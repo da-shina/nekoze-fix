@@ -40,9 +40,9 @@ Types → Domain → Services → Session → UI
 
 ## Specification-Driven 開発（Kiro）
 
-- 仕様の正: `.kiro/specs/nekoze-fix/`（spec.json / requirements.md / design.md / tasks.md / research.md / brief.md、language: ja）
+- 仕様: `.kiro/specs/nekoze-fix/`（spec.json / requirements.md / design.md / tasks.md / research.md / brief.md、language: ja）
 - 設計判断の根拠: `design.md` の **Grilling Decisions（Q1〜Q24）** 表と `docs/adr/0001〜0013`。閾値デフォルト、ゲート秒数、再通知間隔、プリセット等の数値パラメータはここに定義されている
-- ドメイン用語は `CONTEXT.md` の用語定義に厳密に従う（「猫背」「近側キーポイント」「確定猫背判定」等。Avoid 表記の類义词を使わない）
+- ドメイン用語は `CONTEXT.md` の用語定義に厳密に従う（「猫背」「近側キーポイント」「確定猫背判定」等。Avoid 表記の類似語を使わない）
 - コード挙動やパラメータを変えたら design.md / ADR / CONTEXT.md も同期する（git 履歴に docs sync の慣例あり）
 - ワークフローはグローバル CLAUDE.md の通り: `/kiro-spec-*` → `/kiro-impl` → `/kiro-validate-*`。Markdown コンテンツは spec の language（ja）で書く
 
