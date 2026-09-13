@@ -250,7 +250,7 @@
   - _Depends: 8.5, 8.6_
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 8.8 実機検収（手動・コード変更なし）— DEBUG 表示が生きている状態で行う
+- [x] 8.8 実機検収（手動・コード変更なし）— DEBUG 表示が生きている状態で行う
   - iPad 9th 実機: 意図的前出し3秒で通知発音を確認 → 通常作業で自然前出しの最大基準比%を記録 → 8% 妥当性判定（伸びが薄い場合は 8.4/8.6 のデフォルト・範囲を調整してから次工程）
   - Observable completion: 発音確認済み・自然前出し最大%が数値として記録され、閾値据え置きor調整が決定
   - _Requirements: 4.1, 4.2_
@@ -260,3 +260,8 @@
   - Remove `debugDistanceText` field, window buffer, and both view overlays (angle indicator precedent: commit 8205aba)
   - Observable completion: grep for debugDistanceText yields nothing; build and tests green
   - _Depends: 8.8_
+
+## Implementation Notes
+
+- 8.8 実機検収（2026-09-13、iPad 9th）: 意図的前出し110%で発音確認。自然前出しの 1s-median 最大も110%で、8%閾値（108%超発火）では両者が分離しない。ユーザー判断により「作業中の前出し110%は矯正対象」とみなし 8% 据え置きで PASS。FQ2 の暫定値は確定値として有効。
+- 8.5 で `PostureSessionManager.processDetection(_:)` / `applyCalibrationCompletion(...)` を internal 抽出。カメラ不要の合成フレーム統合テスト（DistanceMetricIntegrationTests）がこのシームを使う。
