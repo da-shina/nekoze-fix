@@ -366,8 +366,14 @@ enum CalibrationProgress: Equatable {
 
 **姿勢崩れ判定規則**:
 - 直前の近側角度と今回の近側角度の差分が 5度以上 → 蓄積をリセット
-- `presence == .personMissing` → 蓄積をリセット
+- `presence == .personMissing` が **脱落許容時間（`dropoutTolerance` = 1.0 秒）を超えて継続** → 蓄積をリセット
 - それ以外 → 蓄積を継続
+
+**キーポイント脱落の許容（時間凍結）**:
+脱力・なで肩姿勢では Body Pose 観測がフレーム単位でチラつき、角度サンプルが欠測することがある。
+欠測直後の 1.0 秒以内の脱落は「リセットでも計上でもなく」、蓄積時間を凍結する（f1 決定）。
+許容を超えた時点で personMissing と同じくリセット。これによりカウントダウンの逆行・毎回リセットを防止する。
+`accumulatedDuration` は有効サンプル間の経過のみ計上し、凍結区間の経過は計上しない。
 
 ### CameraSessionManager
 
@@ -405,6 +411,7 @@ protocol PoseDetecting {
 - 観測が空（人物なし）なら `nil` を返す。Session が **即座に** `personMissing` とする（Q21 決定：ノイズ耐性なしの即時判定）
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
 - **複数人物時の選択基準（FR 4.7）**: 画面中央 (0.5, 0.5) に最も近いバウンディングボックスの人物のみ認識する。顔観測は `boundingBox`、Body Pose 観測はキーポイントの囲み矩形を代理 box とし、同一の `closestToCenter`（距離二乗比較）を使う。選択はフレーム単位（人物追跡・ID ロックは持たない）
+- **人体矩形 ROI 再試行（c 案）**: パス1で `VNDetectHumanRectanglesRequest` を顔検出と同時実行し、Body Pose がフルフレームで空振りした場合のみ、人体矩形（単位矩形へクリップ）を `regionOfInterest` として再試行する。頭部クロズアップで Body Pose 観測が 0 になる実測（face/humanRect は生存）への対処で、iPad 9th 実機で蘇生を確認済み。クリップを忘れると Vision Code=14、`.zero` を代入すると Code=3 で全失敗するため、未指定時はプロパティを設定しない
 
 ### AlertPlayer
 
