@@ -180,28 +180,56 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertTrue(sut.settingsStore.isMonitoringEnabled)
     }
 
-    // MARK: - アクティブ中の自動スリープ抑止（要求 8.3/8.4、タスク9.1、ADR 0015）
+    // MARK: - 監視中の自動スリープ抑止（要件 8.3/8.4 改訂、タスク10.1、ADR 0016）
+    // 不変条件: isIdleTimerDisabled == (phase == .monitoring)
 
-    /// 復帰: 監視再開の有無に関わらず wake lock を ON にする（8.3）
-    func testWillEnterForeground_enablesIdleTimerDisabled() {
+    /// 監視開始で ON、監視停止で OFF（8.3 改訂: 抑止は監視中に限定）
+    func testStartStopMonitoring_togglesIdleTimerDisabled() {
         UIApplication.shared.isIdleTimerDisabled = false
-        sut.handleWillEnterForeground() // 未校正で監視再開しない経路でも ON が冪等に設定される
-        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        sut.startMonitoring()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "監視開始で wake lock ON")
+        sut.stopMonitoring()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "監視停止で OS 標準へ復元")
     }
 
-    /// 背面移行: 唯一の OFF 点。OS 標準設定へ復元する（8.3）
-    func testDidEnterBackground_disablesIdleTimerDisabled() {
+    /// 非監視フェーズ（校正中・idle）は抑止しない（8.4 改訂）
+    func testNonMonitoringPhases_doNotEnableIdleTimerDisabled() {
         UIApplication.shared.isIdleTimerDisabled = true
-        sut.handleDidEnterBackground()
-        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+        sut.updatePhase(.calibrating)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "校正中は wake lock OFF")
+        UIApplication.shared.isIdleTimerDisabled = true
+        sut.updatePhase(.idle)
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "idle は wake lock OFF")
     }
 
-    /// 暗転 enter/exit は wake lock に触れない。暗転解除後も自動スリープは復活しない（8.4）
-    func testDimModeEnterExit_doesNotTouchIdleTimerDisabled() {
-        UIApplication.shared.isIdleTimerDisabled = true // アクティブ中のライフサイクル状態を再現
+    /// 監視中の暗転 enter/exit は点灯を維持する（8.4: 暗転の解除操作と無関係）
+    func testDimModeDuringMonitoring_keepsIdleTimerDisabled() {
+        UIApplication.shared.isIdleTimerDisabled = false
+        sut.startMonitoring()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
         sut.enterDimMode()
-        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "enterDimMode は wake lock を変更しない")
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "enterDimMode で抑止は継続")
         sut.exitDimMode()
-        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "exitDimMode は wake lock を変更しない")
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "exitDimMode で自動スリープは復活しない")
+    }
+
+    /// 監視中の退避で OFF、復帰して再開すれば ON（8.3）
+    func testBackgroundDuringMonitoring_disablesAndForegroundResumeReenables() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "校正完了＝監視開始で ON")
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "退避で OS 標準へ復元")
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "監視再開で ON 復帰")
+    }
+
+    /// 明示停止状態からの復帰（監視を再開しない）は OFF のまま（8.3 改訂: アクティブでも非監視は抑止しない）
+    func testForegroundResumeWithoutMonitoring_keepsIdleTimerDisabledOff() {
+        UIApplication.shared.isIdleTimerDisabled = false
+        sut.handleWillEnterForeground() // 未校正・フラグ false → 監視再開しない
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
     }
 }

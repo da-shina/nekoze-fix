@@ -285,6 +285,29 @@
   - _Depends: 9.2_
   - _Requirements: 8.3, 8.4, 9.1_
 
+## 10. 自動スリープ抑止の監視中限定（要件 8.3/8.4 改訂、ADR 0016）
+
+注: 9 グループで導入した「アクティブ中常時 ON」をユーザー要望で「監視中のみ ON」へ縮小。9.1〜9.3 の実測記録は履歴として残る（9.3 の idle 点灯確認はこの改訂で無効）。
+
+- [x] 10.1 PostureSessionManager: wake lock を phase 不変条件へ
+  - `isIdleTimerDisabled == (snapshot.phase == .monitoring)` を全フェーズ遷移で強制する不変条件へ変更。`setPhase()` を phase の唯一の書き込み経路とし、`UIApplication.shared.isIdleTimerDisabled` 代入を集約
+  - `bootstrap()` の直接 ON を削除、`handleDidEnterBackground`/`handleWillEnterForeground` の直接 ON/OFF を `setPhase` 経由へ置換。`enterDimMode`/`exitDimMode` は輝度のみ（変更なし）
+  - Observable completion: 監視開始（startMonitoring / 校正完了）で ON、監視停止・校正中・idle・権限画面で OFF を単体テストが検証。監視中の暗転 enter/exit では点灯が継続
+  - _Boundary: PostureSessionManager_
+  - _Requirements: 8.3, 8.4_
+
+- [x] 10.2 全テストスイート回帰確認
+  - `xcodebuild test -scheme NekozeFix -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`
+  - Observable completion: TEST SUCCEEDED、ライフサイクル・暗転・E2E の既存テストすべて green
+  - _Depends: 10.1_
+  - _Requirements: 8.3, 8.4_
+
+- [ ] 10.3 実機確認（手動・コード変更なし）
+  - 監視開始→画面オフしない／監視停止→自動スリープする／校正中・idle→自動スリープする／監視中の暗転→タップ復帰後も点灯
+  - Observable completion: 4動作の実機確認記録
+  - _Depends: 10.2_
+  - _Requirements: 8.3, 8.4, 9.1_
+
 ## Implementation Notes
 
 - 8.8 実機検収（2026-09-13、iPad 9th）: 意図的前出し110%で発音確認。自然前出しの 1s-median 最大も110%で、8%閾値（108%超発火）では両者が分離しない。ユーザー判断により「作業中の前出し110%は矯正対象」とみなし 8% 据え置きで PASS。FQ2 の暫定値は確定値として有効。

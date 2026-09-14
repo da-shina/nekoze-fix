@@ -86,25 +86,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// セッションの初期化を行う
     func bootstrap() async {
-        // アクティブ中の自動スリープ抑止（要求 8.3、ADR 0015）。
-        // RootView の .onAppear から呼ばれるため初回起動の ON をここで担保する
-        //（scenePhase の onChange は初期値では発火しない）。権限フェーズに関わらず ON。
-        UIApplication.shared.isIdleTimerDisabled = true
         let auth = await cameraManager.requestAuthorization()
         switch auth {
         case .authorized:
-            snapshot.phase = .calibrating
+            setPhase(.calibrating)
             await startCameraPipeline()
         case .denied:
-            snapshot.phase = .permissionDenied
+            setPhase(.permissionDenied)
         case .notDetermined:
-            snapshot.phase = .awaitingPermission
+            setPhase(.awaitingPermission)
         }
     }
 
     /// キャリブレーションフェーズに遷移する
     func startCalibration() {
-        snapshot.phase = .calibrating
+        setPhase(.calibrating)
         calibrationLogic.start()
         Task {
             await startCameraPipeline()
@@ -113,7 +109,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// アイドル状態から再キャリブレーションする
     func recalibrate() {
-        snapshot.phase = .calibrating
+        setPhase(.calibrating)
         calibrationLogic.start()
         Task {
             await startCameraPipeline()
@@ -122,7 +118,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 姿勢監視を開始する
     func startMonitoring() {
-        snapshot.phase = .monitoring
+        setPhase(.monitoring)
         exitDimMode()
         snapshot.isRotating = false
         snapshot.isMonitoringEnabled = true
@@ -137,7 +133,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 姿勢監視を停止する（ユーザーの明示操作）
     func stopMonitoring() {
-        snapshot.phase = .idle
+        setPhase(.idle)
         exitDimMode()
         snapshot.isRotating = false
         snapshot.isMonitoringEnabled = false
@@ -155,9 +151,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
-        UIApplication.shared.isIdleTimerDisabled = false // wake lock 唯一の OFF 点（要求 8.3、ADR 0015）
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating || snapshot.phase == .rotating {
-            snapshot.phase = .idle
+            setPhase(.idle)
         }
         snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
     }
@@ -165,13 +160,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
     /// 明示停止（フラグ false）・未校正・権限なしは停止状態を維持する。
     func handleWillEnterForeground() {
-        // アクティブ中の自動スリープ抑止を再開（要求 8.3、ADR 0015。冪等 — inactive→active 戻りでも再設定）
-        UIApplication.shared.isIdleTimerDisabled = true
         // 復帰後は暗転解除（輝度復元）。監視再開の有無に関わらず行う
         exitDimMode()
         guard settingsStore.isMonitoringEnabled, snapshot.referenceAngle != nil else {
             snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
-            return
+            return // 非監視のまま。不変条件は背面遷移時の setPhase(.idle) で OFF 済み
         }
         guard snapshot.phase == .idle else { return } // 校正中等进行中フェーズは触らない
         startMonitoring()
@@ -217,7 +210,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// フェーズを更新する（外部ステートマシン制御用）
     func updatePhase(_ phase: SessionPhase) {
-        snapshot.phase = phase
+        setPhase(phase)
     }
 
     /// 監視有効フラグを更新する
@@ -241,7 +234,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             try await cameraManager.start(position: settingsStore.cameraPosition.avPosition)
         } catch {
             print("Camera pipeline start failed: \(error)")
-            snapshot.phase = .permissionDenied
+            setPhase(.permissionDenied)
         }
     }
 
@@ -422,13 +415,20 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         referenceSide: Side,
         referencePoints: [CGPoint]
     ) {
-        snapshot.phase = .monitoring
+        setPhase(.monitoring)
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 校正完了＝監視開始。復帰判定の単一ソース
         snapshot.referenceAngle = referenceNearAngleDegrees
         snapshot.referenceDistance = referenceDistance
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
+    }
+
+    /// セッションのフェーズの唯一の書き込み経路。
+    /// wake lock 不変条件 `isIdleTimerDisabled == (phase == .monitoring)` を全遷移で強制する（要求 8.3/8.4、ADR 0016）。
+    private func setPhase(_ phase: SessionPhase) {
+        snapshot.phase = phase
+        UIApplication.shared.isIdleTimerDisabled = (phase == .monitoring)
     }
 
     private func getReferenceAngle() -> Double? {

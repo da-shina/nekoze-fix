@@ -1,5 +1,7 @@
 # wake lock の所有権を暗転モードからライフサイクルへ移管
 
+> **Status: Superseded by [ADR 0016](0016-wakelock-limited-to-monitoring.md)**（2026-09-14）— 抑止範囲は「アクティブ中常時」から「監視中」へ縮小された。暗転 enter/exit が輝度のみ扱う点は継続。
+
 ## 概要
 
 要件 8.3/8.4（アプリがアクティブな間は自動スリープを無効化）に対応するため、`UIApplication.shared.isIdleTimerDisabled` の所有権を画面暗転モードからアプリライフサイクル（PostureSessionManager の scenePhase 配線）へ移管する。ADR 0013 は暗転文脈での wake lock を定めたが、本 ADR により暗転 enter/exit は wake lock に触れない。

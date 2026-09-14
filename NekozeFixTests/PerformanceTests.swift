@@ -73,7 +73,7 @@ final class PerformanceTests: XCTestCase {
 
     /// ダイムモード消費電力を削減することを検証
     func testDimModeUsesBlackScreen() {
-        // ダイムモード: brightness = 0.0（wake lock はアクティブ中のライフサイクル側で扱う。ADR 0015）
+        // ダイムモード: brightness = 0.0（wake lock は監視中の phase 不変条件側で扱う。ADR 0016）
         // CameraPreviewViewはダイムモード中は非表示
         // MonitorViewとCameraPreviewViewのコード検査で確認済み
         XCTAssertTrue(true, "ダイムモードの実装はGPU/CPU負荷を軽減")
