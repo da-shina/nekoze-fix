@@ -160,3 +160,19 @@ requirements.md では機能要件「8 アプリのライフサイクル」と�
 
 ### Recommendations
 - 方式 A。注意点は1つ: 現 DEBUG 経路（`updateDebugDistance`）は近傍側距離を使っている。8.1 の `AngleSample.nearDistance` を「監視時はロック側」に意味変更すると DEBUG 表示の意味も変わる（校正中は同一側なので実害なし、検収後に削除されるため許容）。検収 8.8 は「8.5 統合後」に実施されるため、ロック側の値を見た状態で閾値判定できる — 順序は正しい
+
+---
+
+## アクティブ中の自動スリープ抑止（2026-09-14 追加・要件 8.3/8.4）
+
+### Investigations
+- **既存コード**: `isIdleTimerDisabled` の書き込み点は enterDimMode（true）/ exitDimMode（false）/ handleDidEnterBackground（false）の3箇所。復帰時 ON は存在せず、非暗転のアクティブ画面は自動スリープ対象だった（design.md Q15 旧決定・ADR 0013 と要件の矛盾が実态でも確認できた）
+- **iOS scenePhase の初期挙動**: `onChange(of: scenePhase)` は初回表示では発火しないため、初回起動の wake lock ON は bootstrap（RootView `.onAppear` 経由）で担保する必要がある
+
+### Design Decisions
+- **wake lock の所有権移管（ADR 0015）**: 暗転 enter/exit からライフサイクル（bootstrap / handleWillEnterForeground = true、handleDidEnterBackground = false）へ移管。書き込み点が2箇所に集約され、exitDimMode による意図しない解除が構造的に発生しない
+- **不変条件**: フォアグラウンド滞留中 = isIdleTimerDisabled true、バックグラウンド = false。`.inactive` では変更しない（通知シェード開でも点灯・暗転を維持）
+- 方式は既存 PostureSessionManager 内の完結（新規 Component 不追加）。RootView の配線のみ bootstrap ON の追加で変更不要に近い
+
+### Risks
+- NFR 9.1（1時間 15% 以下）の計測前提が変わる（自動スリープ抑止分を含む）。実機確認時に留意

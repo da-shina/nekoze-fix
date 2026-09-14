@@ -31,13 +31,14 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - Vision による肩・耳キーポイント抽出と信頼度フィルタ（confidence < 0.3 を除外）
 - 近側中心の耳ー肩角度計算（肩の x 座標で近側を判定、鋭角 0-90度）、校正ロック側の耳ー肩距離基準比計算、キャリブレーション、猫背確定/改善判定（角度 OR 距離）
 - 通知音の再生・再通知間隔・停止（前回の音は停止して次を再生）
-- 監視 UI、画面暗転モード（輝度 0.0 + wake lock）、閾値調整（角度 3〜20度・距離 5〜15%）、向き追従、フォアグラウンドライフサイクル
+- 監視 UI、画面暗転モード（輝度 0.0）、閾値調整（角度 3〜20度・距離 5〜15%）、向き追従、フォアグラウンドライフサイクル（アクティブ中の wake lock 含む）
 
 ### Out of Boundary
 
 - バックグラウンドでのカメラ継続、通知センターへのリモート通知
 - 姿勢履歴の保存、分析ダッシュボード
 - OS の権限ダイアログ本体とオーディオ優先度調停の実装
+- 電源ボタンによるユーザーロックの防止、OS 側の非アクティブ時強制ロック設定への介入（アクティブ中の自動スリープ抑止のみ担当）
 - 極端なカメラ角度（真横・真後ろ）での検出保証
 - UserDefaults 以外の永続化（Keychain、ファイル DB など）
 
@@ -55,6 +56,7 @@ NekozeFix は、iPhone/iPad のフロントカメラと Apple Vision の人体�
 - バックグラウンド監視や永続化をスコープに入れる場合
 - 通知手段を音以外（バイブレーション、システム通知）に拡張する場合
 - カメラプリセットを `.high` から変更する場合
+- wake lock の所有権をライフサイクル（アクティブ中常時）から再び暗転モードへ戻す場合
 
 ## Architecture
 
@@ -130,7 +132,7 @@ graph TB
 | # | 決定項目 | 決定 |
 |---|---------|------|
 | Q1 | デフォルト判定閾値 | 5度（2026-09-12 改訂: 感度マッピングを廃止し度数直接指定へ。2026-09-13 改訂: 実測感度によりデフォルト 8度→5度、下限 3度へ変更） |
-| Q2 | 暗転輝度 | 0.0（全黒）+ wake lock |
+| Q2 | 暗転輝度 | 0.0（全黒）+ wake lock。（2026-09-14 改訂: wake lock は Q15 のライフサイクル移管により暗転とは無関係にアクティブ中常時 ON。暗転自体の決定は輝度 0.0 のみ） |
 | Q3 | 遠側キーポイントの役割 | 「両側検出済みか」の合否判定のみ |
 | Q4 | 基準姿勢の永続化 | 不要（プロセス内メモリのみ） |
 | Q5 | 回転中のゲート保持 | 保持する（リセットしない） |
@@ -143,7 +145,7 @@ graph TB
 | Q12 | 両側高信頼度時の安定化 | 移動平均なし（生の角度をゲートに投入） |
 | Q13 | カメラプリセット | `.high`（720p） |
 | Q14 | 回転完了判定 | 5秒タイムアウト |
-| Q15 | wake lock の実装 | `UIApplication.shared.isIdleTimerDisabled = true` |
+| Q15 | wake lock の実装 | `UIApplication.shared.isIdleTimerDisabled = true`。（2026-09-14 改訂: 所有権を暗転モードからライフサイクルへ移管。アクティブ中（scenePhase == .active）は監視・暗転の有無にかかわらず常時 ON、`.background` 遷移でのみ OFF。暗転 enter/exit では触らない。要件 8.3/8.4 対応、ADR 0015） |
 | Q16 | 回転中の personMissing | 抑制 |
 | Q17 | 通知音プリロード | 監視開始時（`startMonitoring()` 内） |
 | Q18 | 通知音同時再生 | 前の音を停止して次を再生 |
@@ -217,11 +219,12 @@ graph TB
 | AlertPlayer | Services | 通知音と再通知（前音停止・上書き） | 5.1-5.4, 8.2 | AVFAudio | Service |
 | DeviceOrientationMonitor | Services | 回転検知（5秒タイムアウト完了） | 7.1, 7.2 | UIKit | Event |
 | SettingsStore | Session | 閾値と監視フラグ（角度 3〜20度・距離 5〜15%） | 4.4, 8.2 | UserDefaults | State |
-| PostureSessionManager | Session | セッション状態の唯一の所有者 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
+| PostureSessionManager | Session | セッション状態の唯一の所有者。アクティブ中の wake lock 所持 | 2.*, 3.*, 4.*, 5.*, 6.*, 7.*, 8.* | 上記すべて | State, Service |
 | PermissionView | UI | 権限 UI | 1.1, 1.2 | Session | State |
 | CalibrationView | UI | 校正 UI | 2.1-2.6, 10.1 | Session | State |
 | MonitorView | UI | 監視・暗転・閾値 UI | 3.1-3.4, 4.4, 6.1-6.3, 9.2, 10.1 | Session | State |
 | CameraPreviewView | UI | プレビュー描画 | 3.2, 6.2 | CameraSessionManager | State |
+| RootView | UI | フェーズ切替と scenePhase ライフサイクル配線 | 8.1, 8.2, 8.3, 8.4 | Session | State |
 
 ### Types
 
@@ -483,6 +486,7 @@ protocol DeviceOrientationMonitoring {
 
 単独 Component は置かず `PostureSessionManager` 内で完結させる（上記決定通り）。
 - **トリガー**: RootView が `@Environment(\.scenePhase)` を購読し、`.background` で `handleDidEnterBackground()`、`.active` で `handleWillEnterForeground()` を呼ぶ（`.inactive` — 通知シェード/コントロールセンター開等 — では呼ばない。フォアグラウンド滞留中の暗転を維持するため）。iOS の AVCaptureSession 自動停止に重ねて明示停止する（音声停止・wake lock 解除を保証するため）
+- **wake lock（2026-09-14 改訂・8.3/8.4）**: `isIdleTimerDisabled` の書き込み点は `bootstrap()` / `handleWillEnterForeground()`（true）と `handleDidEnterBackground()`（false）の3箇所に限定。初回起動は scenePhase の onChange が初期値で発火しないため bootstrap（RootView `.onAppear` 経由）で ON を担保。暗転モードの enter/exit とは分離し、暗転解除しても wake lock は維持される。`inactive → active` の戻りでも true を再設定（冪等）
 - **背面移行**: 通知音停止、カメラ停止、`isIdleTimerDisabled = false`。暗転フラグ・輝度はこの時点では変更しない。監視中/校正中/回転中は `idle` へ退避。監視フラグ（SettingsStore）は維持 — ユーザーストップではないため
 - **フォアグラウンド復帰**: まず暗転を解除（`exitDimMode()` で保存輝度を復元、Q24 改訂）。その後 `isMonitoringEnabled == true` **かつ**校正済み（`referenceAngle != nil`）なら `startMonitoring()` で再開。明示停止（false）・未校正・権限なしは停止維持。idle 以外のフェーズは触らない
 - **監視フラグの単一ソース**: `SettingsStore.isMonitoringEnabled` を `startMonitoring`/`stopMonitoring`/校正完了で更新（snapshot のフラグと同期）。復帰判定はこの永続フラグのみを参照
@@ -569,7 +573,7 @@ stateDiagram-v2
 - **RootView**: snapshot.phase で Permission / Calibration / Monitor を切替える。起動から監視開始までを権限 → 校正 → 開始の 3 ステップに収める（10.1）
 - **PermissionView**: 初回はシステムダイアログをトリガし、拒否時は設定アプリへの案内と「再試行」ボタンを出す（1.1, 1.2, Q7 決定）
 - **CalibrationView**: 5秒キープ指示、検出状態、蓄積時間、人物なしメッセージ、再実行（2.1-2.6）。可視化は `PostureOverlayView(mode: .current)` を使用し、肩・耳・判定ラインをリアルタイム表示
-- **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値（角度スライダーと距離スライダーを横並び。FQ3）、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0 + wake lock**（Q2, Q15 決定）。タップで復帰（3.*, 4.4, 6.*）
+- **MonitorView**: カメラプレビューは表示しない。校正で確定した姿勢を薄いグレー（`.reference` モード）で固定表示し、現在の姿勢をカラー（`.current` モード）で重ねて表示。開始停止、閾値（角度スライダーと距離スライダーを横並び。FQ3）、暗転ボタン。暗転時は **完全黒画面＋輝度 0.0**（Q2 決定。wake lock はアクティブ中常時 ON のため暗転では扱わない）。タップで復帰（3.*, 4.4, 6.*）
 - **PostureOverlayView**: 校正・監視共通のオーバーレイ。`mode: .reference` はグレーで固定表示、`mode: .current` はカラーでリアルタイム表示。肩・耳・判定ライン・基準線を描画
 - **CameraPreviewView**: `UIViewRepresentable`。校正画面のみで使用。暗転中は非表示（3.2, 6.2）
 
@@ -579,12 +583,12 @@ stateDiagram-v2
 - `enterDimMode()` で:
   1. 元の輝度値（`UIScreen.main.brightness`）を **PostureSessionManager のインスタンス変数** に保存（Q24 決定：プロセス内メモリ、UserDefaults 永続化なし）
   2. `UIScreen.main.brightness = 0.0`
-  3. `UIApplication.shared.isIdleTimerDisabled = true`（Q15 決定：wake lock）
+  3. ~~`isIdleTimerDisabled = true`~~（2026-09-14 廃止：wake lock は Q15 改訂によりライフサイクル側でアクティブ中常時 ON。暗転では触らない）
 - `exitDimMode()` で:
-  1. `UIApplication.shared.isIdleTimerDisabled = false`
+  1. ~~`UIApplication.shared.isIdleTimerDisabled = false`~~（同上、削除。暗転解除後も wake lock は維持される）
   2. 保存した輝度値へ復元
 - バックグラウンド移行時の扱い（タスク 3.5 実装済み）:
-  1. `isIdleTimerDisabled = false`
+  1. `isIdleTimerDisabled = false`（ライフサイクル側で唯一の OFF 点）
   2. 背面移行時点では輝度を復元しない（画面が消えているため実害なし）
   3. カメラ停止・通知音停止
   4. フォアグラウンド復帰時に `exitDimMode()` を呼び暗転を解除、保存した輝度を復元する（Q24 改訂。旧決定の「復帰後も暗転継続」は輝度 0.0 の全黒画面で復帰する実害があるため変更）
@@ -640,16 +644,37 @@ sequenceDiagram
     participant Monitor as MonitorView
     participant Session as PostureSessionManager
     participant App as UIApplication
+    Note over Session: アクティブ中は wake lock 常時 ON（8.3/8.4）
     User->>Monitor: 暗転ボタンタップ
     Monitor->>Session: enterDimMode
     Session->>App: brightness = 0.0
-    Session->>App: isIdleTimerDisabled = true
     Note over Session: 元の輝度値をインスタンス変数に保存
     User->>Monitor: 画面タップ
     Monitor->>Session: exitDimMode
-    Session->>App: isIdleTimerDisabled = false
     Session->>App: brightness = saved value
+    Note over Session: wake lock は暗転と無関係に維持
 ```
+
+### アクティブ中の自動スリープ抑止（8.3/8.4）
+
+```mermaid
+sequenceDiagram
+    participant OS as iOS
+    participant RootView
+    participant Session as PostureSessionManager
+    participant App as UIApplication
+    RootView->>Session: bootstrap（初回 onAppear）
+    Session->>App: isIdleTimerDisabled = true
+    Note over Session: 監視・暗転の有無にかかわらず維持
+    OS->>RootView: scenePhase background
+    RootView->>Session: handleDidEnterBackground
+    Session->>App: isIdleTimerDisabled = false
+    OS->>RootView: scenePhase active
+    RootView->>Session: handleWillEnterForeground
+    Session->>App: isIdleTimerDisabled = true
+```
+
+`.inactive`（通知シェード開等）では何も行わない。フォアグラウンド滞留中の wake lock と暗転は維持され、`inactive → active` 復帰の再設定は冪等。
 
 ## Data Models
 
@@ -729,8 +754,9 @@ sequenceDiagram
 - 権限拒否 UI が設定導線と「再試行」ボタンを出す（1.2, Q7 決定）
 - 監視中プレビュー表示、暗転中は非表示（3.2, 6.2）
 - 起動から監視開始が 3 ステップ（10.1）
-- 暗転ボタンは enterDimMode を呼ぶ、輝度 0.0 + isIdleTimerDisabled = true（Q2, Q15 決定）
-- 暗転中のタップは exitDimMode を呼ぶ、輝度復元 + isIdleTimerDisabled = false
+- 暗転ボタンは enterDimMode を呼ぶ、輝度 0.0（isIdleTimerDisabled は触らない）
+- 暗転中のタップは exitDimMode を呼ぶ、輝度復元のみ（wake lock はアクティブ中維持）
+- bootstrap 完了で isIdleTimerDisabled = true、背面移行で false、復帰で true（8.3）
 
 ### 性能確認（手動または計測テスト）
 
@@ -747,10 +773,11 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3
 ## Performance
 
 - キャプチャプリセット **`.high`（720p）**、Vision は最新フレームのみ
-- 画面暗転時はプレビューレイヤを外し、**輝度 0.0 + wake lock** で消費を抑える
+- 画面暗転時はプレビューレイヤを外し、**輝度 0.0** で消費を抑える（wake lock はアクティブ中常時 ON で暗転と無関係）
 - AlertPlayer は **監視開始時にプリロード**（Q17 決定）
 - 角度計算は **移動平均なし**（Q12 決定）：生の角度を 3秒ゲートに投入
 - UI 更新は判定結果の変化時と表示用間引き（最大 15 Hz）に限定する
+- **自動スリープ抑止の消費（8.3/8.4）**: NFR 9.1（1時間 15% 以下）はアクティブ中の画面点灯常時を織り込んだ前提で再実測する（旧実測は自動スリープ任由が前提のため失効）。iPad の Split View/Slide Over で本アプリシーンが非フォーカスでも点灯が遅延する場合はあるが、OS 側調停への介入はスコープ外（Adjacent Expectations 準拠、受容リスク）
 
 ## Requirements Traceability
 
@@ -780,13 +807,15 @@ E2E クリティカルパス: 権限許可 → 5秒校正 → 監視開始 → 3
 | 5.2 | 音声ループ長おき再通知（前回通知から） | AlertPlayer | startRepeating | 通知 |
 | 5.3 | 改善で停止 | AlertPlayer | stop（監視停止でも即座） | 通知 |
 | 5.4 | マナーモードでも再生 | AlertPlayer | playback category | 通知 |
-| 6.1 | 暗転へ切替（輝度 0.0 + wake lock） | MonitorView, PostureSessionManager | enterDimMode | 暗転 |
+| 6.1 | 暗転へ切替（輝度 0.0。wake lock は 8.3 でアクティブ中常時） | MonitorView, PostureSessionManager | enterDimMode | 暗転 |
 | 6.2 | 暗転中も監視継続 | PostureSessionManager, CameraPreviewView | isDimmed | 暗転 |
 | 6.3 | タップで復帰 | MonitorView | exitDimMode | 暗転 |
 | 7.1 | 向き追従 | DeviceOrientationMonitor, CameraSessionManager | applyVideoOrientation | 回転 |
 | 7.2 | 回転中は判定停止（5秒タイムアウト） | PostureSessionManager | phase rotating | 回転 |
 | 8.1 ライフサイクル | 背面で停止 | PostureSessionManager, RootView | handleDidEnterBackground | ライフサイクル |
 | 8.2 ライフサイクル | 復帰時に状態へ従う（復帰時に暗転解除・輝度復元） | PostureSessionManager, SettingsStore | handleWillEnterForeground / isMonitoringEnabled | ライフサイクル |
+| 8.3 | アクティブ中は自動スリープで画面オフにならない／退避で OS 標準へ復元 | PostureSessionManager, RootView | bootstrap と handleWillEnterForeground で ON、handleDidEnterBackground で OFF | ライフサイクル |
+| 8.4 | 監視未開始・暗転中も抑止が常時有効（暗転解除で復活しない） | PostureSessionManager | enterDimMode/exitDimMode は wake lock に触れない | ライフサイクル |
 | 8.1 性能 | 15 fps 以上（.high プリセット） | PoseDetector, CameraSessionManager | detect | 性能 |
 | 8.2 性能 | 0.5 秒以内に再生（プリロード） | AlertPlayer | playOnce | 性能 |
 | 9.1 | 1時間 15% 以下 | CameraSessionManager | preset .high | 性能 |

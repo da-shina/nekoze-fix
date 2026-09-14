@@ -179,4 +179,29 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         XCTAssertTrue(sut.settingsStore.isMonitoringEnabled)
     }
+
+    // MARK: - アクティブ中の自動スリープ抑止（要求 8.3/8.4、タスク9.1、ADR 0015）
+
+    /// 復帰: 監視再開の有無に関わらず wake lock を ON にする（8.3）
+    func testWillEnterForeground_enablesIdleTimerDisabled() {
+        UIApplication.shared.isIdleTimerDisabled = false
+        sut.handleWillEnterForeground() // 未校正で監視再開しない経路でも ON が冪等に設定される
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    /// 背面移行: 唯一の OFF 点。OS 標準設定へ復元する（8.3）
+    func testDidEnterBackground_disablesIdleTimerDisabled() {
+        UIApplication.shared.isIdleTimerDisabled = true
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    /// 暗転 enter/exit は wake lock に触れない。暗転解除後も自動スリープは復活しない（8.4）
+    func testDimModeEnterExit_doesNotTouchIdleTimerDisabled() {
+        UIApplication.shared.isIdleTimerDisabled = true // アクティブ中のライフサイクル状態を再現
+        sut.enterDimMode()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "enterDimMode は wake lock を変更しない")
+        sut.exitDimMode()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "exitDimMode は wake lock を変更しない")
+    }
 }

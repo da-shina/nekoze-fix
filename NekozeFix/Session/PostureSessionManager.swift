@@ -86,6 +86,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// セッションの初期化を行う
     func bootstrap() async {
+        // アクティブ中の自動スリープ抑止（要求 8.3、ADR 0015）。
+        // RootView の .onAppear から呼ばれるため初回起動の ON をここで担保する
+        //（scenePhase の onChange は初期値では発火しない）。権限フェーズに関わらず ON。
+        UIApplication.shared.isIdleTimerDisabled = true
         let auth = await cameraManager.requestAuthorization()
         switch auth {
         case .authorized:
@@ -151,7 +155,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
-        UIApplication.shared.isIdleTimerDisabled = false
+        UIApplication.shared.isIdleTimerDisabled = false // wake lock 唯一の OFF 点（要求 8.3、ADR 0015）
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating || snapshot.phase == .rotating {
             snapshot.phase = .idle
         }
@@ -161,6 +165,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
     /// 明示停止（フラグ false）・未校正・権限なしは停止状態を維持する。
     func handleWillEnterForeground() {
+        // アクティブ中の自動スリープ抑止を再開（要求 8.3、ADR 0015。冪等 — inactive→active 戻りでも再設定）
+        UIApplication.shared.isIdleTimerDisabled = true
         // 復帰後は暗転解除（輝度復元）。監視再開の有無に関わらず行う
         exitDimMode()
         guard settingsStore.isMonitoringEnabled, snapshot.referenceAngle != nil else {
@@ -186,19 +192,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 暗転前に保存した元の輝度値（プロセス内メモリのみ、永続化しない。Q24）
     private var savedBrightness: CGFloat?
 
-    /// ディムモードに入る（ブラックスクリーン＋ウェイクロック）
+    /// ディムモードに入る（ブラックスクリーン。wake lock はライフサイクル側で扱うため触らない。ADR 0015）
     func enterDimMode() {
         guard !snapshot.isDimmed else { return }
         savedBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = 0.0
-        UIApplication.shared.isIdleTimerDisabled = true
         snapshot.isDimmed = true
     }
 
-    /// ディムモードを終了する（輝度復元 + wake lock 解除）
+    /// ディムモードを終了する（輝度復元のみ。暗転解除後も自動スリープは復活しない — 要求 8.4）
     func exitDimMode() {
         guard snapshot.isDimmed else { return }
-        UIApplication.shared.isIdleTimerDisabled = false
         restoreBrightness()
         snapshot.isDimmed = false
     }

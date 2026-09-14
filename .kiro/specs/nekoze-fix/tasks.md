@@ -261,6 +261,30 @@
   - Observable completion: grep for debugDistanceText yields nothing; build and tests green
   - _Depends: 8.8_
 
+## 9. アクティブ中の自動スリープ抑止（要件 8.3/8.4、ADR 0015）
+
+- [x] 9.1 PostureSessionManager: wake lock のライフサイクル移管
+  - `bootstrap()` 完了時と `handleWillEnterForeground()` で `UIApplication.shared.isIdleTimerDisabled = true`、`handleDidEnterBackground()` の `false` 維持（書き込み点はこの3箇所に限定。design.md Q15 改訂・「ライフサイクル（実装）」wake lock 項参照）
+  - `enterDimMode()` の `isIdleTimerDisabled = true` と `exitDimMode()` の `= false` を削除（暗転は輝度のみ扱う。8.4: 暗転解除でスリープが復活しない）
+  - `exitDimMode()` の guard（`isDimmed` でないと呼び出し無視）により `startMonitoring()` 内の復帰経路は挙動不変であることを確認
+  - 既存テストの修正: exitDimMode が wake lock を解除しなくなる前提に合わせ、PostureSessionManagerTests の暗転・ライフサイクルケース（L51-57、L166-171 周辺）を観点「暗転解除後も isIdleTimerDisabled は維持 / 背面で false / 復帰で true」へ更新
+  - Observable completion: 修正後の PostureSessionManagerTests が green。非暗転・非監視（idle）でも bootstrap 経由で wake lock が ON になることを単体テストが検証
+  - _Boundary: PostureSessionManager_
+  - _Requirements: 8.3, 8.4_
+
+- [x] 9.2 全テストスイート回帰確認
+  - `xcodebuild test -scheme NekozeFix -destination 'platform=iOS Simulator,name=iPhone 17 Pro'`（design.md「ライフサイクル」以外の挙動は不変のはずなので回帰のみ）
+  - Observable completion: TEST SUCCEEDED、距離指標・暗転・E2E の既存テストすべて green
+  - _Depends: 9.1_
+  - _Requirements: 8.3, 8.4_
+
+- [ ] 9.3 実機確認（手動）: アクティブ中の画面オフ非発生と NFR 再実測
+  - 実機で: 監視未開始のidle画面で自動スリープ待ち→画面オフしないことを確認 → 暗転→タップ復帰後も点灯維持（8.4）→ ホーム画面遷移後は OS 設定どおりスリープ（8.3 復元）
+  - design.md Performance 改訂に伴い NFR 9.1（1時間 15% 以下）を点灯常時前提で再実測（旧実測は失効。research.md Risks 参照）
+  - Observable completion: 3動作の確認記録と再実測値が 15% 以内（超過なら閾値見直しを別途判断）
+  - _Depends: 9.2_
+  - _Requirements: 8.3, 8.4, 9.1_
+
 ## Implementation Notes
 
 - 8.8 実機検収（2026-09-13、iPad 9th）: 意図的前出し110%で発音確認。自然前出しの 1s-median 最大も110%で、8%閾値（108%超発火）では両者が分離しない。ユーザー判断により「作業中の前出し110%は矯正対象」とみなし 8% 据え置きで PASS。FQ2 の暫定値は確定値として有効。
