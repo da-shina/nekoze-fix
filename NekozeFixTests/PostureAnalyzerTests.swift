@@ -309,4 +309,67 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearDistance ?? 0, 0.1, accuracy: 0.001) // 近側（左）距離
         XCTAssertEqual(verdict, .good)
     }
+
+    // MARK: - 両側距離基準（フォールバック）
+
+    /// ロック側欠測時: 反対側の fallbackReferenceDistance で距離評価を継続
+    func testDistanceFallback_WhenLockSideMissing_UsesOtherSide() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: nil,  // ロック側（左）欠測
+            rightEar: Keypoint(x: 0.7, y: 0.35, confidence: 0.9),
+            leftShoulder: nil,
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        // metric.side = .left だが左キーポイント nil → 右側でフォールバック
+        let metric = DistanceMetric(side: .left, referenceDistance: 0.18, fallbackReferenceDistance: 0.22)
+        let (_, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+        // 右距離 0.25 >= 0.22 * 1.08 = 0.2376 → slouchCandidate
+        XCTAssertEqual(verdict, .slouchCandidate)
+    }
+
+    /// ロック側欠測 + フォールバック基準なし → 距離評価スキップ（角度のみ）
+    func testDistanceFallback_NoFallbackReference_SkipsDistance() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: nil,
+            rightEar: Keypoint(x: 0.7, y: 0.35, confidence: 0.9),
+            leftShoulder: nil,
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .left, referenceDistance: 0.18) // fallback nil
+        let (_, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+        // ロック側 nil + フォールバックなし → 距離スキップ。角度 0 < 10 → good
+        XCTAssertEqual(verdict, .good)
+    }
+
+    /// 両側検出時に遠側の角度・距離も返す
+    func testBothSidesDetected_ReturnsFarSideData() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.45, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let (sample, _) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10
+        )
+        XCTAssertNotNil(sample?.farAngleDegrees, "両側検出時は遠側角度が非nil")
+        XCTAssertNotNil(sample?.farDistance, "両側検出時は遠側距離が非nil")
+    }
 }

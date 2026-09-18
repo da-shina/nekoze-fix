@@ -290,8 +290,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
         // 校正ロック側の距離指標（FQ1）。referenceSide/referenceDistance は校正完了時のみ設定される。
         let distanceMetric: DistanceMetric?
-        if let side = snapshot.referenceSide, let ref = snapshot.referenceDistance {
-            distanceMetric = DistanceMetric(side: side, referenceDistance: ref)
+        if let side = snapshot.referenceSide, let ref = snapshot.referenceDistances[side] {
+            let farSide: Side = (side == .left) ? .right : .left
+            let fallback = snapshot.referenceDistances[farSide]
+            distanceMetric = DistanceMetric(side: side, referenceDistance: ref, fallbackReferenceDistance: fallback)
         } else {
             distanceMetric = nil
         }
@@ -375,12 +377,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let average, let averageDistance, let refSide, let refPoints) = progress {
+            if case .completed(let average, let averageDistance, let refSide, let refPoints, let refFarAngle, let refFarDistance) = progress {
                 self.applyCalibrationCompletion(
                     referenceNearAngleDegrees: average,
                     referenceDistance: averageDistance,
                     referenceSide: refSide,
-                    referencePoints: refPoints
+                    referencePoints: refPoints,
+                    referenceFarAngleDegrees: refFarAngle,
+                    referenceFarDistance: refFarDistance
                 )
             }
         } else if self.snapshot.phase == .monitoring {
@@ -413,13 +417,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         referenceNearAngleDegrees: Double,
         referenceDistance: Double,
         referenceSide: Side,
-        referencePoints: [CGPoint]
+        referencePoints: [CGPoint],
+        referenceFarAngleDegrees: Double? = nil,
+        referenceFarDistance: Double? = nil
     ) {
         setPhase(.monitoring)
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 校正完了＝監視開始。復帰判定の単一ソース
         snapshot.referenceAngle = referenceNearAngleDegrees
-        snapshot.referenceDistance = referenceDistance
+        snapshot.referenceDistances = [referenceSide: referenceDistance]
+        if let farDist = referenceFarDistance {
+            let farSide: Side = (referenceSide == .left) ? .right : .left
+            snapshot.referenceDistances[farSide] = farDist
+        }
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
     }

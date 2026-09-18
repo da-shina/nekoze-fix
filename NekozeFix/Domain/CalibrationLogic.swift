@@ -21,6 +21,8 @@ struct CalibrationLogic {
 
     private var accumulatedAngles: [Double] = []
     private var accumulatedDistances: [Double] = []
+    private var accumulatedFarAngles: [Double] = []
+    private var accumulatedFarDistances: [Double] = []
     private var accumulatedPoints: [[CGPoint]] = []
     private var isAccumulating = false
     /// 有効サンプルが蓄積された時間の合計（秒）。脱落中は加算されない。
@@ -40,6 +42,8 @@ struct CalibrationLogic {
     mutating func start() {
         accumulatedAngles = []
         accumulatedDistances = []
+        accumulatedFarAngles = []
+        accumulatedFarDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0
@@ -63,6 +67,8 @@ struct CalibrationLogic {
                 // 最初の有効サンプルで蓄積を開始
                 accumulatedAngles = [sample.nearAngleDegrees]
                 accumulatedDistances = [sample.nearDistance]
+                accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
+                accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
                 accumulatedPoints = [points]
                 isAccumulating = true
                 accumulatedDuration = 0
@@ -80,6 +86,8 @@ struct CalibrationLogic {
                 // 不安定な場合は蓄積をリセット（角度崩れ・側切り替わりは脱落と違い即時リセット）
                 accumulatedAngles = [sample.nearAngleDegrees]
                 accumulatedDistances = [sample.nearDistance]
+                accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
+                accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
                 accumulatedPoints = [points]
                 accumulatedDuration = 0
                 lastSampleTime = now
@@ -95,6 +103,8 @@ struct CalibrationLogic {
                 if now - lastSampleTime > Self.dropoutTolerance {
                     accumulatedAngles = [sample.nearAngleDegrees]
                     accumulatedDistances = [sample.nearDistance]
+                    accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
+                    accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
                     accumulatedPoints = [points]
                     accumulatedDuration = 0
                     lastSampleTime = now
@@ -111,6 +121,8 @@ struct CalibrationLogic {
             // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
             accumulatedDistances.append(sample.nearDistance)
+            if let fa = sample.farAngleDegrees { accumulatedFarAngles.append(fa) }
+            if let fd = sample.farDistance { accumulatedFarDistances.append(fd) }
             if !points.isEmpty {
                 accumulatedPoints.append(points)
             }
@@ -122,7 +134,9 @@ struct CalibrationLogic {
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
                 let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
                 let finalPoints = accumulatedPoints.last ?? []
-                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referenceSide: sample.nearSide, referencePoints: finalPoints)
+                let avgFarAngle = accumulatedFarAngles.isEmpty ? nil : accumulatedFarAngles.reduce(0.0, +) / Double(accumulatedFarAngles.count)
+                let avgFarDistance = accumulatedFarDistances.isEmpty ? nil : accumulatedFarDistances.reduce(0.0, +) / Double(accumulatedFarDistances.count)
+                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referenceSide: sample.nearSide, referencePoints: finalPoints, referenceFarAngleDegrees: avgFarAngle, referenceFarDistance: avgFarDistance)
 
                 resetAccumulation()
                 return completedProgress
@@ -149,6 +163,8 @@ struct CalibrationLogic {
     private mutating func resetAccumulation() {
         accumulatedAngles = []
         accumulatedDistances = []
+        accumulatedFarAngles = []
+        accumulatedFarDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0

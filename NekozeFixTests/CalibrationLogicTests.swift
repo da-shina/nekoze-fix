@@ -84,7 +84,7 @@ final class CalibrationLogicTests: XCTestCase {
         }
 
         // 検証: 完了
-        if case .completed(let refAngle, _, _, _) = progress {
+        if case .completed(let refAngle, _, _, _, _, _) = progress {
             // リファレンスは蓄積された角度の平均
             XCTAssertEqual(refAngle, stableAngle, accuracy: 0.5)
         } else {
@@ -117,7 +117,7 @@ final class CalibrationLogicTests: XCTestCase {
         // 5.0秒での最終プログレスを取得
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
-        if case .completed(let refAngle, _, _, _) = finalProgress {
+        if case .completed(let refAngle, _, _, _, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 50.0, accuracy: 0.5)
         } else {
             // すでに完了済み、内部状態を確認
@@ -262,7 +262,7 @@ final class CalibrationLogicTests: XCTestCase {
         let finalProgress = sut.ingest(sample: makeSample(angle: 60.0), presence: .personDetected, now: 5.0)
 
         // 検証: リファレンスは新しい値（約60）
-        if case .completed(let refAngle, _, _, _) = finalProgress {
+        if case .completed(let refAngle, _, _, _, _, _) = finalProgress {
             XCTAssertEqual(refAngle, 60.0, accuracy: 1.0)
         } else {
             // 蓄積中に完了したか確認
@@ -442,7 +442,7 @@ final class CalibrationLogicTests: XCTestCase {
             lastProgress = sut.ingest(sample: makeSample(nearSide: .right, angle: 45.0), presence: .personDetected, now: t)
         }
 
-        guard case .completed(_, _, let refSide, _) = lastProgress else {
+        guard case .completed(_, _, let refSide, _, _, _) = lastProgress else {
             XCTFail(".completed が期待されたが、\(lastProgress) を取得")
             return
         }
@@ -462,7 +462,7 @@ final class CalibrationLogicTests: XCTestCase {
             lastProgress = sut.ingest(sample: sample, presence: .personDetected, now: t)
         }
 
-        guard case .completed(_, let refDistance, _, _) = lastProgress else {
+        guard case .completed(_, let refDistance, _, _, _, _) = lastProgress else {
             XCTFail(".completed が期待されたが、\(lastProgress) を取得")
             return
         }

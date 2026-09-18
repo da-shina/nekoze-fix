@@ -84,6 +84,27 @@ struct PostureAnalyzer {
         // 角度のみで判定を継続する。校正中（nil）は近側の素値を記録するだけ。
         var reportedDistance = length
         var distanceOverThreshold = false
+        var farAngleDegrees: Double? = nil
+        var farDistanceValue: Double? = nil
+
+        // 両側検出時に遠側の角度・距離も計算
+        if farSideDetected {
+            let farEar = (nearSide! == .left) ? frame.rightEar : frame.leftEar
+            let farShoulder = (nearSide! == .left) ? frame.rightShoulder : frame.leftShoulder
+            if isValidPair(ear: farEar, shoulder: farShoulder) {
+                let fvx = farEar!.x - farShoulder!.x
+                let fvy = farEar!.y - farShoulder!.y
+                let flength = sqrt(fvx * fvx + fvy * fvy)
+                if flength > 0 {
+                    let fcosTheta = fvy / flength
+                    let fclampedCos = max(-1.0, min(1.0, fcosTheta))
+                    let fthetaDegrees = acos(fclampedCos) * 180.0 / .pi
+                    farAngleDegrees = min(fthetaDegrees, 180.0 - fthetaDegrees)
+                    farDistanceValue = flength
+                }
+            }
+        }
+
         if let metric = distanceMetric, metric.referenceDistance > 0 {
             let lockEar = (metric.side == .left) ? frame.leftEar : frame.rightEar
             let lockShoulder = (metric.side == .left) ? frame.leftShoulder : frame.rightShoulder
@@ -93,6 +114,18 @@ struct PostureAnalyzer {
                 let lockDistance = sqrt(dx * dx + dy * dy)
                 reportedDistance = lockDistance
                 distanceOverThreshold = lockDistance >= metric.referenceDistance * (1.0 + slouchDistanceThresholdPercent / 100.0)
+            } else if let fallback = metric.fallbackReferenceDistance, fallback > 0 {
+                // ロック側欠測時: 反対側のペアでフォールバック評価
+                let fallbackSide: Side = (metric.side == .left) ? .right : .left
+                let fbEar = (fallbackSide == .left) ? frame.leftEar : frame.rightEar
+                let fbShoulder = (fallbackSide == .left) ? frame.leftShoulder : frame.rightShoulder
+                if isValidPair(ear: fbEar, shoulder: fbShoulder) {
+                    let dx = fbEar!.x - fbShoulder!.x
+                    let dy = fbEar!.y - fbShoulder!.y
+                    let fbDistance = sqrt(dx * dx + dy * dy)
+                    reportedDistance = fbDistance
+                    distanceOverThreshold = fbDistance >= fallback * (1.0 + slouchDistanceThresholdPercent / 100.0)
+                }
             }
         }
 
@@ -106,7 +139,9 @@ struct PostureAnalyzer {
                 nearSide: nearSide!,
                 nearAngleDegrees: acuteAngle,
                 farSideDetected: farSideDetected,
-                nearDistance: reportedDistance
+                nearDistance: reportedDistance,
+                farAngleDegrees: farAngleDegrees,
+                farDistance: farDistanceValue
             ),
             verdict
         )
