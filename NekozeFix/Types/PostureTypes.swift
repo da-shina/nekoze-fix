@@ -116,8 +116,6 @@ struct SessionSnapshot: Equatable {
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
-    /// 前面カメラ等でプレビューがミラー表示されているか（オーバーレイ座標のx反転に使用）
-    var isMirrored: Bool = false
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
 }

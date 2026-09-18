@@ -12,8 +12,6 @@ struct PostureOverlayView: View {
     let currentPoints: [CGPoint]
     let threshold: Double
     let nearSide: Side?
-    /// 前面カメラ等でプレビューがミラー表示されているか（Vision座標のx反転に使用）
-    var isMirrored: Bool = false
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
 
@@ -82,10 +80,8 @@ struct PostureOverlayView: View {
         let length: CGFloat = 200
         let radians = referenceAngle * .pi / 180.0
         let xDirection: CGFloat = (nearSide == .left) ? -1.0 : 1.0
-        // 前面カメラのミラー表示では左右が反転するため、方向を反転させる
-        let mirroredXDirection = isMirrored ? -xDirection : xDirection
         let end = CGPoint(
-            x: startPoint.x + (mirroredXDirection * length * sin(radians)),
+            x: startPoint.x + (xDirection * length * sin(radians)),
             y: startPoint.y - length * cos(radians)
         )
         Path { path in
@@ -119,7 +115,7 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        let visionX = isMirrored ? (1.0 - point.x) : point.x
+        let visionX = point.x
         let visionY = 1.0 - point.y
         let imageAR = imageAspectRatio
         let viewAR = size.width / size.height

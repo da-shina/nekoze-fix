@@ -232,7 +232,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // configureSession が必ず非 nil のデリゲートを参照する順序が保証される。
             cameraManager.setSampleBufferDelegate(self)
             try await cameraManager.start(position: settingsStore.cameraPosition.avPosition)
-            snapshot.isMirrored = (settingsStore.cameraPosition == .front)
         } catch {
             print("Camera pipeline start failed: \(error)")
             setPhase(.permissionDenied)
