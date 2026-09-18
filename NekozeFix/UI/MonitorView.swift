@@ -21,6 +21,7 @@ struct MonitorView: View {
                     currentPoints: refPoints,
                     threshold: settingsStore.slouchThresholdDegrees,
                     nearSide: sessionManager.snapshot.nearSide,
+                    isMirrored: sessionManager.snapshot.isMirrored,
                     imageAspectRatio: sessionManager.snapshot.videoAspectRatio
                 )
                 .ignoresSafeArea()
@@ -33,6 +34,7 @@ struct MonitorView: View {
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
+                isMirrored: sessionManager.snapshot.isMirrored,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
             .ignoresSafeArea()

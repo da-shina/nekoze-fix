@@ -33,6 +33,7 @@ struct CalibrationView: View {
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
+                isMirrored: sessionManager.snapshot.isMirrored,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
             .ignoresSafeArea()
