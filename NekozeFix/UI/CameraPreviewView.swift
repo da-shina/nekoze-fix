@@ -28,7 +28,7 @@ internal class CameraPreviewUIView: UIView {
         self.previewLayer = AVCaptureVideoPreviewLayer(session: session)
         super.init(frame: .zero)
 
-        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.videoGravity = .resizeAspect
         updatePreviewOrientation()
 
         // レイヤーを追加
