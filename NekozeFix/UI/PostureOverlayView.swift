@@ -12,7 +12,7 @@ struct PostureOverlayView: View {
     let currentPoints: [CGPoint]
     let threshold: Double
     let nearSide: Side?
-    /// キャプチャ画像のアスペクト比（AspectFill クロップ補正用）
+    /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
 
     var body: some View {
@@ -122,11 +122,13 @@ struct PostureOverlayView: View {
         var sx: CGFloat = 1.0
         var sy: CGFloat = 1.0
         if viewAR > imageAR {
-            sx = 1.0
-            sy = viewAR / imageAR
-        } else if viewAR < imageAR {
+            // 画面が画像より横長 -> 左右に余白（ピラーボックス）、上下はぴったり
             sx = imageAR / viewAR
             sy = 1.0
+        } else if viewAR < imageAR {
+            // 画面が画像より縦長 -> 上下に余白（レターボックス）、左右はぴったり
+            sx = 1.0
+            sy = viewAR / imageAR
         }
         let normX = visionX * sx + (1.0 - sx) / 2.0
         let normY = visionY * sy + (1.0 - sy) / 2.0
