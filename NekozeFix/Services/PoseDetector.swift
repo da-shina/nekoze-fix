@@ -22,8 +22,6 @@ final class PoseDetector: @unchecked Sendable {
 
     // MARK: - プロパティ
 
-    private let visionQueue = DispatchQueue(label: "com.nekozefix.vision.queue")
-
     // MARK: - 検出
 
     /// 画面中央 (0.5, 0.5) に最も近い boundingBox を持つ観測を1つ選ぶ。

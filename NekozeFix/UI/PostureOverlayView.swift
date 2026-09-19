@@ -10,7 +10,6 @@ struct PostureOverlayView: View {
     let mode: Mode
     let referenceAngle: Double
     let currentPoints: [CGPoint]
-    let threshold: Double
     let nearSide: Side?
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0

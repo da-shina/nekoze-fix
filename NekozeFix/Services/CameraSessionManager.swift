@@ -1,6 +1,21 @@
 import AVFoundation
 import UIKit
 
+extension AVCaptureVideoOrientation {
+    /// UIDevice.Orientation から変換。unknown/face-up/face-down は fallbackScene から推定。
+    static func fromDeviceOrientation(_ orientation: UIDeviceOrientation, fallbackScene: UIWindowScene? = nil) -> AVCaptureVideoOrientation? {
+        switch orientation {
+        case .portrait:           return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft:     return .landscapeRight
+        case .landscapeRight:    return .landscapeLeft
+        default:
+            guard let scene = fallbackScene else { return nil }
+            return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue)
+        }
+    }
+}
+
 /// フロントカメラのセッション管理とパーミッション。
 ///
 /// `.high` プリセット (720p)、シリアルキャプチャキュー、
@@ -97,19 +112,10 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
     /// 現在のデバイス向きから AVCaptureVideoOrientation を推定する。
     /// UIDevice.orientation が .unknown の場合は windowScene からフォールバック。
     private func currentDeviceVideoOrientation() -> AVCaptureVideoOrientation {
-        switch UIDevice.current.orientation {
-        case .portrait:           return .portrait
-        case .portraitUpsideDown: return .portraitUpsideDown
-        case .landscapeLeft:     return .landscapeRight
-        case .landscapeRight:    return .landscapeLeft
-        default:
-            if let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }) {
-                return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
-            }
-            return .portrait
-        }
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })
+        return .fromDeviceOrientation(UIDevice.current.orientation, fallbackScene: scene) ?? .portrait
     }
 
     // MARK: - サンプルバッファデリゲート

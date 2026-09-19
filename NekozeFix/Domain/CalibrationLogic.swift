@@ -56,16 +56,7 @@ struct CalibrationLogic {
         if let sample = sample, presence == .personDetected {
             if !isAccumulating {
                 // 最初の有効サンプルで蓄積を開始
-                accumulatedAngles = [sample.nearAngleDegrees]
-                accumulatedDistances = [sample.nearDistance]
-                accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
-                accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
-                accumulatedPoints = [points]
-                isAccumulating = true
-                accumulatedDuration = 0
-                lastSampleTime = now
-                windowSide = sample.nearSide
-                return .accumulating(elapsed: 0)
+                return startNewWindow(sample: sample, now: now, points: points)
             }
 
             // 安定性チェック: 直近 windowSize サンプルの中央値比。
@@ -75,16 +66,7 @@ struct CalibrationLogic {
             let median = Self.median(of: window)
             if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees || sample.nearSide != windowSide {
                 // 不安定な場合は蓄積をリセット（角度崩れ・側切り替わりは脱落と違い即時リセット）
-                accumulatedAngles = [sample.nearAngleDegrees]
-                accumulatedDistances = [sample.nearDistance]
-                accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
-                accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
-                accumulatedPoints = [points]
-                accumulatedDuration = 0
-                lastSampleTime = now
-                dropoutActive = false
-                windowSide = sample.nearSide
-                return .accumulating(elapsed: 0)
+                return startNewWindow(sample: sample, now: now, points: points)
             }
 
             // 前回の有効サンプルからの経過時間分だけ蓄積を進める。
@@ -92,16 +74,7 @@ struct CalibrationLogic {
             // 許容時間を超えている場合は姿勢崩れとしてリセットする。
             if dropoutActive {
                 if now - lastSampleTime > Self.dropoutTolerance {
-                    accumulatedAngles = [sample.nearAngleDegrees]
-                    accumulatedDistances = [sample.nearDistance]
-                    accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
-                    accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
-                    accumulatedPoints = [points]
-                    accumulatedDuration = 0
-                    lastSampleTime = now
-                    dropoutActive = false
-                    windowSide = sample.nearSide
-                    return .accumulating(elapsed: 0)
+                    return startNewWindow(sample: sample, now: now, points: points)
                 }
                 dropoutActive = false
             } else {
@@ -164,7 +137,20 @@ struct CalibrationLogic {
         windowSide = nil
     }
 
-    // MARK: - プライベートメソッド
+    /// リセット直後に新しいサンプルで蓄積窓を開始する
+    private mutating func startNewWindow(sample: AngleSample, now: TimeInterval, points: [CGPoint]) -> CalibrationProgress {
+        accumulatedAngles = [sample.nearAngleDegrees]
+        accumulatedDistances = [sample.nearDistance]
+        accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
+        accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
+        accumulatedPoints = [points]
+        isAccumulating = true
+        accumulatedDuration = 0
+        lastSampleTime = now
+        dropoutActive = false
+        windowSide = sample.nearSide
+        return .accumulating(elapsed: 0)
+    }
 
     private static func median(of values: [Double]) -> Double {
         let sorted = values.sorted()

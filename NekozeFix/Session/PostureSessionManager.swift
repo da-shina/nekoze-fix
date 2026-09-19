@@ -122,7 +122,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func startMonitoring() {
         setPhase(.monitoring)
         exitDimMode()
-        snapshot.isRotating = false
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
@@ -137,7 +136,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func stopMonitoring() {
         setPhase(.idle)
         exitDimMode()
-        snapshot.isRotating = false
         snapshot.isMonitoringEnabled = false
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
