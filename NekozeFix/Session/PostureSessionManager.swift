@@ -48,6 +48,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 最後に人物を検出した時刻（nil は未検出継続中）
     private var lastPersonSeenTime: TimeInterval?
 
+    /// 肩キーポイント欠測確定までの猶予時間（秒）。personMissingGracePeriod と同パターン。
+    static let shoulderMissingGracePeriod: TimeInterval = 0.5
+    /// 最後に肩キーポイントを検出した時刻（nil は肩未検出継続中）
+    private var lastShoulderSeenTime: TimeInterval?
+
+    /// 可視化ポイントの EMA スムージング係数（新値の重み）。
+    /// 小さいほど滑らかだが追従遅延が増す。.zero はスムージング対象外。
+    private let smoothingFactor: CGFloat = 0.3
+    /// 前回のスムージング済み可視化ポイント（EMA の状態）
+    private var smoothedPoints: [CGPoint] = []
+
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
@@ -102,6 +113,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func startCalibration() {
         setPhase(.calibrating)
         calibrationLogic.start()
+        smoothedPoints = []
+        lastShoulderSeenTime = nil
         Task {
             await startCameraPipeline()
         }
@@ -111,6 +124,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func recalibrate() {
         setPhase(.calibrating)
         calibrationLogic.start()
+        smoothedPoints = []
+        lastShoulderSeenTime = nil
         Task {
             await startCameraPipeline()
         }
@@ -275,13 +290,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             return
         }
 
-        // 顔のみの検出: 人物はいるが角度は計算できない。
-        // 「肩が映っていません」案内を灯す（復帰は pose 検出フレームで消える）。
+        // 顔のみ検出（.personOnly）: 人物はいるが肩キーポイントなし。
+        // 肩欠測デバウンス: 猶予期間内は前回の可視化ポイントを維持し
+        // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(let frame) = detection else {
-            snapshot.isShoulderMissing = true
-            updateState(presence: .personDetected, sample: nil)
+            let now = CACurrentMediaTime()
+            if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
+                snapshot.isShoulderMissing = false
+                updateState(presence: .personDetected, sample: nil, points: snapshot.visualizationPoints)
+            } else {
+                snapshot.isShoulderMissing = true
+                lastShoulderSeenTime = nil
+                updateState(presence: .personDetected, sample: nil)
+            }
             return
         }
+
+        // .pose: 肩キーポイント検出あり
+        lastShoulderSeenTime = CACurrentMediaTime()
         snapshot.isShoulderMissing = false
 
         // 2. 姿勢分析
@@ -343,6 +369,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         if let side = sample?.nearSide {
             snapshot.nearSide = side
         }
+
+        // 可視化ポイントの EMA スムージング（位置ジッタ軽減）。
+        // .zero はスムージング対象外（初出/消失は即座）。
+        points = points.enumerated().map { i, new in
+            guard i < smoothedPoints.count,
+                  smoothedPoints[i] != .zero,
+                  new != .zero else { return new }
+            return CGPoint(
+                x: smoothedPoints[i].x + smoothingFactor * (new.x - smoothedPoints[i].x),
+                y: smoothedPoints[i].y + smoothingFactor * (new.y - smoothedPoints[i].y)
+            )
+        }
+        smoothedPoints = points
 
         // 3. 状態更新
         updateState(presence: .personDetected, sample: sample, verdict: verdict, points: points)
