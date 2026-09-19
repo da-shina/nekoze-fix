@@ -32,7 +32,7 @@ final class PostureSessionManagerTests: XCTestCase {
     }
 
     func testRecalibrate_changesPhaseToCalibrating() {
-        sut.recalibrate()
+        sut.startCalibration()
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
     }
 
@@ -61,53 +61,53 @@ final class PostureSessionManagerTests: XCTestCase {
     // MARK: - 姿勢更新
 
     func testUpdatePosture_good_updatesSnapshot() {
-        sut.updatePosture(.good)
+        sut.snapshot.displayedPosture = .good
         XCTAssertEqual(sut.snapshot.displayedPosture, .good)
     }
 
     func testUpdatePosture_slouch_updatesSnapshot() {
-        sut.updatePosture(.slouch)
+        sut.snapshot.displayedPosture = .slouch
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
     }
 
     func testUpdatePosture_personMissing_updatesSnapshot() {
-        sut.updatePosture(.personMissing)
+        sut.snapshot.displayedPosture = .personMissing
         XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
     }
 
     // MARK: - 人物検出
 
     func testUpdatePersonDetected_true_setsFlag() {
-        sut.updatePersonDetected(true)
+        sut.snapshot.isPersonDetected = true
         XCTAssertTrue(sut.snapshot.isPersonDetected)
     }
 
     func testUpdatePersonDetected_false_setsFlag() {
-        sut.updatePersonDetected(false)
+        sut.snapshot.isPersonDetected = false
         XCTAssertFalse(sut.snapshot.isPersonDetected)
     }
 
     // MARK: - 監視有効化
 
     func testUpdateMonitoringEnabled_true() {
-        sut.updateMonitoringEnabled(true)
+        sut.snapshot.isMonitoringEnabled = true
         XCTAssertTrue(sut.snapshot.isMonitoringEnabled)
     }
 
     func testUpdateMonitoringEnabled_false() {
-        sut.updateMonitoringEnabled(false)
+        sut.snapshot.isMonitoringEnabled = false
         XCTAssertFalse(sut.snapshot.isMonitoringEnabled)
     }
 
     // MARK: - フェーズ更新
 
     func testUpdatePhase_rotating() {
-        sut.updatePhase(.rotating)
+        sut.snapshot.phase = .rotating
         XCTAssertEqual(sut.snapshot.phase, .rotating)
     }
 
     func testUpdatePhase_permissionDenied() {
-        sut.updatePhase(.permissionDenied)
+        sut.snapshot.phase = .permissionDenied
         XCTAssertEqual(sut.snapshot.phase, .permissionDenied)
     }
 
@@ -195,10 +195,10 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 非監視フェーズ（校正中・idle）は抑止しない（8.4 改訂）
     func testNonMonitoringPhases_doNotEnableIdleTimerDisabled() {
         UIApplication.shared.isIdleTimerDisabled = true
-        sut.updatePhase(.calibrating)
+        sut.startCalibration()
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "校正中は wake lock OFF")
         UIApplication.shared.isIdleTimerDisabled = true
-        sut.updatePhase(.idle)
+        sut.stopMonitoring()
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "idle は wake lock OFF")
     }
 

@@ -108,10 +108,7 @@ struct PostureOverlayView: View {
 
     /// 角度差を (-pi, pi] に正規化。符号が短距離回る方向を示す
     private func wrappedDelta(_ angle: CGFloat) -> CGFloat {
-        var a = angle
-        while a > .pi { a -= 2 * .pi }
-        while a < -.pi { a += 2 * .pi }
-        return a
+        ((angle + .pi).truncatingRemainder(dividingBy: 2 * .pi)) - .pi
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {

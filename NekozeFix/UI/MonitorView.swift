@@ -291,8 +291,10 @@ struct MonitorView_Previews: PreviewProvider {
 
             MonitorView()
                 .environmentObject({
+                    var snapshot = SessionSnapshot()
+                    snapshot.displayedPosture = .slouch
                     let manager = PostureSessionManager()
-                    manager.updatePosture(.slouch)
+                    manager.snapshot = snapshot
                     return manager
                 }())
                 .environmentObject(SettingsStore())

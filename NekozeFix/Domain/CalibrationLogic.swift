@@ -40,16 +40,7 @@ struct CalibrationLogic {
     /// 新しいキャリブレーションセッションを開始する。
     /// 以前の基準値は上書きされる。
     mutating func start() {
-        accumulatedAngles = []
-        accumulatedDistances = []
-        accumulatedFarAngles = []
-        accumulatedFarDistances = []
-        accumulatedPoints = []
-        isAccumulating = false
-        accumulatedDuration = 0
-        lastSampleTime = 0
-        dropoutActive = false
-        windowSide = nil
+        resetAccumulation()
     }
 
     /// 人物検出状態を処理する。

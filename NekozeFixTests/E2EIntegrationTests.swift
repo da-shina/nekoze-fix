@@ -24,7 +24,7 @@ final class E2EIntegrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
 
         // 人物検出が5秒間安定をシミュレート
-        sut.updatePersonDetected(true)
+        sut.snapshot.isPersonDetected = true
 
         // TimedConditionGate をシミュレート - 5秒間安定
         var gate = TimedConditionGate(requiredDuration: 5.0)
@@ -45,7 +45,7 @@ final class E2EIntegrationTests: XCTestCase {
     func testSlouchDetectionFlow() {
         // セットアップ: キャリブレーション済みでモニタリング中
         sut.startMonitoring()
-        sut.updatePersonDetected(true)
+        sut.snapshot.isPersonDetected = true
 
         // 前傾姿勢検出をシミュレート
         var gate = TimedConditionGate(requiredDuration: 5.0)

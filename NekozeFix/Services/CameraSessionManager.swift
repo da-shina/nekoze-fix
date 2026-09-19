@@ -92,17 +92,6 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
-    func applyVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            if let connection = self.videoOutput?.connection(with: .video) {
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = orientation
-                }
-            }
-        }
-    }
-
     // MARK: - ヘルパー
 
     /// 現在のデバイス向きから AVCaptureVideoOrientation を推定する。

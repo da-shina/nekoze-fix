@@ -38,7 +38,7 @@ struct PermissionView: View {
                 deniedContent
             case .idle:
                 // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
-                Button(action: startCalibration) {
+                Button(action: bootstrap) {
                     Label("キャリブレーションを開始", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
@@ -94,7 +94,7 @@ struct PermissionView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
-            Button(action: requestAuthorization) {
+            Button(action: bootstrap) {
                 Text("再試行")
                     .frame(maxWidth: .infinity)
             }
@@ -105,16 +105,7 @@ struct PermissionView: View {
 
     // MARK: - アクション
 
-    private func startCalibration() {
-        // bootstrap() が認証確認 → .calibrating 遷移とカメラ起動を行う
-        Task {
-            await sessionManager.bootstrap()
-        }
-    }
-
-    private func requestAuthorization() {
-        // bootstrap() が CameraSessionManager 経由で認証を再リクエストし、
-        // 設定で許可された場合もそのまま校正へ遷移する
+    private func bootstrap() {
         Task {
             await sessionManager.bootstrap()
         }
@@ -136,8 +127,10 @@ struct PermissionView_Previews: PreviewProvider {
 
             PermissionView()
                 .environmentObject({
+                    var snapshot = SessionSnapshot()
+                    snapshot.phase = .permissionDenied
                     let manager = PostureSessionManager()
-                    manager.updatePhase(.permissionDenied)
+                    manager.snapshot = snapshot
                     return manager
                 }())
                 .previewDisplayName("拒否済み")

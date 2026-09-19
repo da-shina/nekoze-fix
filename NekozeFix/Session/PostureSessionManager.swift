@@ -9,7 +9,7 @@ import AVFoundation
 final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     // MARK: - 公開プロパティ
 
-    @Published private(set) var snapshot: SessionSnapshot
+    @Published var snapshot: SessionSnapshot
 
     // MARK: - プライベートプロパティ
 
@@ -40,8 +40,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var lastGateTickTime: TimeInterval?
 
     // MARK: - 初期化
-
-    private var guidelineTimer: Timer?
 
     /// personMissing 確定までの猶予時間（秒）。この未満の連続欠測はノイズ扱い。
     static let personMissingGracePeriod: TimeInterval = 0.5
@@ -120,17 +118,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
     }
 
-    /// アイドル状態から再キャリブレーションする
-    func recalibrate() {
-        setPhase(.calibrating)
-        calibrationLogic.start()
-        smoothedPoints = []
-        lastShoulderSeenTime = nil
-        Task {
-            await startCameraPipeline()
-        }
-    }
-
     /// 姿勢監視を開始する
     func startMonitoring() {
         setPhase(.monitoring)
@@ -185,16 +172,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         startMonitoring()
     }
 
-    /// 表示される姿勢状態を更新する
-    func updatePosture(_ posture: DisplayedPosture) {
-        snapshot.displayedPosture = posture
-    }
-
-    /// 人検出状態を更新する
-    func updatePersonDetected(_ detected: Bool) {
-        snapshot.isPersonDetected = detected
-    }
-
     // MARK: - 暗転モード（design.md Q2/Q24、ADR 0013）
 
     /// 暗転前に保存した元の輝度値（プロセス内メモリのみ、永続化しない。Q24）
@@ -211,26 +188,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// ディムモードを終了する（輝度復元のみ。暗転解除後も自動スリープは復活しない — 要求 8.4）
     func exitDimMode() {
         guard snapshot.isDimmed else { return }
-        restoreBrightness()
-        snapshot.isDimmed = false
-    }
-
-    /// 元の輝度値へ復元する（exitDimMode 経由でのみ呼ばれる）
-    private func restoreBrightness() {
         if let brightness = savedBrightness {
             UIScreen.main.brightness = brightness
         }
         savedBrightness = nil
-    }
-
-    /// フェーズを更新する（外部ステートマシン制御用）
-    func updatePhase(_ phase: SessionPhase) {
-        setPhase(phase)
-    }
-
-    /// 監視有効フラグを更新する
-    func updateMonitoringEnabled(_ enabled: Bool) {
-        snapshot.isMonitoringEnabled = enabled
+        snapshot.isDimmed = false
     }
 
     // MARK: - プライベートメソッド
@@ -311,7 +273,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isShoulderMissing = false
 
         // 2. 姿勢分析
-        let refAngle = self.getReferenceAngle()
+        let refAngle = snapshot.referenceAngle
         let threshold = self.settingsStore.slouchThresholdDegrees
 
         // 校正ロック側の距離指標（FQ1）。referenceSide/referenceDistance は校正完了時のみ設定される。
@@ -480,13 +442,4 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         UIApplication.shared.isIdleTimerDisabled = (phase == .monitoring)
     }
 
-    private func getReferenceAngle() -> Double? {
-        snapshot.referenceAngle
-    }
-
-    private func verdictFor(sample: AngleSample) -> PostureVerdict {
-        // ここで改めて判定ロジックを呼ぶか、analyzeの結果をそのまま使う
-        // 実際には updateState 内で analyze した結果を使うように修正
-        return .good
-    }
 }

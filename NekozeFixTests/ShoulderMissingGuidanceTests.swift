@@ -15,8 +15,8 @@ final class ShoulderMissingGuidanceTests: XCTestCase {
 
     func testLandscapeGuidance_offersEffectiveMeans() {
         let text = shoulderMissingGuidance(isLandscape: true)
-        XCTAssertTrue(text.contains("離して"), "ランドスケープは画角が狭い具体手段を案内する")
-        XCTAssertTrue(text.contains("耳から肩"), "実機検収で有効確認済み: カメラを人物の耳-肩へ向ける角度調整")
+        XCTAssertTrue(text.contains("離す"), "ランドスケープは画角が狭い具体手段を案内する")
+        XCTAssertTrue(text.contains("高さ"), "実機検収で有効確認済み: カメラの高さ・距離調整を案内")
     }
 
     /// Session Snapshot の isLandscape がデフォルト false（ポートレート）であることを確認
