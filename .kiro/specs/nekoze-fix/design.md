@@ -151,7 +151,7 @@ graph TB
 | Q18 | 通知音同時再生 | 前の音を停止して次を再生 |
 | Q19 | 暗転中の音量 | ユーザー設定のまま |
 | Q20 | 監視停止時の通知音 | 即座に `stop()` を呼ぶ |
-| Q21 | 人物検出の判定 | 即座（2026-09-13 改訂: null 観測から 0.5 秒猶予 `personMissingGracePeriod` 経過後に確定。瞬間的な検出抜けを吸収） |
+| Q21 | 人物検出の判定 | 即座（2026-09-13 改訂: null 観測から 0.5 秒猶予 `personMissingGracePeriod` 経過後に確定。瞬間的な検出抜けを吸収）。肩キーポイント欠測も同パターンで `shoulderMissingGracePeriod`（0.5 秒）の猶予あり（2026-09-19 追記）|
 | Q22 | 姿勢崩れ判定 | 角度変化 > 5度 OR 人物検出途絶 |
 | Q23 | 再通知間隔 | 前回通知から音声1ループ分（音源長に追従、現音源は約14秒） |
 | Q24 | 暗転復帰時の輝度 | プロセス内メモリ保持。**フォアグラウンド復帰時は暗転を解除し保存した輝度を復元**（2026-09-13 改訂: 旧決定「復元せず暗転継続」は全黒画面で復帰する実害があるため変更） |
@@ -438,7 +438,7 @@ protocol PoseDetecting {
 
 - `VNDetectHumanBodyPoseRequest` を使用する
 - 返すキーポイントは confidence >= 0.3 のみ。未満は `nil`（4.5。検出率向上のため 0.5 から緩和）
-- 観測が空（人物なし）なら `nil` を返す。Session は null 観測が **0.5 秒（`personMissingGracePeriod`）継続した時点で** `personMissing` を確定する（Q21 改訂：瞬間的な検出抜けを吸収）
+- 観測が空（人物なし）なら `nil` を返す。Session は null 観測が **0.5 秒（`personMissingGracePeriod`）継続した時点で** `personMissing` を確定する（Q21 改訂：瞬間的な検出抜けを吸収）。肩キーポイント欠測（`.personOnly`）も **0.5 秒（`shoulderMissingGracePeriod`）継続後に** `isShoulderMissing` を確定する（Q21 拡張パターン）。猶予期間中は前回の可視化ポイントを維持し「肩が映っていません」案内のチラつきを防止する
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
 - **複数人物時の選択基準（FR 4.7）**: 画面中央 (0.5, 0.5) に最も近いバウンディングボックスの人物のみ認識する。顔観測は `boundingBox`、Body Pose 観測はキーポイントの囲み矩形を代理 box とし、同一の `closestToCenter`（距離二乗比較）を使う。選択はフレーム単位（人物追跡・ID ロックは持たない）
 - **人体矩形 ROI 再試行（c 案）**: パス1で `VNDetectHumanRectanglesRequest` を顔検出と同時実行し、Body Pose がフルフレームで空振りした場合のみ、人体矩形（単位矩形へクリップ）を `regionOfInterest` として再試行する。頭部クロズアップで Body Pose 観測が 0 になる実測（face/humanRect は生存）への対処で、iPad 9th 実機で蘇生を確認済み。クリップを忘れると Vision Code=14、`.zero` を代入すると Code=3 で全失敗するため、未指定時はプロパティを設定しない
@@ -562,6 +562,8 @@ stateDiagram-v2
 - `confirmedSlouch` 入場で `playOnce` とリピート開始（間隔は音声ループ長）
 - `good` 入場で `stop`
 - `personMissing` は Vision が `nil` を返してから **0.5 秒猶予（`personMissingGracePeriod`）経過後に確定**。確定した時点で蓄積中の猫背ゲートは即座にリセットする（Q6 決定）
+- `isShoulderMissing` は肩キーポイントが検出されなくなってから **0.5 秒猶予（`shoulderMissingGracePeriod`）経過後に確定**（Q21 拡張パターン）。Vision の信頼度境界付近でのチラつきを防止
+- 可視化ポイント（`visualizationPoints`）には EMA スムージング（係数 0.3）を適用。位置ジッタを軽減しつつ追従遅延は人間が感知しないレベル。角度計算には影響しない（Q12 決定を維持）
 - `dimmed` はフェーズではなくフラグ。監視は継続しプレビューを隠す（6.2）。暗転中の人物なし表示は **抑制**（Q8 決定：完全黒画面維持）
 - 暗転中のタップは `exitDimMode`（6.3）
 - 回転中は personMissing 表示も **抑制**（Q16 決定：回転中黒画面維持）
