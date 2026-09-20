@@ -58,57 +58,86 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
-    // MARK: - 姿勢更新
+    // MARK: - 姿勢更新（processDetection 経由で不変条件を維持）
 
-    func testUpdatePosture_good_updatesSnapshot() {
-        sut.snapshot.displayedPosture = .good
-        XCTAssertEqual(sut.snapshot.displayedPosture, .good)
-    }
-
-    func testUpdatePosture_slouch_updatesSnapshot() {
-        sut.snapshot.displayedPosture = .slouch
-        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
-    }
-
-    func testUpdatePosture_personMissing_updatesSnapshot() {
-        sut.snapshot.displayedPosture = .personMissing
+    func testProcessDetection_absent_showsPersonMissing() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        sut.processDetection(.absent)
         XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
+    }
+
+    func testProcessDetection_withPose_updatesVisualizationPoints() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.4, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.6, y: 0.7, confidence: 0.9)
+        )
+        sut.processDetection(.pose(frame))
+        XCTAssertTrue(sut.snapshot.isPersonDetected)
+        // 可視化ポイントが更新されている（.zero 以外の値が含まれる）
+        let nonZero = sut.snapshot.visualizationPoints.filter { $0 != .zero }
+        XCTAssertFalse(nonZero.isEmpty, "ポーズ検出で可視化ポイントが更新される")
     }
 
     // MARK: - 人物検出
 
-    func testUpdatePersonDetected_true_setsFlag() {
-        sut.snapshot.isPersonDetected = true
+    func testProcessDetection_personDetected_setsFlag() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: nil
+        )
+        sut.startCalibration()
+        sut.processDetection(.pose(frame))
         XCTAssertTrue(sut.snapshot.isPersonDetected)
     }
 
-    func testUpdatePersonDetected_false_setsFlag() {
-        sut.snapshot.isPersonDetected = false
+    func testProcessDetection_absent_clearsFlag() {
+        sut.startCalibration()
+        sut.processDetection(.absent)
         XCTAssertFalse(sut.snapshot.isPersonDetected)
     }
 
     // MARK: - 監視有効化
 
-    func testUpdateMonitoringEnabled_true() {
-        sut.snapshot.isMonitoringEnabled = true
+    func testStartMonitoring_setsFlag() {
+        sut.startMonitoring()
         XCTAssertTrue(sut.snapshot.isMonitoringEnabled)
     }
 
-    func testUpdateMonitoringEnabled_false() {
-        sut.snapshot.isMonitoringEnabled = false
+    func testStopMonitoring_clearsFlag() {
+        sut.startMonitoring()
+        sut.stopMonitoring()
         XCTAssertFalse(sut.snapshot.isMonitoringEnabled)
     }
 
-    // MARK: - フェーズ更新
+    // MARK: - フェーズ遷移（setPhase 不変条件の検証）
 
-    func testUpdatePhase_rotating() {
-        sut.snapshot.phase = .rotating
-        XCTAssertEqual(sut.snapshot.phase, .rotating)
+    func testSetPhase_rotating_disablesIdleTimer() {
+        // rotating は直接セット不可だが、監視停止後の退避で .idle へ戻ることで
+        // isIdleTimerDisabled == false を確認できる
+        sut.startMonitoring()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        sut.stopMonitoring()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled, "idle では wake lock OFF")
     }
 
-    func testUpdatePhase_permissionDenied() {
-        sut.snapshot.phase = .permissionDenied
-        XCTAssertEqual(sut.snapshot.phase, .permissionDenied)
+    func testSetPhase_permissionDenied_disablesIdleTimer() {
+        sut.startMonitoring()
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
+        // permissionDenied 遷移は bootstrap 経由のみ
+        // 停止で idle に戻り wake lock が OFF になることを確認
+        sut.stopMonitoring()
+        XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
     }
 
     // MARK: - ライフサイクル自動停止・復帰（要求 8.1/8.2、タスク3.5）

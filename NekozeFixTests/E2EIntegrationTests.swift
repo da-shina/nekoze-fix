@@ -23,8 +23,15 @@ final class E2EIntegrationTests: XCTestCase {
         sut.startCalibration()
         XCTAssertEqual(sut.snapshot.phase, .calibrating)
 
-        // 人物検出が5秒間安定をシミュレート
-        sut.snapshot.isPersonDetected = true
+        // 人物検出をシミュレート（processDetection 経由で isPersonDetected を設定）
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: nil
+        )
+        sut.processDetection(.pose(frame))
 
         // TimedConditionGate をシミュレート - 5秒間安定
         var gate = TimedConditionGate(requiredDuration: 5.0)
@@ -45,7 +52,15 @@ final class E2EIntegrationTests: XCTestCase {
     func testSlouchDetectionFlow() {
         // セットアップ: キャリブレーション済みでモニタリング中
         sut.startMonitoring()
-        sut.snapshot.isPersonDetected = true
+        // 人物検出をシミュレート
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: nil
+        )
+        sut.processDetection(.pose(frame))
 
         // 前傾姿勢検出をシミュレート
         var gate = TimedConditionGate(requiredDuration: 5.0)

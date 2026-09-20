@@ -105,9 +105,14 @@ struct PostureOverlayView: View {
         .stroke(Color.green, lineWidth: 4)
     }
 
-    /// 角度差を (-pi, pi] に正規化。符号が短距離回る方向を示す
+    /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。
+    /// truncatingRemainder は被除数の符号を保持するため、負の剰余を補正する。
     private func wrappedDelta(_ angle: CGFloat) -> CGFloat {
-        ((angle + .pi).truncatingRemainder(dividingBy: 2 * .pi)) - .pi
+        let period = 2 * CGFloat.pi
+        var normalized = (angle + .pi).truncatingRemainder(dividingBy: period)
+        if normalized < 0 { normalized += period }
+        normalized -= .pi
+        return normalized == -.pi ? .pi : normalized
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {

@@ -278,9 +278,7 @@ struct MonitorView_Previews: PreviewProvider {
                 .environmentObject({
                     var snapshot = SessionSnapshot()
                     snapshot.displayedPosture = .slouch
-                    let manager = PostureSessionManager()
-                    manager.snapshot = snapshot
-                    return manager
+                    return PostureSessionManager(snapshot: snapshot)
                 }())
                 .environmentObject(SettingsStore())
                 .previewDisplayName("モニター - 猫背検出")

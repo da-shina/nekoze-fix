@@ -9,7 +9,7 @@ import AVFoundation
 final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     // MARK: - 公開プロパティ
 
-    @Published var snapshot: SessionSnapshot
+    @Published private(set) var snapshot: SessionSnapshot
 
     // MARK: - プライベートプロパティ
 
@@ -60,6 +60,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     init(settingsStore: SettingsStore = SettingsStore()) {
         self.settingsStore = settingsStore
         self.snapshot = SessionSnapshot()
+        super.init()
+        setupSettingsObservation()
+        setupOrientationObservation()
+    }
+
+    /// Preview・テスト用: 任意の snapshot で初期化する。
+    init(settingsStore: SettingsStore = SettingsStore(), snapshot: SessionSnapshot) {
+        self.settingsStore = settingsStore
+        self.snapshot = snapshot
         super.init()
         setupSettingsObservation()
         setupOrientationObservation()

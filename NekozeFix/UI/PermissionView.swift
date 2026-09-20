@@ -38,7 +38,7 @@ struct PermissionView: View {
                 deniedContent
             case .idle:
                 // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
-                Button(action: bootstrap) {
+                Button(action: { sessionManager.startCalibration() }) {
                     Label("キャリブレーションを開始", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
@@ -129,9 +129,7 @@ struct PermissionView_Previews: PreviewProvider {
                 .environmentObject({
                     var snapshot = SessionSnapshot()
                     snapshot.phase = .permissionDenied
-                    let manager = PostureSessionManager()
-                    manager.snapshot = snapshot
-                    return manager
+                    return PostureSessionManager(snapshot: snapshot)
                 }())
                 .previewDisplayName("拒否済み")
         }
