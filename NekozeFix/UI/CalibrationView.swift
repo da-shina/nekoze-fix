@@ -84,7 +84,7 @@ struct CalibrationView: View {
                     }
                 }
                 .padding()
-                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.15))
                 .cornerRadius(16)
             }
             .padding()
