@@ -26,18 +26,6 @@ struct CalibrationView: View {
             CameraPreviewView(session: sessionManager.cameraManager.captureSession)
                 .ignoresSafeArea()
 
-            // 基準姿勢のオーバーレイ（利用可能な場合）
-            if let refPoints = sessionManager.snapshot.referencePoints {
-                PostureOverlayView(
-                    mode: .reference,
-                    referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
-                    currentPoints: refPoints,
-                    nearSide: sessionManager.snapshot.nearSide,
-                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio
-                )
-                .ignoresSafeArea()
-            }
-
             // 現在の姿勢のオーバーレイ
             PostureOverlayView(
                 mode: .current,

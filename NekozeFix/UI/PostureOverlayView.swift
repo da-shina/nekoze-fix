@@ -78,17 +78,27 @@ struct PostureOverlayView: View {
     /// 基準線（緑またはグレー）と、黄（現在）〜緑／グレー（基準）のなす角を示す弧
     @ViewBuilder
     private func referenceArc(in size: CGSize, isReference: Bool) -> some View {
-        let visionMidpointShoulder = CGPoint(
-            x: (currentPoints[0].x + currentPoints[1].x) / 2,
-            y: (currentPoints[0].y + currentPoints[1].y) / 2
-        )
-        let startPoint = normalizePoint(visionMidpointShoulder, in: size)
+        let startPoint = normalizePoint(currentPoints[5], in: size)
         let length: CGFloat = 200
-        let radians = referenceAngle * .pi / 180.0
-        let mirroredXDirection: CGFloat = (nearSide == .left) ? 1.0 : -1.0
+
+        // 両肩の画面座標から肩ラインベクトル (dx, dy) を算出（左から右への向き）
+        let pL = normalizePoint(currentPoints[0], in: size)
+        let pR = normalizePoint(currentPoints[1], in: size)
+        let leftP = (pL.x <= pR.x) ? pL : pR
+        let rightP = (pL.x <= pR.x) ? pR : pL
+        let dx = rightP.x - leftP.x
+        let dy = rightP.y - leftP.y
+        let shoulderDist = hypot(dx, dy)
+
+        // 肩ラインに対して直角かつ上向き (-y方向) の単位垂線ベクトル
+        // (dx, dy) と (dy, -dx) の内積は dx*dy - dy*dx = 0 (直角)
+        // dx >= 0 のため -dx <= 0 (画面上向き)
+        let unitPerpX: CGFloat = shoulderDist > 0 ? (dy / shoulderDist) : 0.0
+        let unitPerpY: CGFloat = shoulderDist > 0 ? (-dx / shoulderDist) : -1.0
+
         let end = CGPoint(
-            x: startPoint.x + (mirroredXDirection * length * sin(radians)),
-            y: startPoint.y - length * cos(radians)
+            x: startPoint.x + unitPerpX * length,
+            y: startPoint.y + unitPerpY * length
         )
         let baselineColor: Color = isReference ? Color.gray : Color.green
         let baselineWidth: CGFloat = isReference ? 4.0 : 6.0
