@@ -67,18 +67,22 @@ struct PostureOverlayView: View {
                     .stroke(lineColor, lineWidth: 5)
                 }
 
-                // 基準となる直線 (Reference モードでは非表示)
-                if !isRef && currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
-                    referenceArc(in: geometry.size)
+                // 基準となる直線（両モードで表示）
+                if currentPoints.count >= 6 && currentPoints[0] != .zero && currentPoints[1] != .zero && currentPoints[4] != .zero && currentPoints[5] != .zero {
+                    referenceArc(in: geometry.size, isReference: isRef)
                 }
             }
         }
     }
 
-    /// 緑の基準線と、黄（現在）〜緑（基準）のなす角を示す弧
+    /// 基準線（緑またはグレー）と、黄（現在）〜緑／グレー（基準）のなす角を示す弧
     @ViewBuilder
-    private func referenceArc(in size: CGSize) -> some View {
-        let startPoint = normalizePoint(currentPoints[5], in: size)
+    private func referenceArc(in size: CGSize, isReference: Bool) -> some View {
+        let visionMidpointShoulder = CGPoint(
+            x: (currentPoints[0].x + currentPoints[1].x) / 2,
+            y: (currentPoints[0].y + currentPoints[1].y) / 2
+        )
+        let startPoint = normalizePoint(visionMidpointShoulder, in: size)
         let length: CGFloat = 200
         let radians = referenceAngle * .pi / 180.0
         let mirroredXDirection: CGFloat = (nearSide == .left) ? 1.0 : -1.0
@@ -86,16 +90,20 @@ struct PostureOverlayView: View {
             x: startPoint.x + (mirroredXDirection * length * sin(radians)),
             y: startPoint.y - length * cos(radians)
         )
+        let baselineColor: Color = isReference ? Color.gray : Color.green
+        let baselineWidth: CGFloat = isReference ? 4.0 : 6.0
         Path { path in
             path.move(to: startPoint)
             path.addLine(to: end)
         }
-        .stroke(Color.green, lineWidth: 6)
+        .stroke(baselineColor, lineWidth: baselineWidth)
 
         let pE = normalizePoint(currentPoints[4], in: size)
         let yellowAngle = atan2(pE.y - startPoint.y, pE.x - startPoint.x)
         let greenAngle = atan2(end.y - startPoint.y, end.x - startPoint.x)
         let delta = wrappedDelta(yellowAngle - greenAngle)
+        let arcColor: Color = isReference ? Color.gray : Color.green
+        let arcWidth: CGFloat = isReference ? 2.0 : 4.0
         Path { arc in
             arc.addArc(
                 center: startPoint,
@@ -105,7 +113,7 @@ struct PostureOverlayView: View {
                 clockwise: delta < 0
             )
         }
-        .stroke(Color.green, lineWidth: 4)
+        .stroke(arcColor, lineWidth: arcWidth)
     }
 
     /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。
