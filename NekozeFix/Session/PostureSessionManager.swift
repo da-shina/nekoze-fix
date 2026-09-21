@@ -297,6 +297,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             frame: frame,
             referenceNearAngleDegrees: refAngle,
             slouchDeltaThresholdDegrees: threshold,
+            videoAspectRatio: Double(snapshot.videoAspectRatio),
             distanceMetric: distanceMetric,
             slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
             previousNearSide: snapshot.nearSide

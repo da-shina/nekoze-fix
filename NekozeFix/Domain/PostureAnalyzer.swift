@@ -7,6 +7,8 @@ struct PostureAnalyzer {
     /// 片側のみ有効な場合、その側が自動的に近傍側となる（Q11）。
     ///
     /// 角度計算: 肩から耳へのベクトルと基準上向きベクトル（両肩検出時は両肩ライン直交上向き法線、片側時は画像垂直 (0,1)）の角度。
+    /// アスペクト比補正: Vision 正規化座標は非正方形フレームでも [0,1]×[0,1] に正規化されるため、
+    /// x/y のスケールが異なる。角度計算前に x 成分に (1/AR) を適用して等方座標系に変換する（ADR 0008）。
     /// 結果は鋭角 0〜90度。移動平均フィルタなし（Q12）。
     ///
     /// 信頼度 < 0.5 のキーポイントは除外される（4.5）。
@@ -15,6 +17,7 @@ struct PostureAnalyzer {
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
         slouchDeltaThresholdDegrees: Double,
+        videoAspectRatio: Double = 4.0 / 3.0,
         distanceMetric: DistanceMetric? = nil,          // ロック側ペアと基準距離（8.3 までは未使用）
         slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
         previousNearSide: Side? = nil
@@ -67,19 +70,18 @@ struct PostureAnalyzer {
         }
 
         // ステップ3: 基準法線ベクトル（両肩ライン直交上向き法線、片側時(0,1)フォールバック）と鋭角を計算（0〜90度）
+        // Vision 正規化座標は非正方形でも [0,1]×[0,1] に正規化されるため、x 成分に 1/AR を適用して等方座標系に変換する。
+        let arScale = 1.0 / videoAspectRatio
         let perpX: Double
         let perpY: Double
         if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
            ls.confidence >= minimumKeypointConfidence, rs.confidence >= minimumKeypointConfidence {
             let leftShoulder = (ls.x <= rs.x) ? ls : rs
             let rightShoulder = (ls.x <= rs.x) ? rs : ls
-            let sdx = rightShoulder.x - leftShoulder.x
+            let sdx = (rightShoulder.x - leftShoulder.x) * arScale
             let sdy = rightShoulder.y - leftShoulder.y
             let shoulderDist = sqrt(sdx * sdx + sdy * sdy)
             if shoulderDist > 0 {
-                // (sdx, sdy) に直交し、Vision座標系で上向き (+y方向) の単位ベクトル:
-                // 内積: sdx * (-sdy) + sdy * sdx = 0 (直角)
-                // sdx >= 0 のため sdx / shoulderDist >= 0 (+y方向)
                 perpX = -sdy / shoulderDist
                 perpY = sdx / shoulderDist
             } else {
@@ -91,7 +93,7 @@ struct PostureAnalyzer {
             perpY = 1.0
         }
 
-        let vx = nearEar!.x - nearShoulder!.x
+        let vx = (nearEar!.x - nearShoulder!.x) * arScale
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
         guard length > 0 else { return (nil, .insufficientKeypoints) }
@@ -116,7 +118,7 @@ struct PostureAnalyzer {
             let farEar = (nearSide! == .left) ? frame.rightEar : frame.leftEar
             let farShoulder = (nearSide! == .left) ? frame.rightShoulder : frame.leftShoulder
             if isValidPair(ear: farEar, shoulder: farShoulder) {
-                let fvx = farEar!.x - farShoulder!.x
+                let fvx = (farEar!.x - farShoulder!.x) * arScale
                 let fvy = farEar!.y - farShoulder!.y
                 let flength = sqrt(fvx * fvx + fvy * fvy)
                 if flength > 0 {
