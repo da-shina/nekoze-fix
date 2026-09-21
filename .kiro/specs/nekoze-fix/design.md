@@ -441,7 +441,7 @@ protocol PoseDetecting {
 - 観測が空（人物なし）なら `nil` を返す。Session は null 観測が **0.5 秒（`personMissingGracePeriod`）継続した時点で** `personMissing` を確定する（Q21 改訂：瞬間的な検出抜けを吸収）。肩キーポイント欠測（`.personOnly`）も **0.5 秒（`shoulderMissingGracePeriod`）継続後に** `isShoulderMissing` を確定する（Q21 拡張パターン）。猶予期間中は前回の可視化ポイントを維持し「肩が映っていません」案内のチラつきを防止する
 - 処理はキャプチャキュー上。目標は 15 fps 以上（NFR 8.1）。遅延時は最新フレーム以外を捨てる
 - **複数人物時の選択基準（FR 4.7）**: 画面中央 (0.5, 0.5) に最も近いバウンディングボックスの人物のみ認識する。顔観測は `boundingBox`、Body Pose 観測はキーポイントの囲み矩形を代理 box とし、同一の `closestToCenter`（距離二乗比較）を使う。選択はフレーム単位（人物追跡・ID ロックは持たない）
-- **人体矩形 ROI 再試行（c 案）**: パス1で `VNDetectHumanRectanglesRequest` を顔検出と同時実行し、Body Pose がフルフレームで空振りした場合のみ、人体矩形（単位矩形へクリップ）を `regionOfInterest` として再試行する。頭部クロズアップで Body Pose 観測が 0 になる実測（face/humanRect は生存）への対処で、iPad 9th 実機で蘇生を確認済み。クリップを忘れると Vision Code=14、`.zero` を代入すると Code=3 で全失敗するため、未指定時はプロパティを設定しない
+- **人体矩形 ROI 再試行は採用しない**: 9th 実機で Body Pose がフルフレーム・`humanRect` ROI のいずれでも 0 件になることを確認。`VNDetectHumanRectanglesRequest` は人物の大まかな矩形検出に留まり、肩キーポイントの蘇生には寄与しないため、Body Pose のフルフレーム観測のみを使用する
 - **ランドスケープ×なで肩の肩欠測（ADR 0014）**: iPad 9th 横置き・なで肩姿勢では Body Pose 観測がフルフレーム・ROI 再試行ともゼロ件になる（実測: 左右肩/耳 `--`、人体矩形 0.43x0.99 の生存のみ）。ランドスケープの縦画角がセンサー短辺に刈り込まれ肩が画角から落ちるのが物理原因で、検出側の救済（ROI 再試行拡張・閾値引き下げ）は不能と判定。`isShoulderMissing` のガイダンスを `SessionSnapshot.isLandscape`（向きの購読経路で更新、判定ロジックには関与しない）に応じて分岐し、ランドスケープでは「少し離してカメラが耳から肩のあたりに向くよう角度を調整する」を案内する（ガイダンス表示はキャリブレーション画面のみ。モニター画面では出さない）
 
 ### AlertPlayer

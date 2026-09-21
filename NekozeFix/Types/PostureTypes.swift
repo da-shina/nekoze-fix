@@ -97,7 +97,6 @@ struct SessionSnapshot: Equatable {
     var phase: SessionPhase = .awaitingPermission
     var displayedPosture: DisplayedPosture = .good
     var isDimmed: Bool = false
-    var isRotating: Bool = false
     var isPersonDetected: Bool = false
     /// 人物は映っているが肩のキーポイントが読めない状態（顔のみ検出）。
     /// 校正中の「肩が映っていません」案内に使用。
@@ -122,11 +121,11 @@ struct SessionSnapshot: Equatable {
 
 /// 肩キーポイント欠測時のガイダンス文言（ADR 0014）。
 /// ランドスケープは縦画角がセンサー短辺に刈り込まれなで肩の肩が画角から落ちるため、
-/// 実機検収で有効確認済みの手段（離す・カメラをやや下向きに）を案内する。
+/// 実機検収で有効確認済みの手段を案内する。
 func shoulderMissingGuidance(isLandscape: Bool) -> String {
     isLandscape
-        ? "肩を認識できません。横向きは縦の画角が狭いため、少し離してカメラが耳から肩のあたりに向くよう角度を調整してください"
-        : "肩を認識できません。画面に肩まで収めてください"
+        ? "肩を認識できません。カメラを少し離すか、フロアからの高さを少し上げてください。"
+        : "肩を認識できません。画面に肩まで収めてください。"
 }
 
 /// キーポイントを解析に含めるための最低信頼度閾値。

@@ -79,30 +79,12 @@ final class DeviceOrientationMonitor: ObservableObject {
     }
 
     private func updateOrientation() -> Bool {
-        let deviceOrientation = UIDevice.current.orientation
-        let newOrientation: AVCaptureVideoOrientation
-
-        switch deviceOrientation {
-        case .portrait:
-            newOrientation = .portrait
-        case .portraitUpsideDown:
-            newOrientation = .portraitUpsideDown
-        case .landscapeLeft:
-            newOrientation = .landscapeRight
-        case .landscapeRight:
-            newOrientation = .landscapeLeft
-        default:
-            // 起動直後など .unknown の場合は windowScene から推定
-            if let scene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-               let raw = AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue) {
-                newOrientation = raw
-            } else {
-                return false
-            }
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })
+        guard let newOrientation = AVCaptureVideoOrientation.fromDeviceOrientation(UIDevice.current.orientation, fallbackScene: scene) else {
+            return false
         }
-
         currentVideoOrientation = newOrientation
         return true
     }

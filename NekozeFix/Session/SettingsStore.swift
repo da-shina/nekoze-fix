@@ -68,9 +68,6 @@ final class SettingsStore: ObservableObject {
         } else {
             self.cameraPosition = .front
         }
-
-        // 初期化後にregisterDefaultsを呼ぶ
-        registerDefaults()
     }
 
     // MARK: - 公開プロパティ
@@ -121,15 +118,5 @@ final class SettingsStore: ObservableObject {
 
     private static func clampDistance(_ value: Double) -> Double {
         min(distanceThresholdMaxPercent, max(distanceThresholdMinPercent, value))
-    }
-
-    private func registerDefaults() {
-        // slouchThresholdDegrees をここに registered default として登録しないこと：
-        // object(forKey:) が登録値を返し、旧感度キーからの移行判定がマスクされる。
-        // デフォルト値は init の else 分岐（thresholdDefaultDegrees）で担保する。
-        defaults.register(defaults: [
-            Keys.isMonitoringEnabled: false,
-            Keys.cameraPosition: CameraPosition.front.rawValue
-        ])
     }
 }

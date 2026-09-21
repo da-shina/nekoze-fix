@@ -19,7 +19,6 @@ struct MonitorView: View {
                     mode: .reference,
                     referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
-                    threshold: settingsStore.slouchThresholdDegrees,
                     nearSide: sessionManager.snapshot.nearSide,
                     imageAspectRatio: sessionManager.snapshot.videoAspectRatio
                 )
@@ -31,7 +30,6 @@ struct MonitorView: View {
                 mode: .current,
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
@@ -145,7 +143,7 @@ struct MonitorView: View {
         VStack(spacing: 16) {
             HStack(spacing: 16) {
                 // 監視停止ボタン
-                Button(action: stopMonitoring) {
+                Button(action: { sessionManager.stopMonitoring() }) {
                     Label("停止", systemImage: "stop.fill")
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -156,7 +154,7 @@ struct MonitorView: View {
                 .buttonStyle(.borderless)
 
                 // デイムモードボタン
-                Button(action: toggleDimMode) {
+                Button(action: { sessionManager.snapshot.isDimmed ? sessionManager.exitDimMode() : sessionManager.enterDimMode() }) {
                     Label(sessionManager.snapshot.isDimmed ? "解除" : "暗転", systemImage: "moon.fill")
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -264,19 +262,6 @@ struct MonitorView: View {
         }
     }
 
-    // MARK: - アクション
-
-    private func stopMonitoring() {
-        sessionManager.stopMonitoring()
-    }
-
-    private func toggleDimMode() {
-        if sessionManager.snapshot.isDimmed {
-            sessionManager.exitDimMode()
-        } else {
-            sessionManager.enterDimMode()
-        }
-    }
 }
 
 // MARK: - プレビュー
@@ -291,9 +276,9 @@ struct MonitorView_Previews: PreviewProvider {
 
             MonitorView()
                 .environmentObject({
-                    let manager = PostureSessionManager()
-                    manager.updatePosture(.slouch)
-                    return manager
+                    var snapshot = SessionSnapshot()
+                    snapshot.displayedPosture = .slouch
+                    return PostureSessionManager(snapshot: snapshot)
                 }())
                 .environmentObject(SettingsStore())
                 .previewDisplayName("モニター - 猫背検出")

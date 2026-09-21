@@ -6,7 +6,7 @@ struct PostureAnalyzer {
     /// 近傍側の選択: 両側が有効な場合、x座標が小さい方の肩を近傍側とする（Q9）。
     /// 片側のみ有効な場合、その側が自動的に近傍側となる（Q11）。
     ///
-    /// 角度計算: 肩から耳へのベクトルと垂直方向 (0,1) の角度。
+    /// 角度計算: 肩から耳へのベクトルと基準上向きベクトル（両肩検出時は両肩ライン直交上向き法線、片側時は画像垂直 (0,1)）の角度。
     /// 結果は鋭角 0〜90度。移動平均フィルタなし（Q12）。
     ///
     /// 信頼度 < 0.5 のキーポイントは除外される（4.5）。
@@ -66,13 +66,37 @@ struct PostureAnalyzer {
             return (nil, .insufficientKeypoints)
         }
 
-        // ステップ3: 鋭角を計算（0〜90度）
+        // ステップ3: 基準法線ベクトル（両肩ライン直交上向き法線、片側時(0,1)フォールバック）と鋭角を計算（0〜90度）
+        let perpX: Double
+        let perpY: Double
+        if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
+           ls.confidence >= minimumKeypointConfidence, rs.confidence >= minimumKeypointConfidence {
+            let leftShoulder = (ls.x <= rs.x) ? ls : rs
+            let rightShoulder = (ls.x <= rs.x) ? rs : ls
+            let sdx = rightShoulder.x - leftShoulder.x
+            let sdy = rightShoulder.y - leftShoulder.y
+            let shoulderDist = sqrt(sdx * sdx + sdy * sdy)
+            if shoulderDist > 0 {
+                // (sdx, sdy) に直交し、Vision座標系で上向き (+y方向) の単位ベクトル:
+                // 内積: sdx * (-sdy) + sdy * sdx = 0 (直角)
+                // sdx >= 0 のため sdx / shoulderDist >= 0 (+y方向)
+                perpX = -sdy / shoulderDist
+                perpY = sdx / shoulderDist
+            } else {
+                perpX = 0.0
+                perpY = 1.0
+            }
+        } else {
+            perpX = 0.0
+            perpY = 1.0
+        }
+
         let vx = nearEar!.x - nearShoulder!.x
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
         guard length > 0 else { return (nil, .insufficientKeypoints) }
 
-        let cosTheta = vy / length
+        let cosTheta = (vx * perpX + vy * perpY) / length
         let clampedCos = max(-1.0, min(1.0, cosTheta))
         let thetaRadians = acos(clampedCos)
         let thetaDegrees = thetaRadians * 180.0 / .pi
@@ -96,7 +120,7 @@ struct PostureAnalyzer {
                 let fvy = farEar!.y - farShoulder!.y
                 let flength = sqrt(fvx * fvx + fvy * fvy)
                 if flength > 0 {
-                    let fcosTheta = fvy / flength
+                    let fcosTheta = (fvx * perpX + fvy * perpY) / flength
                     let fclampedCos = max(-1.0, min(1.0, fcosTheta))
                     let fthetaDegrees = acos(fclampedCos) * 180.0 / .pi
                     farAngleDegrees = min(fthetaDegrees, 180.0 - fthetaDegrees)

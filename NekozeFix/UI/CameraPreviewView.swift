@@ -69,19 +69,7 @@ internal class CameraPreviewUIView: UIView {
     private func updatePreviewOrientation() {
         guard let connection = previewLayer.connection,
               connection.isVideoOrientationSupported else { return }
-        let orientation: AVCaptureVideoOrientation
-        switch UIDevice.current.orientation {
-        case .portrait:           orientation = .portrait
-        case .portraitUpsideDown: orientation = .portraitUpsideDown
-        case .landscapeLeft:     orientation = .landscapeRight
-        case .landscapeRight:    orientation = .landscapeLeft
-        default:
-            // 起動直後など UIDevice.orientation が未知の場合は
-            // windowScene の interfaceOrientation から推定する
-            guard let scene = self.window?.windowScene else { return }
-            orientation = .init(rawValue: scene.interfaceOrientation.rawValue) ?? .portrait
-        }
-        connection.videoOrientation = orientation
+        connection.videoOrientation = .fromDeviceOrientation(UIDevice.current.orientation, fallbackScene: self.window?.windowScene) ?? .portrait
     }
 }
 

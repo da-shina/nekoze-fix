@@ -26,12 +26,11 @@ struct CalibrationView: View {
             CameraPreviewView(session: sessionManager.cameraManager.captureSession)
                 .ignoresSafeArea()
 
-            // 基準線とポイントの可視化
+            // 現在の姿勢のオーバーレイ
             PostureOverlayView(
                 mode: .current,
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                threshold: settingsStore.slouchThresholdDegrees,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
@@ -85,7 +84,7 @@ struct CalibrationView: View {
                     }
                 }
                 .padding()
-                .background(.ultraThinMaterial)
+                .background(Color.black.opacity(0.25))
                 .cornerRadius(16)
             }
             .padding()

@@ -372,4 +372,58 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertNotNil(sample?.farAngleDegrees, "両側検出時は遠側角度が非nil")
         XCTAssertNotNil(sample?.farDistance, "両側検出時は遠側距離が非nil")
     }
+
+    // MARK: - 両肩直交基準とフォールバック
+
+    /// 両肩が傾いている場合でも、耳〜肩が肩ラインに直角であれば角度0度（良好）と判定される
+    func testAngleCalculation_TiltedShoulders_CalculatesAngleRelativeToShoulderPerpendicular() {
+        // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6) -> 肩ベクトル (0.4, 0.1)
+        // 垂線単位ベクトル: (-0.1, 0.4) / sqrt(0.17) ≈ (-0.2425356, 0.9701425)
+        // 左肩から垂線方向に距離 0.2 伸ばした位置に左耳を配置
+        let ux = -0.1 / sqrt(0.17)
+        let uy = 0.4 / sqrt(0.17)
+        let earX = 0.2 + 0.2 * ux
+        let earY = 0.5 + 0.2 * uy
+
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: earX, y: earY, confidence: 0.9),
+            rightEar: Keypoint(x: 0.8, y: 0.8, confidence: 0.0), // 無効
+            leftShoulder: Keypoint(x: 0.2, y: 0.5, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.6, y: 0.6, confidence: 0.9)
+        )
+
+        let (sample, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10
+        )
+
+        // 画像垂直 (0, 1) との角度は約 14 度だが、両肩垂線との角度は 0 度
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
+        XCTAssertEqual(verdict, .good)
+    }
+
+    /// 片肩しか検出できない場合は従来の画像垂直 (0, 1) へ安全にフォールバックする
+    func testAngleCalculation_OneShoulderOnly_FallsBackToImageVertical() {
+        // 左肩 (0.2, 0.5)、右肩なし。左耳 (0.2, 0.7) は画像垂直真上
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.2, y: 0.7, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.2, y: 0.5, confidence: 0.9),
+            rightShoulder: nil
+        )
+
+        let (sample, verdict) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10
+        )
+
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
+        XCTAssertEqual(verdict, .good)
+    }
 }
