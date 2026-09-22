@@ -8,8 +8,8 @@ struct PostureAnalyzer {
     ///
     /// 角度計算: 肩から耳へのベクトルと基準上向きベクトル（両肩検出時は両肩ライン直交上向き法線、片側時は画像垂直 (0,1)）の角度。
     /// アスペクト比補正: Vision 正規化座標は非正方形フレームでも [0,1]×[0,1] に正規化されるため、
-    /// x/y のスケールが異なる。角度計算前に x 成分に (1/AR) を適用して等方座標系に変換する（ADR 0008）。
-    /// 結果は鋭角 0〜90度。移動平均フィルタなし（Q12）。
+    /// x/y のスケールが異なる。角度計算前に x 成分に AR（画像幅/画像高）を適用して等方座標系に変換する（ADR 0008）。
+    /// 距離指標はパーセント比較のため正規化座標のまま補正しない。
     ///
     /// 信頼度 < 0.5 のキーポイントは除外される（4.5）。
     /// カメラの取り付け角度は基準値に吸収される。
@@ -70,8 +70,9 @@ struct PostureAnalyzer {
         }
 
         // ステップ3: 基準法線ベクトル（両肩ライン直交上向き法線、片側時(0,1)フォールバック）と鋭角を計算（0〜90度）
-        // Vision 正規化座標は非正方形でも [0,1]×[0,1] に正規化されるため、x 成分に 1/AR を適用して等方座標系に変換する。
-        let arScale = 1.0 / videoAspectRatio
+        // Vision 正規化座標は非正方形でも [0,1]×[0,1] に正規化されるため、x 成分に AR を適用して等方座標系に変換する。
+        // 距離指標は正規化座標のまま（補正なし。パーセント比較のため座標系に依存しない）。
+        let arScale = videoAspectRatio
         let perpX: Double
         let perpY: Double
         if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
@@ -108,7 +109,10 @@ struct PostureAnalyzer {
         // 監視中（distanceMetric あり）は角度の近側選択と独立にロック側ペアで評価する（FQ1）。
         // ロック側ペアが信頼度未満等で使用できないフレームでは距離条件をスキップし、
         // 角度のみで判定を継続する。校正中（nil）は近側の素値を記録するだけ。
-        var reportedDistance = length
+        // 距離は正規化座標のまま計算（アスペクト比補正なし。パーセント比較のため座標系に依存しない）。
+        let nearDx = nearEar!.x - nearShoulder!.x
+        let nearDy = nearEar!.y - nearShoulder!.y
+        var reportedDistance = sqrt(nearDx * nearDx + nearDy * nearDy)
         var distanceOverThreshold = false
         var farAngleDegrees: Double? = nil
         var farDistanceValue: Double? = nil
@@ -126,7 +130,10 @@ struct PostureAnalyzer {
                     let fclampedCos = max(-1.0, min(1.0, fcosTheta))
                     let fthetaDegrees = acos(fclampedCos) * 180.0 / .pi
                     farAngleDegrees = min(fthetaDegrees, 180.0 - fthetaDegrees)
-                    farDistanceValue = flength
+                    // 距離は正規化座標のまま（近側と同様に補正なし）
+                    let farDx = farEar!.x - farShoulder!.x
+                    let farDy = farEar!.y - farShoulder!.y
+                    farDistanceValue = sqrt(farDx * farDx + farDy * farDy)
                 }
             }
         }

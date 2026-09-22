@@ -376,23 +376,21 @@ final class PostureAnalyzerTests: XCTestCase {
     // MARK: - 両肩直交基準とフォールバック
 
     /// 両肩が傾いている場合でも、耳〜肩が肩ラインに直角であれば角度0度（良好）と判定される
-    /// アスペクト比補正後も同じ結果になることを確認
+    /// アスペクト比補正（x 成分に AR を適用）後も同じ結果になることを確認
     func testAngleCalculation_TiltedShoulders_CalculatesAngleRelativeToShoulderPerpendicular() {
         // 4:3 アスペクト比（AR = 4/3）で検証
         let ar: Double = 4.0 / 3.0
-        // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6) -> 肩ベクトル (0.4, 0.1)
-        // 補正後肩ベクトル: (0.4/AR, 0.1) = (0.3, 0.1)
-        // 補正後垂線単位ベクトル: (-0.1, 0.3) / sqrt(0.01+0.09) = (-0.1, 0.3) / sqrt(0.1)
-        let ux = -0.1 / sqrt(0.1)
-        let uy = 0.3 / sqrt(0.1)
-        // 左肩から垂線方向に距離 0.2（正規化座標）伸ばした位置に左耳を配置
-        // 耳-肩ベクトルも補正が必要: (dx*1/AR, dy)
-        // 垂線方向に沿う耳-肩ベクトル (正規化): (ux*0.2*ar, uy*0.2) —
-        // 実際は: 耳位置 = 肩 + 0.2*(ux/ar方向を正規化座標で逆算)
-        // vx_norm = ux * 0.2 * ar, vy_norm = uy * 0.2
-        // (vx_norm, vy_norm) の長さ ≠ 0.2 だが、角度は法線と一致すればよい
-        let earDx = ux * 0.2 * ar
-        let earDy = uy * 0.2
+        // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6)
+        // 補正後肩ベクトル: (0.4*AR, 0.1) = (0.5333, 0.1)
+        let sdx = 0.4 * ar
+        let sdy = 0.1
+        let sLen = sqrt(sdx * sdx + sdy * sdy)
+        // 補正後垂線単位ベクトル
+        let ux = -sdy / sLen
+        let uy = sdx / sLen
+        // 耳を垂線方向に配置: 補正後ベクトルが垂線と平行 → 角度0°
+        let earDx = 0.2 * ux / ar
+        let earDy = 0.2 * uy
         let earX = 0.2 + earDx
         let earY = 0.5 + earDy
 
@@ -441,20 +439,23 @@ final class PostureAnalyzerTests: XCTestCase {
 
     // MARK: - アスペクト比補正
 
-    /// アスペクト比補正により、肩が傾斜した場合に正規化座標と等方座標の角度差が是正される
+    /// アスペクト比補正（x 成分に AR を適用）により、肩が傾斜した場合に正規化座標と等方座標の角度差が是正される
     func testAspectRatioCorrection_TiltedShoulders_CorrectsAngleDistortion() {
         // 4:3 フレーム。左肩 (0.2, 0.5)、右肩 (0.6, 0.6)
         // 肩ベクトル（正規化）: (0.4, 0.1) → atan2(0.1, 0.4) ≈ 14.0°
-        // 肩ベクトル（等方・x*3/4）: (0.3, 0.1) → atan2(0.1, 0.3) ≈ 18.4°
-        // 真の角度差は ~4.4°
+        // 肩ベクトル（等方・x*AR）: (0.5333, 0.1) → atan2(0.1, 0.5333) ≈ 10.6°
+        // 真の角度差は ~3.4°
         //
         // 耳を肩ラインに直角（等方座標）に配置 → 補正後は角度0°
-        // 補正なしの場合は ~4.4° の誤差が生じるはず
+        // 補正なしの場合は ~3.4° の誤差が生じるはず
         let ar: Double = 4.0 / 3.0
-        let ux = -0.1 / sqrt(0.1)
-        let uy = 0.3 / sqrt(0.1)
-        let earDx = ux * 0.2 * ar
-        let earDy = uy * 0.2
+        let sdx = 0.4 * ar
+        let sdy = 0.1
+        let sLen = sqrt(sdx * sdx + sdy * sdy)
+        let ux = -sdy / sLen
+        let uy = sdx / sLen
+        let earDx = 0.2 * ux / ar
+        let earDy = 0.2 * uy
         let earX = 0.2 + earDx
         let earY = 0.5 + earDy
 
