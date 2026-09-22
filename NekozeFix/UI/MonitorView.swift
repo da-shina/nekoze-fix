@@ -179,6 +179,7 @@ struct MonitorView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 150)
+                .disabled(sessionManager.snapshot.phase == .monitoring)
             }
             .padding(.horizontal)
         }
