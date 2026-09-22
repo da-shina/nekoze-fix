@@ -104,6 +104,9 @@ struct SessionSnapshot: Equatable {
     var showGuideline: Bool = false
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
+    /// 表示用姿勢の dwell ゲート（0.5秒連続で slouchCandidate のときのみ .slouch 表示。
+    /// good 方向は即時反映。フレームノイズによる一瞬の誤表示を防止）。
+    var postureDisplayGate: TimedConditionGate = TimedConditionGate(requiredDuration: 0.5)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil
     /// 校正時耳-肩距離の平均（正規化座標系）。左右それぞれ保持。
