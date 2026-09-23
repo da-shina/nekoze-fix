@@ -16,9 +16,6 @@ struct PostureOverlayView: View {
     var isMirrored: Bool = true
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
-    /// デバイスがランドスケープ向きか。Vision 座標はポートレート基準のため
-    /// ランドスケープ時は座標を90°回転してプレビューに合わせる。
-    var isLandscape: Bool = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -140,11 +137,12 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        let screenX = isLandscape ? point.y : point.x
-        let screenY = isLandscape ? 1.0 - point.x : 1.0 - point.y
+        let screenX = point.x
+        let screenY = 1.0 - point.y
 
-        // ランドスケープ時は画像の縦横が逆転するため AR も逆数にする
-        let imageAR = isLandscape ? 1.0 / imageAspectRatio : imageAspectRatio
+        // iPadOS 18 以降バッファ自動回転: Vision 座標は常に画面向き基準で出力される。
+        // CVPixelBufferGetWidth/Height も回転後の寸法を返すため imageAR も正しい。
+        let imageAR = imageAspectRatio
         let viewAR = size.width / size.height
         var sx: CGFloat = 1.0
         var sy: CGFloat = 1.0
