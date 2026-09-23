@@ -140,23 +140,9 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        // Vision 座標: (0,0) 左下、x 右、y 上
-        // 画面座標: (0,0) 左上、x 右、y 下
-        // ポートレート: 画面x = visionX, 画面y = 1 - visionY
-        // ランドスケープ: Vision 座標はポートレート基準で出力されるため
-        //   プレビューの90°回転に合わせて座標も回転する
-        //   画面x = visionY, 画面y = 1 - visionX
-        let screenX: CGFloat
-        let screenY: CGFloat
-        if isLandscape {
-            screenX = point.y          // vision y → screen x
-            screenY = 1.0 - point.x    // vision x → screen y (反転)
-        } else {
-            screenX = point.x
-            screenY = 1.0 - point.y
-        }
+        let screenX = isLandscape ? point.y : point.x
+        let screenY = isLandscape ? 1.0 - point.x : 1.0 - point.y
 
-        // AspectFit 補正: 画像AR と画面AR の違いによる黒帯を考慮
         // ランドスケープ時は画像の縦横が逆転するため AR も逆数にする
         let imageAR = isLandscape ? 1.0 / imageAspectRatio : imageAspectRatio
         let viewAR = size.width / size.height

@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// 監視モード中の画面回転ロック。
-/// PostureSessionManager がフェーズ遷移時に lock/unlock を呼び出す。
-final class OrientationLockController {
-    static let shared = OrientationLockController()
-    private(set) var isPortraitLocked = false
-    private init() {}
+/// AppDelegate: 監視モード中の画面回転をポートレートに制限する。
+class AppDelegate: NSObject, UIApplicationDelegate {
+    static var isPortraitLocked = false
 
-    func lockToPortrait() {
+    static func lockToPortrait() {
         guard !isPortraitLocked else { return }
         isPortraitLocked = true
         let current = UIDevice.current.orientation
@@ -17,17 +14,14 @@ final class OrientationLockController {
         UIViewController.attemptRotationToDeviceOrientation()
     }
 
-    func unlock() {
+    static func unlock() {
         guard isPortraitLocked else { return }
         isPortraitLocked = false
         UIViewController.attemptRotationToDeviceOrientation()
     }
-}
 
-/// AppDelegate: 監視モード中の画面回転をポートレートに制限する。
-class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        OrientationLockController.shared.isPortraitLocked ? .portrait : .all
+        Self.isPortraitLocked ? .portrait : .all
     }
 }
 

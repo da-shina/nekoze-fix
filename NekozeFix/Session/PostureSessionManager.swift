@@ -145,7 +145,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.postureDisplayGate.reset()
         lastGateTickTime = nil
         // 監視モード中はポートレート固定（回転によるオーバーレイずれを防止）
-        OrientationLockController.shared.lockToPortrait()
+        AppDelegate.lockToPortrait()
         Task {
             await startCameraPipeline()
         }
@@ -161,7 +161,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
         // ポートレート固定を解除
-        OrientationLockController.shared.unlock()
+        AppDelegate.unlock()
     }
 
     // MARK: - ライフサイクル（要求 8.1/8.2、タスク3.5）
@@ -177,7 +177,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
         // バックグラウンド中は回転制限を解除
-        OrientationLockController.shared.unlock()
+        AppDelegate.unlock()
     }
 
     /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
