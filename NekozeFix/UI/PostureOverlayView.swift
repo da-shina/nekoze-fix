@@ -141,28 +141,10 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        // Vision 座標はポートレート基準 (0,0)左下、x右、y上
-        // 画面座標は (0,0)左上、x右、y下
-        // プレビューは videoOrientation に従って回転表示されるため、
-        // オーバーレイも同じ回転を適用する
-        let screenX: CGFloat
-        let screenY: CGFloat
-        switch videoOrientation {
-        case .portrait, .portraitUpsideDown:
-            screenX = point.x
-            screenY = 1.0 - point.y
-        case .landscapeRight:
-            // ホームボタン右: ポートレート座標を90°右回転
-            screenX = point.y
-            screenY = 1.0 - point.x
-        case .landscapeLeft:
-            // ホームボタン左: ポートレート座標を90°左回転
-            screenX = 1.0 - point.y
-            screenY = point.x
-        @unknown default:
-            screenX = point.x
-            screenY = 1.0 - point.y
-        }
+        // iPadOS 18 バッファ自動回転: Vision 座標はすでに画面向き基準で出力される。
+        // そのまま画面座標に変換（追加の回転は二重回転になる）。
+        let screenX = point.x
+        let screenY = 1.0 - point.y
 
         // ランドスケープ時は画像の縦横が逆転するため AR も逆数にする
         let imageAR = videoOrientation.isLandscape ? 1.0 / imageAspectRatio : imageAspectRatio
