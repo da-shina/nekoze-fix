@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// 姿勢検知のポイントとラインを可視化するオーバーレイ。
 struct PostureOverlayView: View {
@@ -14,8 +15,10 @@ struct PostureOverlayView: View {
     /// 前面カメラ等でプレビューがミラー表示されているか。
     /// Vision 座標の x 反転と緑線方向の決定に使用。
     var isMirrored: Bool = true
-    /// キャプチャ画像のアスペクト比（AspectFit 補正用）
+    /// キャプチャ画像のアスペクト比（バッファ実寸基準。ポートレート前提）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
+    /// 現在のビデオ向き。AspectFit 補正の AR 計算に使用。
+    var videoOrientation: AVCaptureVideoOrientation = .portrait
 
     var body: some View {
         GeometryReader { geometry in
@@ -138,7 +141,7 @@ struct PostureOverlayView: View {
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
         // iPadOS 18 バッファ自動回転: Vision 座標はすでに画面向き基準で出力される。
-        // CVPixelBufferGetWidth/Height も回転後の寸法を返すため imageAspectRatio も正しい。
+        // 座標回転は不要（二重回転になる）。
         let screenX = point.x
         let screenY = 1.0 - point.y
 
