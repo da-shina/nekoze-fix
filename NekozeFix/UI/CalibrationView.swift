@@ -32,8 +32,7 @@ struct CalibrationView: View {
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                videoOrientation: sessionManager.snapshot.videoOrientation
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
             .ignoresSafeArea()
 
