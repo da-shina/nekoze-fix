@@ -120,6 +120,8 @@ struct SessionSnapshot: Equatable {
     var nearSide: Side? = nil
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
+    /// 現在のビデオ向き。オーバーレイの座標変換に使用。
+    var videoOrientation: AVCaptureVideoOrientation = .portrait
 }
 
 /// 肩キーポイント欠測時のガイダンス文言（ADR 0014）。
