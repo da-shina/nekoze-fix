@@ -20,7 +20,8 @@ struct MonitorView: View {
                     referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
                     nearSide: sessionManager.snapshot.nearSide,
-                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                    isLandscape: sessionManager.snapshot.isLandscape
                 )
                 .ignoresSafeArea()
             }
@@ -31,7 +32,8 @@ struct MonitorView: View {
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                isLandscape: sessionManager.snapshot.isLandscape
             )
             .ignoresSafeArea()
 

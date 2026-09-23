@@ -16,6 +16,9 @@ struct PostureOverlayView: View {
     var isMirrored: Bool = true
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
+    /// デバイスがランドスケープ向きか。Vision 座標はポートレート基準のため
+    /// ランドスケープ時は座標を90°回転してプレビューに合わせる。
+    var isLandscape: Bool = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -137,23 +140,35 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        let visionX = point.x
-        let visionY = 1.0 - point.y
-        let imageAR = imageAspectRatio
+        // Vision 座標: (0,0) 左下、x 右、y 上
+        // 画面座標: (0,0) 左上、x 右、y 下
+        // ポートレート: 画面x = visionX, 画面y = 1 - visionY
+        // ランドスケープ: Vision 座標はポートレート基準で出力されるため
+        //   プレビューの90°回転に合わせて座標も回転する
+        //   画面x = visionY, 画面y = 1 - visionX
+        let screenX: CGFloat
+        let screenY: CGFloat
+        if isLandscape {
+            screenX = point.y          // vision y → screen x
+            screenY = 1.0 - point.x    // vision x → screen y (反転)
+        } else {
+            screenX = point.x
+            screenY = 1.0 - point.y
+        }
+
+        // AspectFit 補正: 画像AR と画面AR の違いによる黒帯を考慮
+        // ランドスケープ時は画像の縦横が逆転するため AR も逆数にする
+        let imageAR = isLandscape ? 1.0 / imageAspectRatio : imageAspectRatio
         let viewAR = size.width / size.height
         var sx: CGFloat = 1.0
         var sy: CGFloat = 1.0
         if viewAR > imageAR {
-            // 画面が画像より横長 -> 左右に余白（ピラーボックス）、上下はぴったり
             sx = imageAR / viewAR
-            sy = 1.0
         } else if viewAR < imageAR {
-            // 画面が画像より縦長 -> 上下に余白（レターボックス）、左右はぴったり
-            sx = 1.0
             sy = viewAR / imageAR
         }
-        let normX = visionX * sx + (1.0 - sx) / 2.0
-        let normY = visionY * sy + (1.0 - sy) / 2.0
+        let normX = screenX * sx + (1.0 - sx) / 2.0
+        let normY = screenY * sy + (1.0 - sy) / 2.0
         return CGPoint(x: normX * size.width, y: normY * size.height)
     }
 }
