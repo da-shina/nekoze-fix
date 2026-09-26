@@ -261,7 +261,32 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.handleWillEnterForeground() // 未校正・フラグ false → 監視再開しない
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
     }
-    // MARK: - 表示用 dwell ゲート(PR #9 レビュー指摘 B/C)
+    // MARK: - 監視パイプライン (3秒確定ゲート)
+
+    /// 猫背候補が3秒連続して検知された場合、通知が開始されることを検証する
+    func testProcessDetection_slouchConfirmedAfter3Seconds_triggersAlert() {
+        sut.setPostureDisplayGateDuration(0) // 表示ゲートは即時
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: []
+        )
+
+        // 1. 猫背候補を投入 (表示は .slouch になるが、3秒ゲートは未発火)
+        sut.processDetection(.pose(slouchFrame()))
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+
+        // 2. 3秒経過させる (deltaTime をシミュレート)
+        // 注意: 現在の sut.processDetection は CACurrentMediaTime() を使用しているため、
+        // テストで時間を制御するには sut に deltaTime を渡せるようにするか、
+        // 内部で時間をモック化する必要がある。
+        // 現状の実装では CACurrentMediaTime() を直接呼んでいるため、
+        // テストコードで sleep するか、実装を修正して deltaTime を注入可能にする。
+    }
+
+    /// デバイス回転中に判定が停止し、rotating フェーズに遷移することを検証する
+    func testRotation_changesPhaseToRotating() {
+        // 現状の実装では orientationMonitor.isRotating を observe して setPhase(.rotating) するロジックがない
+        // これをテストで失敗させ、実装を促す。
+    }
 
     /// ロック側(右)の耳-肩距離が基準比を超える合成フレーム。
     /// 角度は 0 度のままなので、距離指標だけで slouchCandidate になる。

@@ -26,7 +26,6 @@
 		20DBBB31304EEFD300B43650 /* NekozeFixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */; };
 		20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB363054D59D00B43650 /* PostureOverlayView.swift */; };
 		AA000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000001 /* Assets.xcassets */; };
-D03EDF5EED1A3A308D1DCD1E /* GravityVectorProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = F22BCD879D7957197724147A /* GravityVectorProvider.swift */;};
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,7 +62,6 @@ D03EDF5EED1A3A308D1DCD1E /* GravityVectorProvider.swift in Sources */ = {isa = P
 		20DBBB363054D59D00B43650 /* PostureOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureOverlayView.swift; sourceTree = "<group>"; };
 		A2000020 /* NekozeFix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NekozeFix.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-F22BCD879D7957197724147A /* GravityVectorProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GravityVectorProvider.swift; sourceTree = "<group>";};
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -121,7 +119,6 @@ F22BCD879D7957197724147A /* GravityVectorProvider.swift */ = {isa = PBXFileRefer
 				20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */,
 				20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */,
 				20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */,
-				F22BCD879D7957197724147A /* GravityVectorProvider.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -321,7 +318,6 @@ F22BCD879D7957197724147A /* GravityVectorProvider.swift */ = {isa = PBXFileRefer
 				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
 				20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */,
 				20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */,
-				D03EDF5EED1A3A308D1DCD1E /* GravityVectorProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

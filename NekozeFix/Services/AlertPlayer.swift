@@ -1,9 +1,16 @@
 import AVFoundation
 
+protocol AlertPlaying {
+    func configureSession() throws
+    func playOnce()
+    func startRepeating()
+    func stop()
+}
+
 /// サービス層: .playback オーディオカテゴリによる通知音再生。
 /// 詳細は design.md "AlertPlayer" セクション参照。
 
-final class AlertPlayer {
+final class AlertPlayer: AlertPlaying {
     // MARK: - プロパティ
 
     private var audioPlayer: AVAudioPlayer?
