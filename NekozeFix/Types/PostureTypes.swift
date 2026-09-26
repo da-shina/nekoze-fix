@@ -77,6 +77,10 @@ enum DisplayedPosture: Equatable {
     case good
     case slouch
     case personMissing
+
+    var isSlouch: Bool {
+        self == .slouch
+    }
 }
 
 enum CalibrationProgress: Equatable {

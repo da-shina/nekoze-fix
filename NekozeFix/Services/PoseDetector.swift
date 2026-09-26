@@ -59,6 +59,10 @@ final class PoseDetector: @unchecked Sendable {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return .absent
         }
+        return detect(pixelBuffer: pixelBuffer, orientation: orientation)
+    }
+
+    func detect(pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation) -> Detection {
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation)
 
         // パス1: 顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）

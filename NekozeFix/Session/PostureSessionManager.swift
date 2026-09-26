@@ -18,13 +18,13 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private let poseDetector = PoseDetector()
     private let postureAnalyzer = PostureAnalyzer()
     private var calibrationLogic = CalibrationLogic()
-    let settingsStore: SettingsStore
+    var settingsStore: SettingsStore
     private let orientationMonitor = DeviceOrientationMonitor()
-    private let gravityProvider = GravityVectorProvider()
+    let gravityProvider = GravityVectorProvider()
 
 
-    // 通知音（design.md "AlertPlayer" Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
-    private lazy var alertPlayer: AlertPlayer? = {
+    // 通知音（design.md AlertPlaying Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
+    var alertPlayer: AlertPlaying? = {
         guard let url = Bundle.main.url(forResource: "usagi-to-kame", withExtension: "caf") else {
             print("AlertPlayer: usagi-to-kame.caf が見つかりません")
             return nil
@@ -79,6 +79,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// テスト用: 表示用 dwell gate の requiredDuration を変更する。
     /// テストではフレーム間の実時間がほぼ0のため、デフォルト0.5秒では
     /// gate が発火せず displayedPosture が .slouch にならない。
+    /// テスト用: セッション状態を直接設定する。
+    func setTestSnapshot(_ snapshot: SessionSnapshot) {
+        self.snapshot = snapshot
+    }
+
+    /// テスト用: 表示用 dwell gate の requiredDuration を変更する。
     func setPostureDisplayGateDuration(_ duration: TimeInterval) {
         snapshot.postureDisplayGate = TimedConditionGate(requiredDuration: duration)
     }
@@ -258,11 +264,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // iPadOS 18 以降、videoDataOutput のバッファはインターフェース向きに
         // 自動回転して配信される（connection.videoOrientation は参考値にすぎない）。
         // したがって Vision には常に .up を渡す。
-        //
+
         // ポーズ検出はキャプチャキュー（sessionQueue）上で同期的に実行する。
         // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
         // タップ応答の遅延・取りこぼしを引き起こす。
-        // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
+        // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引う。
         let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
 
         Task { @MainActor in
@@ -329,7 +335,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
         var points = [CGPoint](repeating: .zero, count: 6)
 
-        // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片側は出す)
+        // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片方は出す)
         if let ls = frame.leftShoulder {
             points[0] = CGPoint(x: ls.x, y: ls.y)
         }

@@ -1,0 +1,603 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 70;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		20DBBB1C304EEE2E00B43650 /* usagi-to-kame.caf in Resources */ = {isa = PBXBuildFile; fileRef = 20DBBAF2304EEE2E00B43650 /* usagi-to-kame.caf */; };
+		20DBBB1F304EEE9200B43650 /* CalibrationLogic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAED304EEE2E00B43650 /* CalibrationLogic.swift */; };
+		20DBBB20304EEE9200B43650 /* PostureAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAEE304EEE2E00B43650 /* PostureAnalyzer.swift */; };
+		20DBBB21304EEE9200B43650 /* TimedConditionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAEF304EEE2E00B43650 /* TimedConditionGate.swift */; };
+		20DBBB22304EEE9B00B43650 /* AlertPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */; };
+		20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */; };
+		20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */; };
+		20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */; };
+		20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */; };
+		20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */; };
+		20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */; };
+		20DBBB2C304EEFCE00B43650 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB01304EEE2E00B43650 /* CalibrationView.swift */; };
+		20DBBB2D304EEFCE00B43650 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */; };
+		20DBBB2E304EEFCE00B43650 /* MonitorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB03304EEE2E00B43650 /* MonitorView.swift */; };
+		20DBBB2F304EEFCE00B43650 /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB04304EEE2E00B43650 /* PermissionView.swift */; };
+		20DBBB30304EEFCE00B43650 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB05304EEE2E00B43650 /* RootView.swift */; };
+		20DBBB31304EEFD300B43650 /* NekozeFixApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */; };
+		20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB363054D59D00B43650 /* PostureOverlayView.swift */; };
+		AA000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA000001 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		20DBBACB304EECF600B43650 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A5000006 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A5000000;
+			remoteInfo = NekozeFix;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		20DBBAC7304EECF500B43650 /* NekozeFixTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NekozeFixTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		20DBBAED304EEE2E00B43650 /* CalibrationLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationLogic.swift; sourceTree = "<group>"; };
+		20DBBAEE304EEE2E00B43650 /* PostureAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureAnalyzer.swift; sourceTree = "<group>"; };
+		20DBBAEF304EEE2E00B43650 /* TimedConditionGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimedConditionGate.swift; sourceTree = "<group>"; };
+		20DBBAF1304EEE2E00B43650 /* .gitkeep */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitkeep; sourceTree = "<group>"; };
+		20DBBAF2304EEE2E00B43650 /* usagi-to-kame.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "usagi-to-kame.caf"; sourceTree = "<group>"; };
+		20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPlayer.swift; sourceTree = "<group>"; };
+		20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionManager.swift; sourceTree = "<group>"; };
+		20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientationMonitor.swift; sourceTree = "<group>"; };
+		20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseDetector.swift; sourceTree = "<group>"; };
+		20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureSessionManager.swift; sourceTree = "<group>"; };
+		20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureTypes.swift; sourceTree = "<group>"; };
+		20DBBB01304EEE2E00B43650 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
+		20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		20DBBB03304EEE2E00B43650 /* MonitorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorView.swift; sourceTree = "<group>"; };
+		20DBBB04304EEE2E00B43650 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
+		20DBBB05304EEE2E00B43650 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		20DBBB07304EEE2E00B43650 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NekozeFixApp.swift; sourceTree = "<group>"; };
+		20DBBB363054D59D00B43650 /* PostureOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureOverlayView.swift; sourceTree = "<group>"; };
+		A2000020 /* NekozeFix.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NekozeFix.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		20DBBAC8304EECF500B43650 /* NekozeFixTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = NekozeFixTests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		20DBBAC4304EECF500B43650 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		20DBBAEC304EEE2E00B43650 /* BuildOutput */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = BuildOutput;
+			sourceTree = "<group>";
+		};
+		20DBBAF0304EEE2E00B43650 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBAED304EEE2E00B43650 /* CalibrationLogic.swift */,
+				20DBBAEE304EEE2E00B43650 /* PostureAnalyzer.swift */,
+				20DBBAEF304EEE2E00B43650 /* TimedConditionGate.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		20DBBAF3304EEE2E00B43650 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBAF1304EEE2E00B43650 /* .gitkeep */,
+				20DBBAF2304EEE2E00B43650 /* usagi-to-kame.caf */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		20DBBAF9304EEE2E00B43650 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */,
+				20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */,
+				20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */,
+				20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		20DBBAFC304EEE2E00B43650 /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */,
+				20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		20DBBB00304EEE2E00B43650 /* Types */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */,
+			);
+			path = Types;
+			sourceTree = "<group>";
+		};
+		20DBBB06304EEE2E00B43650 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				20DBBB363054D59D00B43650 /* PostureOverlayView.swift */,
+				20DBBB01304EEE2E00B43650 /* CalibrationView.swift */,
+				20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */,
+				20DBBB03304EEE2E00B43650 /* MonitorView.swift */,
+				20DBBB04304EEE2E00B43650 /* PermissionView.swift */,
+				20DBBB05304EEE2E00B43650 /* RootView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		20DBBB09304EEE2E00B43650 /* NekozeFix */ = {
+			isa = PBXGroup;
+			children = (
+				AA000001 /* Assets.xcassets */,
+				20DBBAEC304EEE2E00B43650 /* BuildOutput */,
+				20DBBAF0304EEE2E00B43650 /* Domain */,
+				20DBBAF3304EEE2E00B43650 /* Resources */,
+				20DBBAF9304EEE2E00B43650 /* Services */,
+				20DBBAFC304EEE2E00B43650 /* Session */,
+				20DBBB00304EEE2E00B43650 /* Types */,
+				20DBBB06304EEE2E00B43650 /* UI */,
+				20DBBB07304EEE2E00B43650 /* Info.plist */,
+				20DBBB08304EEE2E00B43650 /* NekozeFixApp.swift */,
+			);
+			path = NekozeFix;
+			sourceTree = "<group>";
+		};
+		A4000000 = {
+			isa = PBXGroup;
+			children = (
+				20DBBB09304EEE2E00B43650 /* NekozeFix */,
+				20DBBAC8304EECF500B43650 /* NekozeFixTests */,
+				A4000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A4000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A2000020 /* NekozeFix.app */,
+				20DBBAC7304EECF500B43650 /* NekozeFixTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		20DBBAC6304EECF500B43650 /* NekozeFixTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 20DBBACD304EECF600B43650 /* Build configuration list for PBXNativeTarget "NekozeFixTests" */;
+			buildPhases = (
+				20DBBAC3304EECF500B43650 /* Sources */,
+				20DBBAC4304EECF500B43650 /* Frameworks */,
+				20DBBAC5304EECF500B43650 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				20DBBACC304EECF600B43650 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				20DBBAC8304EECF500B43650 /* NekozeFixTests */,
+			);
+			name = NekozeFixTests;
+			packageProductDependencies = (
+			);
+			productName = NekozeFixTests;
+			productReference = 20DBBAC7304EECF500B43650 /* NekozeFixTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A5000000 /* NekozeFix */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A6000003 /* Build configuration list for PBXNativeTarget "NekozeFix" */;
+			buildPhases = (
+				A3000000 /* Frameworks */,
+				A5000002 /* Sources */,
+				A5000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NekozeFix;
+			productName = NekozeFix;
+			productReference = A2000020 /* NekozeFix.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A5000006 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					20DBBAC6304EECF500B43650 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = A5000000;
+					};
+					A5000000 = {
+						CreatedOnToolsVersion = 17.0;
+					};
+				};
+			};
+			buildConfigurationList = A6000000 /* Build configuration list for PBXProject "NekozeFix" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"ja-JP",
+			);
+			mainGroup = A4000000;
+			productRefGroup = A4000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A5000000 /* NekozeFix */,
+				20DBBAC6304EECF500B43650 /* NekozeFixTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		20DBBAC5304EECF500B43650 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000002 /* Assets.xcassets in Resources */,
+				20DBBB1C304EEE2E00B43650 /* usagi-to-kame.caf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		20DBBAC3304EECF500B43650 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A5000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				20DBBB31304EEFD300B43650 /* NekozeFixApp.swift in Sources */,
+				20DBBB2C304EEFCE00B43650 /* CalibrationView.swift in Sources */,
+				20DBBB2D304EEFCE00B43650 /* CameraPreviewView.swift in Sources */,
+				20DBBB2E304EEFCE00B43650 /* MonitorView.swift in Sources */,
+				20DBBB21304EEE9200B43650 /* TimedConditionGate.swift in Sources */,
+				20DBBB20304EEE9200B43650 /* PostureAnalyzer.swift in Sources */,
+				20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */,
+				20DBBB1F304EEE9200B43650 /* CalibrationLogic.swift in Sources */,
+				20DBBB22304EEE9B00B43650 /* AlertPlayer.swift in Sources */,
+				20DBBB2F304EEFCE00B43650 /* PermissionView.swift in Sources */,
+				20DBBB30304EEFCE00B43650 /* RootView.swift in Sources */,
+				20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */,
+				20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */,
+				20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */,
+				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
+				20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */,
+				20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		20DBBACC304EECF600B43650 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A5000000 /* NekozeFix */;
+			targetProxy = 20DBBACB304EECF600B43650 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		20DBBACE304EECF600B43650 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "da-shina.NekozeFixTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NekozeFix.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NekozeFix";
+			};
+			name = Debug;
+		};
+		20DBBACF304EECF600B43650 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "da-shina.NekozeFixTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NekozeFix.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NekozeFix";
+			};
+			name = Release;
+		};
+		A6000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS_PREFIX_IN_EXTENSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A6000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS_PREFIX_IN_EXTENSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A6000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLATFORM = iOS;
+				INFOPLIST_KEY_CFBundleDisplayName = NekozeFix;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSCameraUsageDescription = "NekozeFix needs camera access to detect your posture in real-time.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.nekoze.nekoze-fix";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A6000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 784BVSV6BA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLATFORM = iOS;
+				INFOPLIST_KEY_CFBundleDisplayName = NekozeFix;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSCameraUsageDescription = "NekozeFix needs camera access to detect your posture in real-time.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.nekoze.nekoze-fix";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		20DBBACD304EECF600B43650 /* Build configuration list for PBXNativeTarget "NekozeFixTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				20DBBACE304EECF600B43650 /* Debug */,
+				20DBBACF304EECF600B43650 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A6000000 /* Build configuration list for PBXProject "NekozeFix" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A6000001 /* Debug */,
+				A6000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A6000003 /* Build configuration list for PBXNativeTarget "NekozeFix" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A6000005 /* Debug */,
+				A6000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A5000006 /* Project object */;
+}
