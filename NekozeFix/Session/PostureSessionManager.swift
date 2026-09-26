@@ -99,9 +99,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         orientationMonitor.$currentVideoOrientation
             .sink { [weak self] orientation in
                 self?.cameraManager.updateVideoOrientation(orientation)
-                // なで肩ガイダンスの向き分岐用（ADR 0014）とオーバーレイ座標変換用。
-                // Session が唯一の書き込み点。
-                self?.snapshot.isLandscape = orientation.isLandscape
+                // オーバーレイの座標変換用。Session が唯一の書き込み点。
                 self?.snapshot.videoOrientation = orientation
             }
             .store(in: &cancellables)
@@ -140,12 +138,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         exitDimMode()
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
-        // 監視開始時にゲートをリセットする
-        snapshot.slouchGate.reset()
-        snapshot.postureDisplayGate.reset()
-        lastGateTickTime = nil
-        // 監視モード中はポートレート固定（回転によるオーバーレイずれを防止）
-        AppDelegate.lockToPortrait()
+        // 監視開始の初期化（ゲート・表示状態）。再校正完了時も同じ初期化を使う
+        resetMonitoringState()
         Task {
             await startCameraPipeline()
         }
@@ -160,8 +154,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         cameraManager.stop()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
-        // ポートレート固定を解除
-        AppDelegate.unlock()
     }
 
     // MARK: - ライフサイクル（要求 8.1/8.2、タスク3.5）
@@ -176,8 +168,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             setPhase(.idle)
         }
         snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
-        // バックグラウンド中は回転制限を解除
-        AppDelegate.unlock()
     }
 
     /// フォアグラウンド復帰: 監視フラグ true かつ校正済みなら監視を再開する（要求 8.2）。
@@ -433,8 +423,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                     self.snapshot.postureDisplayGate.tick(isConditionMet: false, deltaTime: deltaTime)
                     self.snapshot.displayedPosture = .good
                 }
+            } else {
+                // 姿勢判定不能フレーム（presence は personDetected だが sample なし）:
+                // 表示は維持し、dwell 蓄積だけ解除する（欠測を挟んだ非連続フレームでの .slouch 確定を防ぐ）
+                self.snapshot.postureDisplayGate.reset()
             }
-            // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
 
             // 確定猫背ゲート: 3秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
             let isSlouch = self.snapshot.displayedPosture == .slouch
@@ -446,6 +439,16 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.alertPlayer?.stop()
             }
         }
+    }
+
+    /// 監視開始時のゲート・表示状態の初期化（監視開始の唯一の初期化点）。
+    /// 再校正完了時にも呼ぶ — 校正中の経過を deltaTime に持ち込ませない（PR #9 レビュー指摘）。
+    private func resetMonitoringState() {
+        snapshot.slouchGate.reset()
+        snapshot.postureDisplayGate.reset()
+        lastGateTickTime = nil
+        // 前セッションの .slouch を持ち越さない（startMonitoring と同じ初期状態にする）
+        snapshot.displayedPosture = .good
     }
 
     /// 校正完了時に基準値をスナップショットへ反映し監視フェーズへ遷移する。
@@ -469,6 +472,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
+        // 再校正完了時も監視開始と同じ初期状態にする（ゲート・時刻・表示をリセット）
+        resetMonitoringState()
     }
 
     /// セッションのフェーズの唯一の書き込み経路。

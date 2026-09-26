@@ -15,8 +15,6 @@ extension AVCaptureVideoOrientation {
         }
     }
 
-    /// ランドスケープ向きか
-    var isLandscape: Bool { self == .landscapeLeft || self == .landscapeRight }
 }
 
 /// フロントカメラのセッション管理とパーミッション。

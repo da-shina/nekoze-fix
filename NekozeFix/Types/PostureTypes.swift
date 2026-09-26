@@ -118,20 +118,15 @@ struct SessionSnapshot: Equatable {
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
-    /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
-    var isLandscape: Bool = false
     /// 現在のビデオ向き。オーバーレイの座標変換に使用。
     var videoOrientation: AVCaptureVideoOrientation = .portrait
 }
 
-/// 肩キーポイント欠測時のガイダンス文言（ADR 0014）。
-/// ランドスケープは縦画角がセンサー短辺に刈り込まれなで肩の肩が画角から落ちるため、
-/// 実機検収で有効確認済みの手段を案内する。
-func shoulderMissingGuidance(isLandscape: Bool) -> String {
-    isLandscape
-        ? "肩を認識できません。カメラを少し離すか、フロアからの高さを少し上げてください。"
-        : "肩を認識できません。画面に肩まで収めてください。"
-}
+/// 肩キーポイント欠測時のガイダンス文言。
+/// ランドスケープは縦画角がセンサー短辺に刈り込まれなで肩の肩が画角から落ちるが、
+/// 検出側の救済は不能と実測判定済みのため、向きに依存しない固定文言で案内する。
+/// 実際に有効な手段（カメラの位置・角度・高さの調整）を含む1文に統一。
+let shoulderMissingGuidance = "カメラの位置を工夫し画面中央に肩や耳を納めてください。"
 
 /// キーポイントを解析に含めるための最低信頼度閾値。
 // 設計仕様: confidence < 0.3 → 猫背検出から除外（なで肩等の低信頼度帯を救うため 0.5 → 0.3 に改訂）。
