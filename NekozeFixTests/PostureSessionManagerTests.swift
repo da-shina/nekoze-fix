@@ -261,4 +261,57 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.handleWillEnterForeground() // 未校正・フラグ false → 監視再開しない
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
     }
+    // MARK: - 表示用 dwell ゲート(PR #9 レビュー指摘 B/C)
+
+    /// ロック側(右)の耳-肩距離が基準比を超える合成フレーム。
+    /// 角度は 0 度のままなので、距離指標だけで slouchCandidate になる。
+    private func slouchFrame() -> PoseFrame {
+        PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.39, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+    }
+
+    /// 再校正完了時にゲート・時刻・表示が初期化される(指摘 C)。
+    /// リセットされないと、校正中の経過時間が deltaTime に乗り最初の候補で即 .slouch になる。
+    func testApplyCalibrationCompletion_resetsDisplayStateAndGates() {
+        sut.setPostureDisplayGateDuration(0) // テストではフレーム間実時間がほぼ0のため即時発火にする
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: []
+        )
+
+        // 前出しフレーム(右距離0.21 = 基準比116.7%)→ .slouch 表示 + ゲート発火状態になる
+        sut.processDetection(.pose(slouchFrame()))
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch, "距離OVERで .slouch")
+        XCTAssertTrue(sut.snapshot.postureDisplayGate.isFired, "ゲートは発火済み")
+
+        // 再校正完了 → 監視開始と同じ初期状態へ戻る
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: []
+        )
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "前セッションの .slouch を持ち越さない")
+        XCTAssertFalse(sut.snapshot.postureDisplayGate.isFired, "ゲート発火状態が残らない")
+        XCTAssertEqual(sut.snapshot.postureDisplayGate.accumulated, 0, "蓄積が残らない")
+    }
+
+    /// 姿勢判定不能フレームは表示を維持し、dwell 蓄積だけ解除する(指摘 B)。
+    /// 蓄積が残ると、欠測を挟んだ非連続フレームで .slouch が確定してしまう。
+    func testUnevaluableFrame_resetsDisplayGateButKeepsDisplay() {
+        sut.setPostureDisplayGateDuration(0)
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: []
+        )
+
+        sut.processDetection(.pose(slouchFrame()))
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertTrue(sut.snapshot.postureDisplayGate.isFired)
+
+        // .personOnly: 肩キーポイントが読めない(presence は personDetected だが sample なし)
+        sut.processDetection(.personOnly)
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch, "判定不能フレームは表示を維持")
+        XCTAssertFalse(sut.snapshot.postureDisplayGate.isFired, "dwell 蓄積は解除される")
+    }
 }

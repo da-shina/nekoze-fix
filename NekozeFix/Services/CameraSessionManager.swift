@@ -14,6 +14,7 @@ extension AVCaptureVideoOrientation {
             return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue)
         }
     }
+
 }
 
 /// フロントカメラのセッション管理とパーミッション。

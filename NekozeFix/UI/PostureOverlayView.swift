@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 /// 姿勢検知のポイントとラインを可視化するオーバーレイ。
 struct PostureOverlayView: View {
@@ -14,8 +15,10 @@ struct PostureOverlayView: View {
     /// 前面カメラ等でプレビューがミラー表示されているか。
     /// Vision 座標の x 反転と緑線方向の決定に使用。
     var isMirrored: Bool = true
-    /// キャプチャ画像のアスペクト比（AspectFit 補正用）
+    /// キャプチャ画像のアスペクト比（バッファ実寸基準。ポートレート前提）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
+    /// 現在のビデオ向き。AspectFit 補正の AR 計算に使用。
+    var videoOrientation: AVCaptureVideoOrientation = .portrait
 
     var body: some View {
         GeometryReader { geometry in
@@ -137,23 +140,22 @@ struct PostureOverlayView: View {
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        let visionX = point.x
-        let visionY = 1.0 - point.y
+        // iPadOS 18 バッファ自動回転: Vision 座標はすでに画面向き基準で出力される。
+        // 座標回転は不要（二重回転になる）。
+        let screenX = point.x
+        let screenY = 1.0 - point.y
+
         let imageAR = imageAspectRatio
         let viewAR = size.width / size.height
         var sx: CGFloat = 1.0
         var sy: CGFloat = 1.0
         if viewAR > imageAR {
-            // 画面が画像より横長 -> 左右に余白（ピラーボックス）、上下はぴったり
             sx = imageAR / viewAR
-            sy = 1.0
         } else if viewAR < imageAR {
-            // 画面が画像より縦長 -> 上下に余白（レターボックス）、左右はぴったり
-            sx = 1.0
             sy = viewAR / imageAR
         }
-        let normX = visionX * sx + (1.0 - sx) / 2.0
-        let normY = visionY * sy + (1.0 - sy) / 2.0
+        let normX = screenX * sx + (1.0 - sx) / 2.0
+        let normY = screenY * sy + (1.0 - sy) / 2.0
         return CGPoint(x: normX * size.width, y: normY * size.height)
     }
 }

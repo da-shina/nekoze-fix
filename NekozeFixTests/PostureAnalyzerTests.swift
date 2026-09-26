@@ -376,14 +376,23 @@ final class PostureAnalyzerTests: XCTestCase {
     // MARK: - 両肩直交基準とフォールバック
 
     /// 両肩が傾いている場合でも、耳〜肩が肩ラインに直角であれば角度0度（良好）と判定される
+    /// アスペクト比補正（x 成分に AR を適用）後も同じ結果になることを確認
     func testAngleCalculation_TiltedShoulders_CalculatesAngleRelativeToShoulderPerpendicular() {
-        // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6) -> 肩ベクトル (0.4, 0.1)
-        // 垂線単位ベクトル: (-0.1, 0.4) / sqrt(0.17) ≈ (-0.2425356, 0.9701425)
-        // 左肩から垂線方向に距離 0.2 伸ばした位置に左耳を配置
-        let ux = -0.1 / sqrt(0.17)
-        let uy = 0.4 / sqrt(0.17)
-        let earX = 0.2 + 0.2 * ux
-        let earY = 0.5 + 0.2 * uy
+        // 4:3 アスペクト比（AR = 4/3）で検証
+        let ar: Double = 4.0 / 3.0
+        // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6)
+        // 補正後肩ベクトル: (0.4*AR, 0.1) = (0.5333, 0.1)
+        let sdx = 0.4 * ar
+        let sdy = 0.1
+        let sLen = sqrt(sdx * sdx + sdy * sdy)
+        // 補正後垂線単位ベクトル
+        let ux = -sdy / sLen
+        let uy = sdx / sLen
+        // 耳を垂線方向に配置: 補正後ベクトルが垂線と平行 → 角度0°
+        let earDx = 0.2 * ux / ar
+        let earDy = 0.2 * uy
+        let earX = 0.2 + earDx
+        let earY = 0.5 + earDy
 
         let frame = PoseFrame(
             timestamp: 0,
@@ -396,10 +405,11 @@ final class PostureAnalyzerTests: XCTestCase {
         let (sample, verdict) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
-            slouchDeltaThresholdDegrees: 10
+            slouchDeltaThresholdDegrees: 10,
+            videoAspectRatio: ar
         )
 
-        // 画像垂直 (0, 1) との角度は約 14 度だが、両肩垂線との角度は 0 度
+        // 両肩垂線との角度は 0 度（補正済み座標系で計算）
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
@@ -425,5 +435,56 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
+    }
+
+    // MARK: - アスペクト比補正
+
+    /// アスペクト比補正（x 成分に AR を適用）により、肩が傾斜した場合に正規化座標と等方座標の角度差が是正される
+    func testAspectRatioCorrection_TiltedShoulders_CorrectsAngleDistortion() {
+        // 4:3 フレーム。左肩 (0.2, 0.5)、右肩 (0.6, 0.6)
+        // 肩ベクトル（正規化）: (0.4, 0.1) → atan2(0.1, 0.4) ≈ 14.0°
+        // 肩ベクトル（等方・x*AR）: (0.5333, 0.1) → atan2(0.1, 0.5333) ≈ 10.6°
+        // 真の角度差は ~3.4°
+        //
+        // 耳を肩ラインに直角（等方座標）に配置 → 補正後は角度0°
+        // 補正なしの場合は ~3.4° の誤差が生じるはず
+        let ar: Double = 4.0 / 3.0
+        let sdx = 0.4 * ar
+        let sdy = 0.1
+        let sLen = sqrt(sdx * sdx + sdy * sdy)
+        let ux = -sdy / sLen
+        let uy = sdx / sLen
+        let earDx = 0.2 * ux / ar
+        let earDy = 0.2 * uy
+        let earX = 0.2 + earDx
+        let earY = 0.5 + earDy
+
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: earX, y: earY, confidence: 0.9),
+            rightEar: Keypoint(x: 0.8, y: 0.8, confidence: 0.0),
+            leftShoulder: Keypoint(x: 0.2, y: 0.5, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.6, y: 0.6, confidence: 0.9)
+        )
+
+        // 補正あり（4:3）: 角度0°
+        let (sampleCorrected, _) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            videoAspectRatio: ar
+        )
+        XCTAssertEqual(sampleCorrected?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1,
+                       "補正後は肩ライン直角の耳-肩ベクトルが角度0°になるべき")
+
+        // 補正なし（1:1 = 正方形）: 角度にズレが生じる
+        let (sampleUncorrected, _) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            videoAspectRatio: 1.0
+        )
+        XCTAssertGreaterThan(sampleUncorrected?.nearAngleDegrees ?? 0, 1.0,
+                             "補正なし（1:1）では肩傾斜時に角度誤差が生じるべき")
     }
 }

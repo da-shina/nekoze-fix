@@ -14,3 +14,14 @@
 - `SessionSnapshot.isLandscape` を追加。`DeviceOrientationMonitor.currentVideoOrientation` を購読している既存経路で更新し、判定ロジックには関与しない（表示専用）
 - 検出ロジック・閾値・キャリブレーションは変更しない
 - 実測根拠は DEBUG 足場（左右肩/耳の生 confidence・人体矩形・ROI 採用元表示）による。足場は検収後に削除する（前例: 8.9 距離表示）
+- ランドスケープでの運用は維持される。ADR 0007「更新 (2026-09-26)」で監視中のポートレート固定を撤回したため、本 ADR が前提とするランドスケープ姿勢は今後も成立する
+
+## 更新 （2026-09-26）
+
+PR #9 レビュー指摘により、`isShoulderMissing` ガイダンスの**向き分岐を撤回**し、向きに依存しない固定文言へ統一した。
+
+- 分岐の前提だった「ランドスケープだけ画角が狭い」は、ユーザー判断として分岐を設けるほどの差ではない。向きを判定して文言を出し分ける複雑さの方が大きい
+- 実機検収で有効だった手段（カメラの位置・角度・高さの調整）は、ポートレートでも同じく有効な一般則である。向きで分けず1文に含めれば足りる
+- 文言: 「カメラの位置を工夫し画面中央に肩や耳を納めてください。」（`PostureTypes.swift` の `shoulderMissingGuidance`）
+
+コード変更: `SessionSnapshot.isLandscape` を削除、`shoulderMissingGuidance（isLandscape:）` 関数を固定文言の `let` へ、`AVCaptureVideoOrientation.isLandscape` 拡張を削除（利用元が消えたため）、`ShoulderMissingGuidanceTests` を削除。判定ロジック（`isShoulderMissing` 自体）とガイダンス表示は存続する。

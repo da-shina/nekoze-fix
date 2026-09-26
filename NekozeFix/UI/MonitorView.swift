@@ -20,7 +20,8 @@ struct MonitorView: View {
                     referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
                     nearSide: sessionManager.snapshot.nearSide,
-                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                    videoOrientation: sessionManager.snapshot.videoOrientation
                 )
                 .ignoresSafeArea()
             }
@@ -31,7 +32,8 @@ struct MonitorView: View {
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                videoOrientation: sessionManager.snapshot.videoOrientation
             )
             .ignoresSafeArea()
 
@@ -179,6 +181,7 @@ struct MonitorView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 150)
+                .disabled(sessionManager.snapshot.phase == .monitoring)
             }
             .padding(.horizontal)
         }
