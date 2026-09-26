@@ -37,7 +37,7 @@
   - _Requirements: 2.3, 2.4, 4.2, 4.3_
   - _Depends: 1.2_
 
-- [ ] 2.3 (P) CalibrationLogic — stable reference posture acquisition
+- [x] 2.3 (P) CalibrationLogic — stable reference posture acquisition
   - Implement concrete `CalibrationLogic` struct with `start()`, `ingest(sample:presence:now:points:)`, `CalibrationProgress`
   - Accumulate only when `personDetected` and `AngleSample` is valid; accumulate visualization points alongside angles
   - Posture instability reset: angle delta > 5 degrees or near-side flip or person dropout over 1.0s resets accumulation（dropoutTolerance 内の脱落は蓄積時間を凍結）
