@@ -20,6 +20,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var calibrationLogic = CalibrationLogic()
     let settingsStore: SettingsStore
     private let orientationMonitor = DeviceOrientationMonitor()
+    private let gravityProvider = GravityVectorProvider()
+
 
     // 通知音（design.md "AlertPlayer" Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
     private lazy var alertPlayer: AlertPlayer? = {
@@ -101,6 +103,22 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self?.cameraManager.updateVideoOrientation(orientation)
                 // オーバーレイの座標変換用。Session が唯一の書き込み点。
                 self?.snapshot.videoOrientation = orientation
+            }
+            .store(in: &cancellables)
+
+        orientationMonitor.$isRotating
+            .sink { [weak self] isRotating in
+                guard let self = self else { return }
+                if isRotating {
+                    setPhase(.rotating)
+                } else if self.snapshot.phase == .rotating {
+                    // 回転完了後、監視有効かつ校正済みなら監視へ復帰。それ以外は idle。
+                    if self.settingsStore.isMonitoringEnabled, self.snapshot.referenceAngle != nil {
+                        self.startMonitoring()
+                    } else {
+                        setPhase(.idle)
+                    }
+                }
             }
             .store(in: &cancellables)
     }
@@ -256,6 +274,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
     /// captureOutput の Task 本体。テストは合成フレームの Detection を直接投入できる。
     func processDetection(_ detection: PoseDetector.Detection) {
+        guard snapshot.phase != .rotating else { return }
+
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
@@ -299,9 +319,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
         let (sample, verdict) = self.postureAnalyzer.analyze(
             frame: frame,
-            referenceNearAngleDegrees: refAngle,
-            slouchDeltaThresholdDegrees: threshold,
-            videoAspectRatio: Double(snapshot.videoAspectRatio),
+            verticalVector: gravityProvider.verticalVector(for: snapshot.videoOrientation),
+            slouchThresholdDegrees: threshold,
             distanceMetric: distanceMetric,
             slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
             previousNearSide: snapshot.nearSide
@@ -410,6 +429,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             if presence == .personMissing {
                 self.snapshot.displayedPosture = .personMissing
                 self.snapshot.postureDisplayGate.reset()
+                self.snapshot.slouchGate.reset()
             } else if sample != nil {
                 if verdict == .slouchCandidate {
                     // slouch 方向: dwell ゲートを通して0.5秒連続でのみ .slouch 表示

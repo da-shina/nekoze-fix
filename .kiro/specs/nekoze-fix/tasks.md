@@ -110,7 +110,7 @@
 
 ## 4. Core: Session layer
 
-- [ ] 4.1 PostureSessionManager — session state machine and single source of truth
+- [x] 4.1 PostureSessionManager — session state machine and single source of truth
   - Implement concrete `PostureSessionManager: ObservableObject` with `snapshot: SessionSnapshot`
   - Integrate `GravityVectorProvider` to supply $\vec{v}_{vertical}$ to `PostureAnalyzer`
   - State machine: awaitingPermission → calibrating → idle → monitoring → rotating
