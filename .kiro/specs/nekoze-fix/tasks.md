@@ -91,7 +91,7 @@
   - _Requirements: 7.1, 7.2_
   - _Depends: 1.2_
 
-- [ ] 3.5 (P) GravityVectorProvider — Core Motion gravity integration
+- [x] 3.5 (P) GravityVectorProvider — Core Motion gravity integration
   - Implement `GravityVectorProvider` using `CMMotionManager`
   - Provide real-time gravity vector $\vec{g} = (g_x, g_y, g_z)$ in device coordinate system
   - Project $\vec{g}$ onto the image plane based on current `videoOrientation` to get $\vec{v}_{vertical}$
