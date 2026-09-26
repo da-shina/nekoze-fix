@@ -164,7 +164,7 @@
   - _Requirements: 3.2, 6.2_
   - _Depends: 3.1_
 
-- [ ] 5.6 (P) PostureOverlayView — visualization of landmarks and vertical guideline
+- [x] 5.6 (P) PostureOverlayView — visualization of landmarks and vertical guideline
   - Implement `PostureOverlayView` to draw shoulders, ears, and the current judgment line
   - Draw the **physical vertical guideline** starting from the near-shoulder point, extending in the $\vec{v}_{vertical}$ direction
   - Support `.reference` (gray, fixed) and `.current` (colored, real-time) modes

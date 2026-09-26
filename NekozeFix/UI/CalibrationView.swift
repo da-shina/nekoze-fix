@@ -29,7 +29,7 @@ struct CalibrationView: View {
             // 現在の姿勢のオーバーレイ
             PostureOverlayView(
                 mode: .current,
-                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
+                verticalVector: sessionManager.gravityProvider.verticalVector(for: sessionManager.snapshot.videoOrientation),
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio,

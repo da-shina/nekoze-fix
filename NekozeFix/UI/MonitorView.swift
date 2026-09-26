@@ -21,17 +21,33 @@ struct MonitorView: View {
                     .padding(.horizontal)
 
                 // カメラプレビュー（暗転時は非表示）
-                if !snapshot.isDimmed {
-                    CameraPreviewView(session: sessionManager.cameraManager.captureSession)
+                ZStack {
+                    if !snapshot.isDimmed {
+                        CameraPreviewView(session: sessionManager.cameraManager.captureSession)
+                            .cornerRadius(16)
+                            .padding(.horizontal)
+                            .aspectRatio(snapshot.videoAspectRatio, contentMode: .fit)
+
+                        // 現在の姿勢オーバーレイ
+                        PostureOverlayView(
+                            mode: .current,
+                            verticalVector: sessionManager.gravityProvider.verticalVector(for: snapshot.videoOrientation),
+                            currentPoints: snapshot.visualizationPoints,
+                            nearSide: snapshot.nearSide,
+                            imageAspectRatio: snapshot.videoAspectRatio,
+                            videoOrientation: snapshot.videoOrientation
+                        )
                         .cornerRadius(16)
                         .padding(.horizontal)
                         .aspectRatio(snapshot.videoAspectRatio, contentMode: .fit)
-                } else {
-                    // プレビュー非表示時のスペース確保
-                    Color.clear
-                        .aspectRatio(snapshot.videoAspectRatio, contentMode: .fit)
-                        .padding(.horizontal)
+                    } else {
+                        // プレビュー非表示時のスペース確保
+                        Color.clear
+                            .aspectRatio(snapshot.videoAspectRatio, contentMode: .fit)
+                            .padding(.horizontal)
+                    }
                 }
+                .frame(maxWidth: .infinity)
 
                 // コントロールパネル
                 controlsPanel
@@ -139,11 +155,16 @@ struct MonitorView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("\(String(format: "%.1f", Double(truncatingIfNeeded: value.wrappedValue)))\(unit)")
+                Text("\(String(format: "%.1f", Double(value.wrappedValue)))\(unit)")
                     .font(.system(.caption, design: .monospaced))
                     .bold()
             }
-            Slider(value: value, in: range, step: step)
+            // ponytail: Use a concrete Slider for Double to avoid generic V.Stride complexity.
+            // Since all current thresholds are Double/CGFloat, we cast to Double.
+            Slider(value: Binding(
+                get: { value.wrappedValue as! Double },
+                set: { value.wrappedValue = $0 as! V }
+            ), in: (range.lowerBound as! Double)...(range.upperBound as! Double), step: step as! Double)
         }
     }
 
