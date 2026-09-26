@@ -183,7 +183,7 @@
 
 ## 7. Validation
 
-- [ ] 7.1 Performance verification
+- [x] 7.1 Performance verification
   - Measure keypoint processing >= 15fps with `.high` preset (NFR 8.1)
   - Measure notification latency <= 0.5s from confirmed slouch (NFR 8.2)
   - Observable completion: performance test results meet NFR targets

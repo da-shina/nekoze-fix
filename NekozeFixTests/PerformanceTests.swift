@@ -1,81 +1,132 @@
 import XCTest
+import AVFoundation
+import Vision
 @testable import NekozeFix
 
-@MainActor
 final class PerformanceTests: XCTestCase {
-    var sut: PostureSessionManager!
-    var poseDetector: PoseDetector!
-    var analyzer: PostureAnalyzer!
 
-    override func setUp() {
-        super.setUp()
-        sut = PostureSessionManager()
-        poseDetector = PoseDetector()
-        analyzer = PostureAnalyzer()
+    // MARK: - Throughput Test (NFR 8.1)
+
+    func testDetectionThroughput() {
+        let detector = PoseDetector()
+        let frameCount = 100
+
+        guard let pixelBuffer = createDummyPixelBuffer() else {
+            XCTFail("Failed to create dummy pixel buffer")
+            return
+        }
+
+        let startTime = CACurrentMediaTime()
+        for _ in 0..<frameCount {
+            _ = detector.detect(pixelBuffer: pixelBuffer, orientation: .up)
+        }
+        let endTime = CACurrentMediaTime()
+
+        let totalTime = endTime - startTime
+        let fps = Double(frameCount) / totalTime
+
+        print("--- Throughput Result ---")
+        print("Total time for \(frameCount) frames: \(String(format: "%.3f", totalTime))s")
+        print("Measured FPS: \(String(format: "%.2f", fps))")
+
+        XCTAssertGreaterThanOrEqual(fps, 15.0, "Detection throughput should be >= 15 fps")
     }
 
-    override func tearDown() {
-        sut = nil
-        poseDetector = nil
-        analyzer = nil
-        super.tearDown()
+    // MARK: - Latency Test (NFR 8.2)
+
+    func testNotificationLatency() async {
+        let settings = SettingsStore()
+        let manager = await PostureSessionManager(settingsStore: settings)
+
+        // Inject Mock
+        let mockPlayer = MockAlertPlayer()
+        await MainActor.run {
+            manager.alertPlayer = mockPlayer
+        }
+
+        // Setup monitoring state
+        var testSnapshot = SessionSnapshot()
+        testSnapshot.phase = .monitoring
+        testSnapshot.referenceAngle = 10.0
+        testSnapshot.postureDisplayGate = TimedConditionGate(requiredDuration: 0)
+        testSnapshot.slouchGate = TimedConditionGate(requiredDuration: 0.1)
+
+        await MainActor.run {
+            manager.setTestSnapshot(testSnapshot)
+        }
+
+        // Trigger a slouch: Vector (0.1, -0.3) vs Vertical (0, 1)
+        // angle = acos( (-0.3*1) / (sqrt(0.1^2 + 0.3^2) * 1) ) = acos(-0.3 / 0.316) = acos(-0.948) = 161 deg
+        // Acute angle = 180 - 161 = 19 deg. 19 > 5 (default threshold).
+        let slouchDetection = PoseDetector.Detection.pose(
+            PoseFrame(
+                timestamp: CACurrentMediaTime(),
+                leftEar: Keypoint(x: 0.6, y: 0.5, confidence: 1.0),
+                rightEar: nil,
+                leftShoulder: Keypoint(x: 0.5, y: 0.8, confidence: 1.0),
+                rightShoulder: nil
+            )
+        )
+
+        let startTime = CACurrentMediaTime()
+
+        // Feed frames until the gate fires
+        var fired = false
+        var iterations = 0
+        while !fired && iterations < 100 {
+            iterations += 1
+            await MainActor.run {
+                manager.processDetection(slouchDetection)
+                if mockPlayer.startRepeatingCalledAt != nil {
+                    fired = true
+                }
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000) // 10ms
+        }
+
+        let triggerTime = mockPlayer.startRepeatingCalledAt ?? CACurrentMediaTime()
+        let latency = triggerTime - startTime
+
+        print("--- Latency Result ---")
+        print("Latency from detection start to sound: \(String(format: "%.3f", latency))s")
+
+        XCTAssertNotNil(mockPlayer.startRepeatingCalledAt, "Notification should have been triggered")
+        XCTAssertLessThan(latency, 0.5, "Latency should be within 0.5s (including the test gate of 0.1s)")
     }
 
-    // MARK: - NFR 8.1: キーポイント処理 >= 15fps
+    // MARK: - Helpers
 
-    /// 処理パイプラインが15fps支持的構造になっていることを検証
-    /// このテストはコードパスがノンブロッキングでバックグラウンドキューを使用することを保証
-    func testPoseDetectorUsesBackgroundQueue() {
-        // PoseDetectorは専用のシリアルキューを使用
-        // 遅いフレームは破棄 - コード検査で確認済み
-        XCTAssertNotNil(poseDetector)
+    private func createDummyPixelBuffer() -> CVPixelBuffer? {
+        var pixelBuffer: CVPixelBuffer?
+        let width = 1280
+        let height = 720
+
+        let attrs = [
+            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey: width,
+            kCVPixelBufferHeightKey: height,
+            kCVPixelBufferCGImageCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true
+        ] as [String: Any]
+
+        CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &pixelBuffer)
+        return pixelBuffer
+    }
+}
+
+class MockAlertPlayer: AlertPlaying {
+    var playOnceCalledAt: TimeInterval?
+    var startRepeatingCalledAt: TimeInterval?
+
+    func configureSession() throws {}
+
+    func playOnce() {
+        playOnceCalledAt = CACurrentMediaTime()
     }
 
-    /// CameraSessionManagerがパフォーマンス用に.highプリセット（720p）を使用することを検証
-    func testCameraSessionUsesHighPreset() {
-        let cameraManager = CameraSessionManager()
-        // .highプリセットを使用（configureSessionで設定済み）
-        XCTAssertNotNil(cameraManager)
+    func startRepeating() {
+        startRepeatingCalledAt = CACurrentMediaTime()
     }
 
-    /// 非同期処理チェーン: camera -> vision -> analyzer を検証
-    func testAsyncProcessingChain() {
-        // CameraSessionManagerはsessionQueueを使用（バックグラウンド）
-        // PoseDetectorはvisionQueueを使用（バックグラウンド）
-        // PostureAnalyzerは純粋関数（I/Oなし）
-        // すべて >= 15fpsで動作するように設計済み
-        XCTAssertNotNil(sut)
-    }
-
-    // MARK: - NFR 8.2: 通知レイテンシ <= 0.5秒
-
-    /// AlertPlayerが即座再生用にサウンドをプリロードすることを検証
-    func testAlertPlayerPreloadsSound() {
-        let alertPlayer = AlertPlayer(soundURL: URL(fileURLWithPath: "/dev/null"))
-        // プリロードはinit内のconfigureAudioSessionで実行
-        // サウンドはconfigureSession()でプリロード済み
-        XCTAssertNotNil(alertPlayer)
-    }
-
-    /// AlertPlayer.playOnceが延迟なく発火することを検証
-    func testAlertPlayerPlayOnceDoesNotBlock() {
-        let alertPlayer = AlertPlayer(soundURL: URL(fileURLWithPath: "/dev/null"))
-        let startTime = CFAbsoluteTimeGetCurrent()
-
-        alertPlayer.playOnce()
-
-        let elapsed = CFAbsoluteTimeGetCurrent() - startTime
-        // nilプレイヤーの場合はほぼ瞬時（< 0.1秒）
-        XCTAssertLessThan(elapsed, 0.1)
-    }
-
-    // MARK: - バッテリー最適化 (NFR 9.1, 9.2)
-
-    /// ダイムモード消費電力を削減することを検証
-    func testDimModeUsesBlackScreen() {
-        // ダイムモード: brightness = 0.0（wake lock は監視中の phase 不変条件側で扱う。ADR 0016）
-        // CameraPreviewViewはダイムモード中は非表示
-        // MonitorViewとCameraPreviewViewのコード検査で確認済み
-        XCTAssertTrue(true, "ダイムモードの実装はGPU/CPU負荷を軽減")
-    }
+    func stop() {}
 }
