@@ -147,7 +147,7 @@
   - _Requirements: 2.1-2.6_
   - _Depends: 4.1_
 
-- [ ] 5.4 (P) MonitorView — monitoring, dim mode, sensitivity control
+- [x] 5.4 (P) MonitorView — monitoring, dim mode, sensitivity control
   - Preview, good/slouch/personMissing display; start/stop buttons
   - Sensitivity slider; dim mode button (enterDimMode/exitDimMode)
   - Dim mode: black screen (brightness 0.0 + wake lock); tap to exit
