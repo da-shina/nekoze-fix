@@ -199,7 +199,7 @@
 
 ## 8. Validation: Gravity Vector Robustness (New)
 
-- [ ] 8.1 Gravity Vector Unit Tests
+- [x] 8.1 Gravity Vector Unit Tests
   - Mock `GravityVectorProvider` to return various tilt vectors
   - Verify `PostureAnalyzer` returns correct `PostureVerdict` regardless of device orientation
   - Observable completion: all tilt scenarios (portrait, landscape, tilted) produce consistent verdict for same relative posture
