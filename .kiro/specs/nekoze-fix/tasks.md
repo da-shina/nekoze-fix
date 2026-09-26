@@ -175,7 +175,7 @@
 
 ## 6. Integration: E2E flows
 
-- [ ] 6.1 E2E critical path integration test
+- [x] 6.1 E2E critical path integration test
   - Verify: permission → 5s calibration → monitoring start → 3s slouch held → notification → improvement stop → dim mode → tap restore
   - Observable completion: full flow completes without errors in integration test
   - _Requirements: 1.1-10.1_
