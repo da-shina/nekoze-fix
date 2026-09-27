@@ -32,8 +32,7 @@ struct CalibrationView: View {
                 referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                videoOrientation: sessionManager.snapshot.videoOrientation
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
             )
             .ignoresSafeArea()
 
@@ -114,7 +113,7 @@ struct CalibrationView: View {
                 if !detected {
                     self.progressMessage = "人物が検出されません"
                 } else if snapshot.isShoulderMissing {
-                    self.progressMessage = shoulderMissingGuidance
+                    self.progressMessage = shoulderMissingGuidance(isLandscape: snapshot.isLandscape)
                 } else if pts.count >= 4 && pts[2] == .zero && pts[3] == .zero {
                     self.progressMessage = "耳を認識できません。顔全体を画面に収めてください"
                 } else {
