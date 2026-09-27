@@ -31,7 +31,6 @@ struct CalibrationView: View {
                 mode: .current,
                 verticalVector: sessionManager.gravityProvider.verticalVector(for: sessionManager.snapshot.videoOrientation),
                 currentPoints: sessionManager.snapshot.visualizationPoints,
-                nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
                 videoOrientation: sessionManager.snapshot.videoOrientation
             )

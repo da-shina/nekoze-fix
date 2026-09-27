@@ -33,7 +33,6 @@ struct MonitorView: View {
                             mode: .current,
                             verticalVector: sessionManager.gravityProvider.verticalVector(for: snapshot.videoOrientation),
                             currentPoints: snapshot.visualizationPoints,
-                            nearSide: snapshot.nearSide,
                             imageAspectRatio: snapshot.videoAspectRatio,
                             videoOrientation: snapshot.videoOrientation
                         )
