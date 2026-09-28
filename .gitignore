@@ -23,3 +23,11 @@ Packages/
 
 # Misc
 .netrc
+
+# AI agents / local config
+.agents/
+.claude/
+.opencode/
+skills-lock.json
+.aclaude
+.opencode
