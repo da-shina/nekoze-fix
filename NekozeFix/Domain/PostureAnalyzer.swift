@@ -6,21 +6,26 @@ struct PostureAnalyzer {
     /// 近傍側の選択: 両側が有効な場合、x座標が小さい方の肩を近傍側とする（Q9）。
     /// 片側のみ有効な場合、その側が自動的に近傍側となる（Q11）。
     ///
-    /// 角度計算: 肩から耳へのベクトルと基準上向きベクトル（両肩検出時は両肩ライン直交上向き法線、片側時は画像垂直 (0,1)）の角度。
+    /// 角度計算: 肩から耳へのベクトルと解決済み基準ベクトル（重力→両肩ライン直交上向き法線→
+    /// 画像垂直 (0,1) の順に同ファイル内 `resolve` で解決）の角度。
     /// 結果は鋭角 0〜90度。移動平均フィルタなし（Q12）。
     ///
-    /// 信頼度 < 0.5 のキーポイントは除外される（4.5）。
+    /// 信頼度 < 0.3 のキーポイントは除外される（4.5）。
     /// カメラの取り付け角度は基準値に吸収される。
+    ///
+    /// 重力は値として受け取る（Domain は Services を参照しない）。nil は代替解決を意味し、
+    /// gravity 以外の入力が同一なら従来と同一の近側・距離・判定を返す（不変条件）。
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
         slouchDeltaThresholdDegrees: Double,
         distanceMetric: DistanceMetric? = nil,          // ロック側ペアと基準距離（8.3 までは未使用）
         slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
-        previousNearSide: Side? = nil
-    ) -> (sample: AngleSample?, verdict: PostureVerdict) {
+        previousNearSide: Side? = nil,
+        gravityInKeypointSpace: SIMD2<Double>? = nil    // MotionService 変換済みか nil（12.2）
+    ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ReferenceVector) {
 
-        // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.5）
+        // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.3）
         let leftValid = isValidPair(ear: frame.leftEar, shoulder: frame.leftShoulder)
         let rightValid = isValidPair(ear: frame.rightEar, shoulder: frame.rightShoulder)
 
@@ -63,38 +68,18 @@ struct PostureAnalyzer {
             nearShoulder = frame.rightShoulder
             farSideDetected = false
         } else {
-            return (nil, .insufficientKeypoints)
+            return (nil, .insufficientKeypoints, Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame))
         }
 
-        // ステップ3: 基準法線ベクトル（両肩ライン直交上向き法線、片側時(0,1)フォールバック）と鋭角を計算（0〜90度）
-        let perpX: Double
-        let perpY: Double
-        if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
-           ls.confidence >= minimumKeypointConfidence, rs.confidence >= minimumKeypointConfidence {
-            let leftShoulder = (ls.x <= rs.x) ? ls : rs
-            let rightShoulder = (ls.x <= rs.x) ? rs : ls
-            let sdx = rightShoulder.x - leftShoulder.x
-            let sdy = rightShoulder.y - leftShoulder.y
-            let shoulderDist = sqrt(sdx * sdx + sdy * sdy)
-            if shoulderDist > 0 {
-                // (sdx, sdy) に直交し、Vision座標系で上向き (+y方向) の単位ベクトル:
-                // 内積: sdx * (-sdy) + sdy * sdx = 0 (直角)
-                // sdx >= 0 のため sdx / shoulderDist >= 0 (+y方向)
-                perpX = -sdy / shoulderDist
-                perpY = sdx / shoulderDist
-            } else {
-                perpX = 0.0
-                perpY = 1.0
-            }
-        } else {
-            perpX = 0.0
-            perpY = 1.0
-        }
+        // ステップ3: 解決済み基準ベクトル（重力→肩ライン直交→画像垂直）と鋭角を計算（0〜90度）
+        let reference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame)
+        let perpX = reference.x
+        let perpY = reference.y
 
         let vx = nearEar!.x - nearShoulder!.x
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
-        guard length > 0 else { return (nil, .insufficientKeypoints) }
+        guard length > 0 else { return (nil, .insufficientKeypoints, reference) }
 
         let cosTheta = (vx * perpX + vy * perpY) / length
         let clampedCos = max(-1.0, min(1.0, cosTheta))
@@ -156,8 +141,45 @@ struct PostureAnalyzer {
                 farAngleDegrees: farAngleDegrees,
                 farDistance: farDistanceValue
             ),
-            verdict
+            verdict,
+            reference
         )
+    }
+
+    /// 重力・肩直交・画像垂直の三段解決を純粋に所有する（要件4.1）。
+    ///
+    /// 入力は重力値（キーポイント空間、任意）とフレームのみ。時刻・状態を持たない。
+    /// 解決順序は gravity → shoulderLine → imageVertical に固定する。
+    /// 肩直交の算出式は従来式をそのまま移設したもの。常に単位ベクトル相当（長さ 1±1e-9）を返す。
+    /// Analyzer からのみ呼ぶ。Session は直接呼ばない（単一解決）。
+    private static func resolve(
+        gravityInKeypointSpace: SIMD2<Double>?,
+        frame: PoseFrame
+    ) -> ReferenceVector {
+        // 第一段: 重力（有効な単位化可能ベクトルのみ採用）
+        if let gravity = gravityInKeypointSpace {
+            let length = sqrt(gravity.x * gravity.x + gravity.y * gravity.y)
+            if length.isFinite && length > 1e-9 {
+                return gravity / length
+            }
+        }
+        // 第二段: 両肩ライン直交上向き法線（従来式を移設）
+        if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
+           ls.confidence >= minimumKeypointConfidence, rs.confidence >= minimumKeypointConfidence {
+            let leftShoulder = (ls.x <= rs.x) ? ls : rs
+            let rightShoulder = (ls.x <= rs.x) ? rs : ls
+            let sdx = rightShoulder.x - leftShoulder.x
+            let sdy = rightShoulder.y - leftShoulder.y
+            let shoulderDist = sqrt(sdx * sdx + sdy * sdy)
+            if shoulderDist > 0 {
+                // (sdx, sdy) に直交し、Vision座標系で上向き (+y方向) の単位ベクトル:
+                // 内積: sdx * (-sdy) + sdy * sdx = 0 (直角)
+                // sdx >= 0 のため sdx / shoulderDist >= 0 (+y方向)
+                return ReferenceVector(-sdy / shoulderDist, sdx / shoulderDist)
+            }
+        }
+        // 第三段（終端）: 画像垂直
+        return ReferenceVector(0.0, 1.0)
     }
 
     private func isValidPair(ear: Keypoint?, shoulder: Keypoint?) -> Bool {

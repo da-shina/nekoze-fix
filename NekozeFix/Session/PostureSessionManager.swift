@@ -291,7 +291,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric = nil
         }
 
-        let (sample, verdict) = self.postureAnalyzer.analyze(
+        let (sample, verdict, _) = self.postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: refAngle,
             slouchDeltaThresholdDegrees: threshold,
