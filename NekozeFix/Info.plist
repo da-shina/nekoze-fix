@@ -43,5 +43,7 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>NekozeFix needs camera access to detect your posture in real-time.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>姿勢の角度を正しく測るために、端末の傾き（モーション）を利用します。NekozeFix uses motion data to measure device tilt for accurate posture angle detection.</string>
 </dict>
 </plist>
