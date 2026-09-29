@@ -17,6 +17,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
     private let postureAnalyzer = PostureAnalyzer()
+    /// 重力の取得・変換・保持を所有する（タスク13.1）。
+    /// 起停は Session が駆動する（開始系で start、停止・背景移行で stop、暗転中は継続）。
+    /// テストは @testable で latestGravityInKeypointSpace へ直接代入する。
+    let motionService = MotionService()
     private var calibrationLogic = CalibrationLogic()
     let settingsStore: SettingsStore
     private let orientationMonitor = DeviceOrientationMonitor()
@@ -108,6 +112,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         switch auth {
         case .authorized:
             setPhase(.calibrating)
+            motionService.start()
             await startCameraPipeline()
         case .denied:
             setPhase(.permissionDenied)
@@ -119,6 +124,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// キャリブレーションフェーズに遷移する
     func startCalibration() {
         setPhase(.calibrating)
+        motionService.start()
         calibrationLogic.start()
         smoothedPoints = []
         lastShoulderSeenTime = nil
@@ -136,6 +142,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
+        motionService.start()
         Task {
             await startCameraPipeline()
         }
@@ -148,6 +155,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isMonitoringEnabled = false
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
+        motionService.stop()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
     }
@@ -160,6 +168,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
+        motionService.stop()
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating || snapshot.phase == .rotating {
             setPhase(.idle)
         }
@@ -297,7 +306,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             slouchDeltaThresholdDegrees: threshold,
             distanceMetric: distanceMetric,
             slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
-            previousNearSide: snapshot.nearSide
+            previousNearSide: snapshot.nearSide,
+            gravityInKeypointSpace: self.motionService.latestGravityInKeypointSpace
         )
 
         // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
@@ -383,14 +393,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             )
             self.snapshot.calibrationProgress = progress
 
-            if case .completed(let average, let averageDistance, let refSide, let refPoints, let refFarAngle, let refFarDistance) = progress {
+            if case .completed(let average, let averageDistance, let refSide, let refPoints, _, _) = progress {
                 self.applyCalibrationCompletion(
                     referenceNearAngleDegrees: average,
                     referenceDistance: averageDistance,
                     referenceSide: refSide,
-                    referencePoints: refPoints,
-                    referenceFarAngleDegrees: refFarAngle,
-                    referenceFarDistance: refFarDistance
+                    referencePoints: refPoints
                 )
             }
         } else if self.snapshot.phase == .monitoring {
@@ -418,24 +426,20 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }
 
     /// 校正完了時に基準値をスナップショットへ反映し監視フェーズへ遷移する。
+    /// 遠側基準は構築しない（要件4.1: ロック側のみ。タスク13.1で削除）。
     /// テストは直接呼んで校正済み状態をシードできる。
     func applyCalibrationCompletion(
         referenceNearAngleDegrees: Double,
         referenceDistance: Double,
         referenceSide: Side,
-        referencePoints: [CGPoint],
-        referenceFarAngleDegrees: Double? = nil,
-        referenceFarDistance: Double? = nil
+        referencePoints: [CGPoint]
     ) {
         setPhase(.monitoring)
+        motionService.start()
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 校正完了＝監視開始。復帰判定の単一ソース
         snapshot.referenceAngle = referenceNearAngleDegrees
         snapshot.referenceDistances = [referenceSide: referenceDistance]
-        if let farDist = referenceFarDistance {
-            let farSide: Side = (referenceSide == .left) ? .right : .left
-            snapshot.referenceDistances[farSide] = farDist
-        }
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
     }

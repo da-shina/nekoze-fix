@@ -28,16 +28,18 @@ final class MotionService {
     private lazy var orientationMonitor = DeviceOrientationMonitor()
     private var lastValidVector: SIMD2<Double>?
     private var lastValidTime: Date?
-    private var isRunning = false
+    /// Session 駆動のライフサイクル状態（start 済み・未 stop）。テストは @testable で読む。
+    /// シミュレータ等の取得不可環境でも start/stop の対応は保持する（値は持続 nil）。
+    private(set) var isRunning = false
 
     init() {}
 
     /// 監視・校正開始時に呼ぶ。停止・背景移行時は stop で止める（暗転中は継続）。
     func start() {
         guard !isRunning else { return }
+        isRunning = true
         // シミュレータ・未対応端末・権限拒否では持続的に nil を返す。
         guard motionManager.isDeviceMotionAvailable else { return }
-        isRunning = true
         motionManager.deviceMotionUpdateInterval = Self.updateInterval
         let monitor = orientationMonitor
         motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in

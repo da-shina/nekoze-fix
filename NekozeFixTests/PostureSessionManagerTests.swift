@@ -261,4 +261,63 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.handleWillEnterForeground() // 未校正・フラグ false → 監視再開しない
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
     }
+
+    // MARK: - Motion所有・起停（要件 2.7/3.1/6.2/8.1/8.2、タスク13.1）
+
+    /// 監視開始で傾き取得を開始する（要求 3.1）
+    func testStartMonitoring_startsMotionService() {
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.startMonitoring()
+        XCTAssertTrue(sut.motionService.isRunning, "監視開始で Motion 開始")
+    }
+
+    /// 監視停止で傾き取得を停止し、保持重力を破棄する（要求 3.1）
+    func testStopMonitoring_stopsMotionServiceAndClearsGravity() {
+        sut.startMonitoring()
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.stopMonitoring()
+        XCTAssertFalse(sut.motionService.isRunning, "監視停止で Motion 停止")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "停止で保持値を破棄")
+    }
+
+    /// 校正開始で傾き取得を開始する（要求 2.7: 校正は天方向基準で登録）
+    func testStartCalibration_startsMotionService() {
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.startCalibration()
+        XCTAssertTrue(sut.motionService.isRunning, "校正開始で Motion 開始")
+    }
+
+    /// 暗転中も傾き取得は継続する（要求 6.2: enter/exit ともに起停しない）
+    func testDimMode_keepsMotionServiceRunning() {
+        sut.startMonitoring()
+        XCTAssertTrue(sut.motionService.isRunning)
+        sut.enterDimMode()
+        XCTAssertTrue(sut.motionService.isRunning, "暗転中も Motion 継続")
+        sut.exitDimMode()
+        XCTAssertTrue(sut.motionService.isRunning, "暗転解除後も Motion 継続")
+    }
+
+    /// 背景移行で傾き取得を停止する（要求 8.1）
+    func testDidEnterBackground_stopsMotionService() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        XCTAssertTrue(sut.motionService.isRunning, "校正完了＝監視開始で Motion 開始")
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(sut.motionService.isRunning, "背景移行で Motion 停止")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "背景移行で保持値を破棄")
+    }
+
+    /// 復帰して監視再開すれば傾き取得も再開する（要求 8.2）
+    func testWillEnterForeground_resumesMotionService() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+        )
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertTrue(sut.motionService.isRunning, "監視再開で Motion 再開")
+    }
 }
