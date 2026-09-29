@@ -28,7 +28,7 @@
 - `analyze` への重力注入と角度算出の一本化、判定・校正・表示での同一ベクトル使用
 - 基準線描画の重力対応（通常時と代替時で同一の見た目）
 - モーション権限文言と黙過フォールバック（監視を妨げない）
-- 重力×向き×鏡の同時取得と単一 0.5 秒ホールド（レビュー Issue 3）
+- 重力の取得と単一 0.5 秒ホールド（向き・鏡の同時取得は不要。出力接続が向き補正済みバッファを渡すため。14.2 実機知見）
 - 向き変化時（monitoring中のみ）の自動再校正遷移（旧基準・ゲート破棄、再校正完了まで監視停止。grill Q3/Q5/Q6決定）
 
 ### Out of Boundary
@@ -195,7 +195,7 @@ private static func resolve(
 
 - Integration: Analyzer からのみ呼ぶ。Session は直接呼ばない（単一解決）。
 - Validation: 下記 Resolver テストでベクトル値と角度を検証する。
-- Risks: 変換表の誤りは角度オフセットになるが、校正が定数分を吸収するため致命化しない。直立端末＋直立人物で約 0 度の不変条件テストで検出する。
+- Risks: 変換則の誤りは角度オフセットになるが、校正が定数分を吸収するため致命化しない。直立端末＋直立人物で約 0 度の不変条件テストで検出する。
 
 ### Domain
 
@@ -251,8 +251,8 @@ func analyze(
 
 **Responsibilities & Constraints**
 - `CMMotionManager.deviceMotion` を 1/30 間隔（定数）で取得する。監視・校正中のみ動作させる。
-- 重力サンプル取得時点の向き・鏡を同時取得し、その場で変換して有効ベクトルとして保持する。読取り側が別タイミングの向きと組み合わせることはしない（レビュー Issue 3）。
-- 無効（z 支配の平置き・未取得・権限拒否・未知組合せ・向き変化直後）は直前有効値を 0.5 秒ホールドし（単一タイマ、設計値・実装内に閉じる）、超過で nil を返す。回復時は即時復帰する。ユーザー通知はしない（黙過フォールバック）。
+- 天方向 `K = normalize(−gx, −gy)` をそのまま有効ベクトルとして保持する。キャプチャ接続が出力向きに応じてバッファを物理回転させるため、デバイス座標はバッファ座標と軸一致し、向き別の回転・鏡像は不要である（14.2 実機知見。旧向き別変換表は撤去）。
+- 無効（z 支配の平置き・未取得・権限拒否）は直前有効値を 0.5 秒ホールドし（単一タイマ、設計値・実装内に閉じる）、超過で nil を返す。回復時は即時復帰する。ユーザー通知はしない（黙過フォールバック）。
 
 **Dependencies**
 - Inbound: Session — 起停と値参照（Criticality P0）
@@ -264,7 +264,7 @@ func analyze(
 
 ```swift
 final class MotionService {
-  init() // CMMotionManager 実体・1/30・0.5s ホールドは内部定数。向き・鏡は DeviceOrientationMonitor / CameraSessionManager を直接参照（provider 配線なし）
+  init() // CMMotionManager 実体・1/30・0.5s ホールドは内部定数。向きは持たない（Session 側の向き購読・出力接続の向き同期とは別系統）
   var latestGravityInKeypointSpace: SIMD2<Double>? // テストは@testableで直接代入（サブクラス不要、prod 分岐なし）
   func start()
   func stop()
@@ -282,23 +282,16 @@ final class MotionService {
 - Concurrency strategy: 更新はモーションキュー、読取りはメイン。最新値の上書きのみで競合なし。
 
 **Implementation Notes**
-- Integration: Session は start/stop のみ結線する（provider 配線なし）。向き・鏡は既存の監視値とミラー情報を直接読む。
-- Validation: 変換表テスト＋単一ホールドテスト＋平置き無効テスト。
+- Integration: Session は start/stop のみ結線する（provider 配線なし）。向き・鏡の読取りは持たない。
+- Validation: 向き非依存の変換テスト（傾き鏡像回帰含む）＋単一ホールドテスト＋平置き無効テスト。
 - Risks: バッテリは起停限定と 1/30 間隔で抑制する。実機検証タスクを残す。
 
-##### 変換表（全組み合わせ固定、grill Q2決定）
+##### 変換則（向き非依存、14.2 実機知見で確定）
 
-- 合成規則: 天方向 `u = (−gx, −gy)` に対し `K = mirror(R(V) · u)`。前面固定のため鏡は定数（x反転）。`R(V)` は connection の videoOrientation 値に対する回転（portrait: 恒等、portraitUpsideDown: 180°、landscapeRight: 反時計90°、landscapeLeft: 時計90°）。
-
-| V（connection値） | 対応デバイス向き | 変換式 | 例 → K |
-|---|---|---|---|
-| portrait | 縦置き | (−ux, uy) | (0,−1,0)→(0,1) ✅P0確定 |
-| portraitUpsideDown | 逆さ縦 | (ux, −uy) | (0,+1,0)→(0,1) 設計値 |
-| landscapeRight | device landscapeLeft | (uy, ux) | (−1,0,0)→(0,1) 設計値 |
-| landscapeLeft | device landscapeRight | (−uy, −ux) | (+1,0,0)→(0,1) 設計値 |
-
-- P0（portrait）は確定。landscape 2行＋upsideDown は設計値とし、表駆動テストでロックした上で実機検証する（直立端末＋直立人物で約0度の不変条件を向き毎に確認。符号誤りは90度級誤差として即検出される）。
-- 未知組合せ・平置き（z支配）は nil で代替鎖へ退行させる。
+- 合成規則: 天方向 `K = normalize(u)`、`u = (−gx, −gy)`。キャプチャ接続の videoOrientation によりバッファは常に向き補正済み（デバイス上端＝バッファ上端）で渡るため、デバイス座標とバッファ座標は軸一致する。向き別の回転表・鏡像は不要である。
+- 旧表（grill Q2決定の向き別4行）はセンサ固定フレームの誤った想定＋前面鏡の適用誤りであり、縦持ち右傾きで緑線が鏡像反転する実機不具合として発覚したため撤去した（黄線＝キーポイントは正しく左傾き、緑のみ右傾きという観測が決定打）。
+- 世界直立人物の耳ー肩ベクトルは全向きで K と一致し、向き毎の直立約0度の不変条件が成立する。
+- 平置き（z支配）は nil で代替鎖へ退行させる。
 - 向き遷移後の定常ズレは自動再校正遷移で吸収する（grill Q3決定）。
 - 回転中（transient）の判定停止配線は本 spec の対象外のまま。単一ホールドは重力欠測時の切替振動対策に限定する。
 
@@ -369,11 +362,11 @@ final class MotionService {
 
 - 無効重力（未対応端末・権限拒否・平置き・変換失敗）→ 肩直交→画像垂直の鎖で継続
 - モーション停止中（idle・背景）→ nil 扱いで同鎖に委譲
-- 変換表の未知組合せ → nil 扱い（クラッシュさせない）
+- 変換則の無効入力（平置き等）→ nil 扱い（クラッシュさせない）
 
 ## Testing Strategy
 
-- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（P0 写像＋規則導出の表駆動）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰
+- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（向き非依存の K=normalize(−gx,−gy)・傾き鏡像回帰）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰
 - Integration Tests: Session 結合（TestDouble 重力で校正→基準保存→猫背→3 秒確定→改善停止）、代替中も同一ベクトルで判定表示が一致すること、背景・停止での Motion 停止
 - E2E/UI Tests: 実機で縦置き校正→前屈アラート、斜め設置での安定性、代替時の見た目不変の目視、回転前後の復帰
 - Performance/Load: フレーム処理 33ms 以内、Motion 1/30 時の 1 時間電池 15pct 以内（既存目標の維持確認）
@@ -391,7 +384,7 @@ final class MotionService {
 
 ## Open Questions / Risks
 
-- 変換表のlandscape行は設計値のため実機確証が必要（特に横置き）。向き遷移後のオフセット変化は自動再校正遷移で吸収する。
+- 変換則は向き非依存（K=normalize(−gx,−gy)）で確定済み。旧向き別表の残滓がないか注意。向き遷移後のオフセット変化は自動再校正遷移で吸収する。
 - 校正 5 度閾値は角度分布変化でリセット頻発の可能性があり、実機で要否を判断する（設計値は変えない）。
 - シミュレータでは重力が恒常 nil となり代替パスのみ検証できる。実機レーンの確保が前提である。
 
@@ -403,3 +396,4 @@ final class MotionService {
 *改訂 2026-09-28（ponytail-2）: stale 互換注記・print ログ・二重 Optional・x/y 分割・ ceremony 表・出所リセット/推奨フラグを削除*
 *改訂 2026-09-28（ponytail-3）: ReferenceSource を削除し ReferenceVector を SIMD2 別名に一本化、MotionService を@testable 代入に簡素化、三つ組保持を有効ベクトル保持に縮約、Traceability・File Structure を差分のみに削減*
 *改訂 2026-09-28（grill R1・R2）: Q1距離スキップ一本化（fallback枝削除）、Q2変換表の全組み合わせ固定、Q3/Q5/Q6向き変化時の自動再校正遷移（monitoring限定・旧基準破棄）、Q7境界更新、Q4用語集反映（CONTEXT.md）*
+*改訂 2026-09-29（14.2 実機検収）: 向き別変換表を撤去し向き非依存の K=normalize(−gx,−gy) に一本化（縦持ち右傾きで緑線が鏡像反転する実機不具合対応。黄線＝キーポイントは正しく左傾き、緑のみ右傾きの観測が決定打）*

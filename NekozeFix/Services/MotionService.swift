@@ -1,12 +1,20 @@
-import AVFoundation
 import CoreMotion
 import Foundation
 
-/// サービス層: 重力の取得・画像座標変換・無効保持を所有する。
+/// サービス層: 重力の取得・無効保持を所有する。
 ///
 /// design.md "MotionService（新設）" 参照。
 /// Requirements 4.1（天方向基準・代替鎖への nil 合図）、
-/// 7.1（向き追従・取得時点の向きと同時変換）、9.1（電池・1/30間隔＋起停限定）。
+/// 7.1（向き追従）、9.1（電池・1/30間隔＋起停限定）。
+///
+/// 方向の扱い（14.2 実機検収の知見）:
+/// キャプチャ接続の videoOrientation により、Vision に渡るバッファは常に向き補正済み
+/// （デバイス上端＝バッファ上端）で渡る。このため重力のデバイス座標 (gx, gy) は
+/// バッファ座標と軸一致し、向き別の回転表は不要である。天方向 K は常に
+/// `normalize(−gx, −gy)` で求まる（向き非依存）。旧来の向き別変換表は
+/// センサ固定フレームの誤った想定＋前面鏡の二重適用であり、14.2 で右傾き時の
+/// 鏡像反転として発覚したため撤去した。Session 側の向き購読（自動再校正・
+/// プレビュー/出力接続の向き同期）は別系統であり、本サービスは向きを持たない。
 final class MotionService {
     /// モーション取得間隔（1/30秒）。電池制約 9.1 のため最小限の頻度に抑制。
     static let updateInterval = 1.0 / 30.0
@@ -24,8 +32,6 @@ final class MotionService {
         queue.maxConcurrentOperationCount = 1
         return queue
     }()
-    /// 向きの参照元。Session からの provider 配線なしで直接所有する。
-    private lazy var orientationMonitor = DeviceOrientationMonitor()
     private var lastValidVector: SIMD2<Double>?
     private var lastValidTime: Date?
     /// Session 駆動のライフサイクル状態（start 済み・未 stop）。テストは @testable で読む。
@@ -41,18 +47,8 @@ final class MotionService {
         // シミュレータ・未対応端末・権限拒否では持続的に nil を返す。
         guard motionManager.isDeviceMotionAvailable else { return }
         motionManager.deviceMotionUpdateInterval = Self.updateInterval
-        let monitor = orientationMonitor
         motionManager.startDeviceMotionUpdates(to: motionQueue) { [weak self] motion, _ in
-            guard let self, let motion else {
-                self?.ingest(converted: nil, now: Date())
-                return
-            }
-            // 重力サンプル取得時点の向きと同時に変換する（別タイミングの向きと組合わせない）。
-            self.ingest(
-                gravity: motion.gravity,
-                videoOrientation: monitor.currentVideoOrientation,
-                now: Date()
-            )
+            self?.ingest(gravity: motion?.gravity, now: Date())
         }
     }
 
@@ -65,53 +61,33 @@ final class MotionService {
         latestGravityInKeypointSpace = nil
     }
 
-    // MARK: - 変換（全組み合わせ固定、grill Q2決定）
+    // MARK: - 変換（向き非依存、14.2 実機知見）
 
-    /// 重力＋向き→キーポイント空間の純粋変換。無効（平置き・正規化不能・未知）は nil。
+    /// 重力→天方向の純粋変換。平置き・正規化不能は nil。
     ///
-    /// 合成規則: 天方向 `u = (−gx, −gy)` に対し `K = mirror(R(V) · u)`。
-    /// 前面固定のため鏡は定数（x反転。CameraSessionManager の前面 mirrored 則に準拠）。
-    /// 下表の変換式は鏡込みの最終形である。
-    static func convert(
-        gravity: CMAcceleration,
-        videoOrientation: AVCaptureVideoOrientation
-    ) -> SIMD2<Double>? {
-        // 平置き（z支配）は無効として代替鎖へ退行させる。
+    /// 天方向 `u = (−gx, −gy)` を単位化して返す。キャプチャ接続が出力向きに応じて
+    /// バッファを物理回転させるため、デバイス座標はバッファ座標と軸一致する。
+    /// したがって向き別の回転・鏡像は不要であり、向き引数は持たない。
+    /// 平置き（z支配）は無効として代替鎖へ退行させる。
+    static func convert(gravity: CMAcceleration) -> SIMD2<Double>? {
         guard abs(gravity.z) <= abs(gravity.x) || abs(gravity.z) <= abs(gravity.y) else {
             return nil
         }
         let u = SIMD2<Double>(-gravity.x, -gravity.y)
-        let converted: SIMD2<Double>
-        switch videoOrientation {
-        case .portrait:
-            converted = SIMD2<Double>(-u.x, u.y)
-        case .portraitUpsideDown:
-            converted = SIMD2<Double>(u.x, -u.y)
-        case .landscapeRight:
-            converted = SIMD2<Double>(u.y, u.x)
-        case .landscapeLeft:
-            converted = SIMD2<Double>(-u.y, -u.x)
-        @unknown default:
-            return nil
-        }
-        let length = (converted.x * converted.x + converted.y * converted.y).squareRoot()
-        guard length > 1e-9 else { return nil }
-        return converted / length
+        let length = (u.x * u.x + u.y * u.y).squareRoot()
+        guard length.isFinite && length > 1e-9 else { return nil }
+        return u / length
     }
 
     // MARK: - 取得と単一ホールド
 
-    /// 生サンプルを取得時点の向きと同時変換する単一入口。nil は未取得・向き不明を表す。
-    func ingest(
-        gravity: CMAcceleration?,
-        videoOrientation: AVCaptureVideoOrientation?,
-        now: Date
-    ) {
-        guard let gravity, let videoOrientation else {
+    /// 生サンプルをホールド則で解決する単一入口。nil は未取得を表す。
+    func ingest(gravity: CMAcceleration?, now: Date) {
+        guard let gravity else {
             ingest(converted: nil, now: now)
             return
         }
-        ingest(converted: Self.convert(gravity: gravity, videoOrientation: videoOrientation), now: now)
+        ingest(converted: Self.convert(gravity: gravity), now: now)
     }
 
     /// 変換済みサンプル（nil＝無効）をホールド則で解決する。回復時は即時復帰、通知なし。
