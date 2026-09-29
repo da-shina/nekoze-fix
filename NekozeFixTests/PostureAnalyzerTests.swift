@@ -312,8 +312,8 @@ final class PostureAnalyzerTests: XCTestCase {
 
     // MARK: - 両側距離基準（フォールバック）
 
-    /// ロック側欠測時: 反対側の fallbackReferenceDistance で距離評価を継続
-    func testDistanceFallback_WhenLockSideMissing_UsesOtherSide() {
+    /// ロック側欠測時: 反対側代用なし・距離スキップ（要件4.1・grill Q1）。右距離がOVER相当でも角度のみで判定
+    func testDistanceLockSideMissing_DoesNotUseOtherSide_SkipsDistance() {
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: nil,  // ロック側（左）欠測
@@ -321,8 +321,8 @@ final class PostureAnalyzerTests: XCTestCase {
             leftShoulder: nil,
             rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
         )
-        // metric.side = .left だが左キーポイント nil → 右側でフォールバック
-        let metric = DistanceMetric(side: .left, referenceDistance: 0.18, fallbackReferenceDistance: 0.22)
+        // metric.side = .left だが左キーポイント nil → 反対側（右）は評価対象外
+        let metric = DistanceMetric(side: .left, referenceDistance: 0.18)
         let (_, verdict) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
@@ -330,28 +330,7 @@ final class PostureAnalyzerTests: XCTestCase {
             distanceMetric: metric,
             slouchDistanceThresholdPercent: 8.0
         )
-        // 右距離 0.25 >= 0.22 * 1.08 = 0.2376 → slouchCandidate
-        XCTAssertEqual(verdict, .slouchCandidate)
-    }
-
-    /// ロック側欠測 + フォールバック基準なし → 距離評価スキップ（角度のみ）
-    func testDistanceFallback_NoFallbackReference_SkipsDistance() {
-        let frame = PoseFrame(
-            timestamp: 0,
-            leftEar: nil,
-            rightEar: Keypoint(x: 0.7, y: 0.35, confidence: 0.9),
-            leftShoulder: nil,
-            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
-        )
-        let metric = DistanceMetric(side: .left, referenceDistance: 0.18) // fallback nil
-        let (_, verdict) = postureAnalyzer.analyze(
-            frame: frame,
-            referenceNearAngleDegrees: 0,
-            slouchDeltaThresholdDegrees: 10,
-            distanceMetric: metric,
-            slouchDistanceThresholdPercent: 8.0
-        )
-        // ロック側 nil + フォールバックなし → 距離スキップ。角度 0 < 10 → good
+        // 右距離 0.25 は反対側のため無視 → 距離スキップ。角度 0 < 10 → good
         XCTAssertEqual(verdict, .good)
     }
 

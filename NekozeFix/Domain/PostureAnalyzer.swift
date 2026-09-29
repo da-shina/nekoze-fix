@@ -138,19 +138,8 @@ struct PostureAnalyzer {
                 let lockDistance = sqrt(dx * dx + dy * dy)
                 reportedDistance = lockDistance
                 distanceOverThreshold = lockDistance >= metric.referenceDistance * (1.0 + slouchDistanceThresholdPercent / 100.0)
-            } else if let fallback = metric.fallbackReferenceDistance, fallback > 0 {
-                // ロック側欠測時: 反対側のペアでフォールバック評価
-                let fallbackSide: Side = (metric.side == .left) ? .right : .left
-                let fbEar = (fallbackSide == .left) ? frame.leftEar : frame.rightEar
-                let fbShoulder = (fallbackSide == .left) ? frame.leftShoulder : frame.rightShoulder
-                if isValidPair(ear: fbEar, shoulder: fbShoulder) {
-                    let dx = fbEar!.x - fbShoulder!.x
-                    let dy = fbEar!.y - fbShoulder!.y
-                    let fbDistance = sqrt(dx * dx + dy * dy)
-                    reportedDistance = fbDistance
-                    distanceOverThreshold = fbDistance >= fallback * (1.0 + slouchDistanceThresholdPercent / 100.0)
-                }
             }
+            // ロック側ペアが使用できないフレームは距離条件をスキップし角度のみで判定（反対側代用なし・要件4.1）。
         }
 
         // ステップ4: 判定を決定（角度 OR 距離基準比・FQ6）

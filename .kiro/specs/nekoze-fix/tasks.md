@@ -310,7 +310,7 @@
 
 ## 11. Foundation: 重力基準の型と権限文言
 
-- [ ] 11.1 (P) Types: 重力基準ベクトルの型追加と距離型の簡素化
+- [x] 11.1 (P) Types: 重力基準ベクトルの型追加と距離型の簡素化
   - ReferenceVector（単位ベクトル相当の2次元ベクトル）を型として追加する
   - 距離指標の型から反対側フォールバック用の予備基準距離を削除し、呼び出し側を機械的に追従させる（挙動変更なし。8.1の前例に倣う）
   - Observable completion: プロジェクトがビルド成功し、全既存テストが変更なく成功する
@@ -390,3 +390,4 @@
 - 8.5 で `PostureSessionManager.processDetection(_:)` / `applyCalibrationCompletion(...)` を internal 抽出。カメラ不要の合成フレーム統合テスト（DistanceMetricIntegrationTests）がこのシームを使う。
 - 9.3 実機確認（2026-09-14、iPhone 13 mini）: idle 画面で画面オフ非発生（8.3）、暗転→タップ復帰後も点灯維持（8.4）、ホーム遷移後 OS 標準スリープ復帰、NFR 9.1 再実測すべて問題なし。→ 同日夜の 10.1 改訂（監視中限定）で idle 点灯確認は無効。
 - 10.3 実機確認（2026-09-14、iPhone 13 mini、645ec96）: 監視開始で点灯維持／監視停止で自動スリープ／校正中・idle で自動スリープ／監視中暗転→タップ復帰後も点灯、4動作すべて OK。
+- 11.1 (2026-09-29): ReferenceVector は `SIMD2<Double>` の typealias として追加。DistanceMetric の反対側フォールバック予備距離を削除（読取側の fallback 枝のみ）。Session 側の `referenceFar*` 構築は 13.1 の所有物として残置（一時的に write-only）。旧フォールバック検証テストは要件 4.1 と矛盾するため `.good` 期待へ更新が必須だった。

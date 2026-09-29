@@ -85,12 +85,15 @@ enum CalibrationProgress: Equatable {
     case completed(referenceNearAngleDegrees: Double, referenceDistance: Double, referenceSide: Side, referencePoints: [CGPoint], referenceFarAngleDegrees: Double? = nil, referenceFarDistance: Double? = nil)
 }
 
+/// 重力基準ベクトル（単位ベクトル相当の2次元ベクトル）。
+/// 判定・校正・表示で同一の基準線を共有するための型。SIMD2<Double> の別名。
+/// 不変条件は単位長（長さ 1±1e-9）。design.md "Data Models" 参照。
+typealias ReferenceVector = SIMD2<Double>
+
 /// 距離指標の評価に必要データ（Session 層が校正完了時に構成し監視中保持・FQ1）。
 struct DistanceMetric: Equatable {
     var side: Side                // 校正時にロックした側
     var referenceDistance: Double // 校正時耳-肩距離の平均（正規化座標系）
-    /// 反対側の基準距離（両側校正時に設定。ロック側欠測時のフォールバック用）。
-    var fallbackReferenceDistance: Double? = nil
 }
 
 struct SessionSnapshot: Equatable {

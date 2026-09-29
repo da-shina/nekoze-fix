@@ -286,9 +286,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 校正ロック側の距離指標（FQ1）。referenceSide/referenceDistance は校正完了時のみ設定される。
         let distanceMetric: DistanceMetric?
         if let side = snapshot.referenceSide, let ref = snapshot.referenceDistances[side] {
-            let farSide: Side = (side == .left) ? .right : .left
-            let fallback = snapshot.referenceDistances[farSide]
-            distanceMetric = DistanceMetric(side: side, referenceDistance: ref, fallbackReferenceDistance: fallback)
+            distanceMetric = DistanceMetric(side: side, referenceDistance: ref)
         } else {
             distanceMetric = nil
         }
