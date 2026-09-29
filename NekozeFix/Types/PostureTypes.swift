@@ -118,6 +118,10 @@ struct SessionSnapshot: Equatable {
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
+    /// 判定が返した基準線ベクトル（表示専用、非オプショナル）。
+    /// Vision座標系（y上向き）の方向ベクトルをそのまま保持する（単一解決）。
+    /// 初期値・プレビューはダミー垂直 (0,1)。判定には影響しない。
+    var referenceVector: CGVector = CGVector(dx: 0, dy: 1)
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
 }

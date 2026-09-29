@@ -300,7 +300,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric = nil
         }
 
-        let (sample, verdict, _) = self.postureAnalyzer.analyze(
+        let (sample, verdict, reference) = self.postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: refAngle,
             slouchDeltaThresholdDegrees: threshold,
@@ -309,6 +309,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             previousNearSide: snapshot.nearSide,
             gravityInKeypointSpace: self.motionService.latestGravityInKeypointSpace
         )
+        // 判定が返した基準線ベクトルをそのまま表示へ受渡しする（単一解決、二重解決なし）。
+        // Vision座標系（y上向き）の方向を保持し、変換は Overlay 側で点列と同一係数にて行う。
+        snapshot.referenceVector = CGVector(dx: reference.x, dy: reference.y)
 
         // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
         var points = [CGPoint](repeating: .zero, count: 6)
