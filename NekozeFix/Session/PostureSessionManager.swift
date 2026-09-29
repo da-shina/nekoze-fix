@@ -95,13 +95,36 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private func setupOrientationObservation() {
         orientationMonitor.$currentVideoOrientation
             .sink { [weak self] orientation in
-                self?.cameraManager.updateVideoOrientation(orientation)
-                // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
-                self?.snapshot.isLandscape = (
-                    orientation == .landscapeLeft || orientation == .landscapeRight
-                )
+                self?.handleVideoOrientationChange(orientation)
             }
             .store(in: &cancellables)
+    }
+
+    /// 直前の確定向き（初期購読・同一向きの重複発火を除外する）。
+    private var lastKnownVideoOrientation: AVCaptureVideoOrientation?
+
+    /// 向き変化時の自動再校正遷移（要件 2.3/2.4/7.1）。
+    /// monitoring中のみ旧基準（角度・距離・ロック側）と猫背ゲートを破棄して
+    /// 校正へ自動遷移し、再校正完了まで監視を停止する（calibrating滞留）。
+    /// Motion再始動・校正リセットは既存 startCalibration フローへ委譲し重複実装しない。
+    /// calibrating中・idle・同一向きの再通知は対象外。
+    /// トリガは既存 DeviceOrientationMonitor.currentVideoOrientation の購読のみ
+    /// （モニタ自体は無改修）。テストは直接呼んで向き変化を再現できる。
+    func handleVideoOrientationChange(_ orientation: AVCaptureVideoOrientation) {
+        cameraManager.updateVideoOrientation(orientation)
+        // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
+        snapshot.isLandscape = (
+            orientation == .landscapeLeft || orientation == .landscapeRight
+        )
+        defer { lastKnownVideoOrientation = orientation }
+        guard let previous = lastKnownVideoOrientation, previous != orientation else { return }
+        guard snapshot.phase == .monitoring else { return }
+        snapshot.referenceAngle = nil
+        snapshot.referenceDistances = [:]
+        snapshot.referenceSide = nil
+        snapshot.slouchGate.reset()
+        lastGateTickTime = nil
+        startCalibration()
     }
 
     // MARK: - 公開メソッド

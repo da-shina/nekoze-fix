@@ -363,7 +363,7 @@
   - _Boundary: PostureSessionManager, PostureOverlayView_
   - _Requirements: 4.8_
 
-- [ ] 13.3 Session: 向き変化時の自動再校正遷移
+- [x] 13.3 Session: 向き変化時の自動再校正遷移
   - monitoring中の向き変化で旧基準（角度・距離・ロック側）とゲートを破棄して校正へ自動遷移する
   - 再校正完了まで監視を停止する。calibrating中・idleの向き変化は対象外
   - Observable completion: 向き変化の結合テストで破棄→校正遷移→完了まで停止が成功する
