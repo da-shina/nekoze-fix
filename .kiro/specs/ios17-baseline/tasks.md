@@ -5,7 +5,7 @@
   - 移行前の非推奨警告件数と全テスト成功をベースラインとして記録する
   - 完了条件：警告件数・テスト結果の記録が残り、移行後の比較基準として使える
   - _Requirements: 1.1, 5.1_
-- [ ] 1.2 回転角注入テスト基盤とAPI署名確定
+- [x] 1.2 回転角注入テスト基盤とAPI署名確定
   - 回転角注入テスト基盤（角度値を直接注入できるTestDouble）を用意する
   - coordinator初期化API署名を確認し、プレビュー層引数型を確定する（既知：preview layer型。実装時に最終確認）
   - 完了条件：TestDoubleで角度注入ができることと、プレビュー層引数型が確定していること
@@ -99,3 +99,8 @@
   - 通知遅延の実測と吸収可否、フレーム途切れ有無、前面／背面の両経路を記録し合否を判定する（回転→自動再校正発火は2秒以内＝暫定値）
   - 完了条件：実機検証記録が出揃い、移行前と同一振る舞いの合否が判定できる
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1, 5.2, 5.3_
+
+## Implementation Notes
+- SDK実測：`RotationCoordinator(device:previewLayer:)` のpreviewLayerは `CALayer?`（AVCaptureDevice.h）。Service公開APIは所有権規律により `AVCaptureVideoPreviewLayer?` に絞り、coordinatorへupcastする（1.2で確定。2.1は本実装を `DeviceRotationServiceProtocol` に適合させ、`init(device:previewLayer:)` 署名一致をレビューで再確認すること）
+- 警告集計は `clean build`（アプリのみ）と `clean test`（テストバンドル含む）で件数が変わる。5.1ゲートの基準はbaseline.md定義の「アプリ由来AVCapture系15件ゼロ」。テスト側の既存警告（OrientationRecalibrationTests.swift:38）は4.2で書換え予定
+- ビルド警告はログ内で重複出力されるため `sort -u` で重複除去して数えること（`tail` では欠落する）
