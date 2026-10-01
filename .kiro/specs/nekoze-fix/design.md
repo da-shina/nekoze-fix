@@ -28,7 +28,7 @@
 - `analyze` への重力注入と角度算出の一本化、判定・校正・表示での同一ベクトル使用
 - 基準線描画の重力対応（通常時と代替時で同一の見た目）
 - モーション権限文言と黙過フォールバック（監視を妨げない）
-- 重力の取得と単一 0.5 秒ホールド（向き・鏡の同時取得は不要。出力接続が向き補正済みバッファを渡すため。14.2 実機知見）
+- 重力の取得と単一 0.5 秒ホールド（デバイス姿勢・鏡像の同時取得は不要。出力バッファはインターフェース向きに自動回転し Vision には `.up` 固定で渡るため。14.2 実機知見）
 - 向き変化時（monitoring中のみ）の自動再校正遷移（旧基準・ゲート破棄、再校正完了まで監視停止。grill Q3/Q5/Q6決定）
 
 ### Out of Boundary
@@ -40,13 +40,13 @@
 ### Allowed Dependencies
 
 - Apple frameworks のみ: SwiftUI, Combine, AVFoundation, Vision, CoreMotion, UIKit, AudioToolbox（サードパーティ追加なし）
-- 既存層の再利用: `DeviceOrientationMonitor` の向き値、`CameraSessionManager` のミラー情報、`TimedConditionGate`、`CalibrationLogic`（無改修で利用）
+- 既存層の再利用: `TimedConditionGate`、`CalibrationLogic`（無改修で利用）。デバイス姿勢の購読と出力接続の向き同期は Session 側の別系統であり、`MotionService` は参照しない。`DeviceOrientationMonitor` の改修・`CameraSessionManager` の鏡像情報の読取りは行わない
 - 依存方向は Types → Domain → Services → Session → UI を厳守し、Domain は Services を参照しない（重力は値として注入）
 
 ### Revalidation Triggers
 
 - `ReferenceVector` の形状・フォールバック順序・無効判定しきい値の変更
-- 重力→画像座標の変換表の変更
+- 重力→天方向の変換則の変更（正規化・平置き判定含む）
 - `analyze` シグニチャの変更
 - 単一ホールド秒数の変更
 - 向き変化時の自動再校正遷移の条件・破棄方針の変更
@@ -60,7 +60,7 @@
 - 単方向レイヤード構成。Domain は副作用なし純粋関数。Session（`@MainActor`）が唯一の状態所有者。
 - `PostureAnalyzer.analyze` が基準ベクトル `perp` を内部算出しているため、重力対応の自然な拡張点は引数注入である。
 - `snapshot.videoAspectRatio`・EMA 平滑・personMissing／shoulderMissing 猶予（各 0.5 秒）の前例があり、フォールバック保持時間の設計前例として流用できる。
-- `captureOutput` は Vision に `.up` 固定で渡す（iPadOS 18 自動回転対応済み）。キーポイント空間と重力投影空間の一致が本設計の要点である。
+- `captureOutput` は出力バッファがインターフェース向きに自動回転して配信されるため Vision に `.up` 固定で渡す（`PostureSessionManager.captureOutput`、`connection.videoOrientation` は参考値）。キーポイント空間上向きは画面上向きと一致し、デバイス座標の天方向 `K=normalize(−gx,−gy)` と軸一致する。これが向き非依存が成立する要点である。
 
 ### Architecture Pattern & Boundary Map
 
@@ -251,7 +251,7 @@ func analyze(
 
 **Responsibilities & Constraints**
 - `CMMotionManager.deviceMotion` を 1/30 間隔（定数）で取得する。監視・校正中のみ動作させる。
-- 天方向 `K = normalize(−gx, −gy)` をそのまま有効ベクトルとして保持する。キャプチャ接続が出力向きに応じてバッファを物理回転させるため、デバイス座標はバッファ座標と軸一致し、向き別の回転・鏡像は不要である（14.2 実機知見。旧向き別変換表は撤去）。
+- 天方向 `K = normalize(−gx, −gy)` をそのまま有効ベクトルとして保持する。出力バッファはインターフェース向きに自動回転して配信され Vision には `.up` 固定で渡すため（`PostureSessionManager.captureOutput`）、キーポイント空間上向きは画面上向きと一致し、デバイス姿勢別の回転・鏡像は不要である（14.2 実機知見。旧デバイス姿勢別変換表は撤去）。
 - 無効（z 支配の平置き・未取得・権限拒否）は直前有効値を 0.5 秒ホールドし（単一タイマ、設計値・実装内に閉じる）、超過で nil を返す。回復時は即時復帰する。ユーザー通知はしない（黙過フォールバック）。
 
 **Dependencies**
@@ -288,7 +288,7 @@ final class MotionService {
 
 ##### 変換則（向き非依存、14.2 実機知見で確定）
 
-- 合成規則: 天方向 `K = normalize(u)`、`u = (−gx, −gy)`。キャプチャ接続の videoOrientation によりバッファは常に向き補正済み（デバイス上端＝バッファ上端）で渡るため、デバイス座標とバッファ座標は軸一致する。向き別の回転表・鏡像は不要である。
+- 合成規則: 天方向 `K = normalize(u)`、`u = (−gx, −gy)`。出力バッファはインターフェース向きに自動回転して配信され Vision には `.up` 固定で渡すため（`PostureSessionManager.captureOutput`）、キーポイント空間上向きは画面上向きと一致する。デバイス姿勢別の回転表・鏡像は不要である。
 - 旧表（grill Q2決定の向き別4行）はセンサ固定フレームの誤った想定＋前面鏡の適用誤りであり、縦持ち右傾きで緑線が鏡像反転する実機不具合として発覚したため撤去した（黄線＝キーポイントは正しく左傾き、緑のみ右傾きという観測が決定打）。
 - 世界直立人物の耳ー肩ベクトルは全向きで K と一致し、向き毎の直立約0度の不変条件が成立する。
 - 平置き（z支配）は nil で代替鎖へ退行させる。
@@ -348,8 +348,8 @@ final class MotionService {
 
 ### Domain Model
 
-- `ReferenceVector`（`SIMD2<Double>` の typealias）: 不変条件は単位長。集約外の純粋値。
-- 既存の `PoseFrame / Keypoint / AngleSample / DistanceMetric / CalibrationProgress` は不変。永続化なし。
+- `ReferenceVector`（`SIMD2<Double>` の typealias）: 不変条件は単位長。正規化責任は `MotionService.convert`（重力経路）と `resolve` 内の肩直交・画像垂直経路が各々負い、Session の `SIMD2→CGVector` 変換は方向保存のみで正規化しない。単一コンストラクタの導入は将来の拡張とし、本設計では責任分担の明記に留める。
+- 既存の `PoseFrame / Keypoint / AngleSample / DistanceMetric / CalibrationProgress` は不変。`CalibrationProgress.completed` の `referenceFar*` は旧遠側基準の残滓であり、Session は `_, _` で破棄して近側のみ使用する（11.1で距離型の予備基準は削除済み、13.1で Session 側の遠側構築は削除済み）。永続化なし。
 
 ## Error Handling
 
