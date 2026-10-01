@@ -51,6 +51,12 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
     /// `@testable` 経由でテストが Fake を注入する。
     var rotationConnectionForTesting: CaptureVideoRotationConnection?
 
+    /// カメラ確定デバイスの通知先（4.1 実結線）。
+    /// Session が設定し、coordinator 再生成（同一所有層）に使う。
+    /// configureSession 内・sessionQueue 上で同期呼出しする。
+    /// Session 側は Main へ hop して受けるため、本呼出しは構成ブロックを塞がない。
+    var deviceFinalizedHandler: ((AVCaptureDevice) -> Void)?
+
     /// 直近の有効 capture 角（度）。再構成時（カメラ切替）の再適用用に保持する。
     private(set) var lastCaptureRotationAngle: CGFloat = 0
 
@@ -205,6 +211,13 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
             throw CameraError.cameraNotAvailable
         }
+
+        // 4.1 実結線：確定デバイスを Session へ通知する（coordinator 再生成用）。
+        // 順序・キュー保証：本通知は sessionQueue 上の構成ブロック内で発行され、
+        // Session 側の recreate→publish→capture角転送も同一 sessionQueue へ FIFO 投入されるため、
+        // 構成（直前角の再適用）→新角適用の順序が確定し、最終値は最新角になる。
+        // ハンドラは Main へ hop するため構成ブロックを塞がない。
+        deviceFinalizedHandler?(camera)
 
         do {
             let input = try AVCaptureDeviceInput(device: camera)

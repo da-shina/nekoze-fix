@@ -22,9 +22,21 @@ struct CalibrationView: View {
 
     var body: some View {
         ZStack {
-            // 背景にカメラプレビューを表示
-            CameraPreviewView(session: sessionManager.cameraManager.captureSession)
-                .ignoresSafeArea()
+            // 背景にカメラプレビューを表示（4.1 実結線）。
+            // プレビュー層は Session が生成した同一インスタンスを注入し（所有権は Session）、
+            // preview 角は Session と同一の Service インスタンスから購読する。
+            // 層出現時はペイロードなしで Session へ通知し、Session が所有層で recreate する。
+            CameraPreviewView(
+                session: sessionManager.cameraManager.captureSession,
+                injectedPreviewLayer: sessionManager.previewLayerForInjection,
+                rotationSource: sessionManager.rotationServiceForPreview,
+                onPreviewLayerAppeared: {
+                    Task { @MainActor in
+                        sessionManager.handlePreviewLayerAppeared()
+                    }
+                }
+            )
+            .ignoresSafeArea()
 
             // 現在の姿勢のオーバーレイ
             PostureOverlayView(

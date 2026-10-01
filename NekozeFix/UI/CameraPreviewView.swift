@@ -74,9 +74,11 @@ struct CameraPreviewView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: CameraPreviewUIView, context: Context) {
-        // Session 結線時（task 4.1）の更新点。現状は初回結線のみで、フックの
-        // 差し替えのみ反映する（層・購読源の差し替えは 4.1 で確定する）。
+        // Session 結線時（task 4.1）の更新点。層・購読源は Session 所有の同一
+        // インスタンスを使い回す。購読源が View 出現より後に結線された場合
+        // （attach-after-appear）に備え、変化時のみ購読し直す。
         uiView.onPreviewLayerAppeared = onPreviewLayerAppeared
+        uiView.resubscribeIfNeeded(to: rotationSource)
     }
 }
 
@@ -95,6 +97,9 @@ internal class CameraPreviewUIView: UIView {
     var onPreviewLayerAppeared: (() -> Void)?
 
     private var cancellables = Set<AnyCancellable>()
+
+    /// 現在購読中の配信源（attach-after-appear の変化検出用）。
+    private var subscribedSource: (any PreviewRotationAngleSource)?
 
     /// テスト用アクセサ：使用中のプレビュー層（注入層か自前層かの検証用）。
     internal var previewLayerForTesting: AVCaptureVideoPreviewLayer { previewLayer }
@@ -121,7 +126,7 @@ internal class CameraPreviewUIView: UIView {
         self.layer.addSublayer(self.previewLayer)
 
         if let rotationSource {
-            subscribe(to: rotationSource)
+            resubscribeIfNeeded(to: rotationSource)
         }
     }
 
@@ -157,7 +162,14 @@ internal class CameraPreviewUIView: UIView {
     }
 
     /// 配信源の preview 角を購読し、配信値の適用のみ行う。
-    private func subscribe(to source: any PreviewRotationAngleSource) {
+    /// Service 結線が View 出現より後になる場合（attach-after-appear）に備え、
+    /// 同一インスタンスには再購読せず、変化時のみ購読し直す。
+    /// nil 時は何もしない（3.2 の既定動作を維持）。
+    func resubscribeIfNeeded(to source: (any PreviewRotationAngleSource)?) {
+        guard let source else { return }
+        if let subscribedSource, subscribedSource === source { return }
+        cancellables.removeAll()
+        subscribedSource = source
         source.previewRotationAnglePublisher
             .sink { [weak self] angle in
                 self?.applyPreviewRotationAngle(angle)

@@ -20,6 +20,24 @@ protocol SessionRotationService: AnyObject {
 
 extension DeviceRotationService: SessionRotationService {}
 
+/// 回転角購読シーム（4.1 実結線用）。Session が同一 Service インスタンスの
+/// 両角配信を購読するための受口。`DeviceRotationService` が適合し、
+/// テストでは `FakeDeviceRotationService` が適合する（RotationWiringOrderTests 内の extension）。
+/// `SessionRotationService`（起停・再生成の指示口）とは別口のままにし、
+/// 既存適合（SessionRotationTriggerTests 内）を壊さない。
+protocol SessionRotationAngleSource: AnyObject {
+    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> { get }
+}
+
+extension DeviceRotationService: SessionRotationAngleSource {
+    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
+        $previewRotationAngle
+            .combineLatest($captureRotationAngle)
+            .map { (preview: $0, capture: $1) }
+            .eraseToAnyPublisher()
+    }
+}
+
 @MainActor
 final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     // MARK: - 公開プロパティ
@@ -38,12 +56,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     let motionService = MotionService()
     private var calibrationLogic = CalibrationLogic()
     let settingsStore: SettingsStore
-    /// 回転角サービス（起停・再生成の指示先。実結線は task 4.1）。
+    /// 回転角サービス（起停・再生成の指示先。4.1 で結線済み）。
     /// nil 時は指示を見送る（監視・校正フロー自体は継続）。
     /// 起停は Motion 起停と完全同一箇所で駆動する（暗転中継続・背景移行停止を含む）。
-    var rotationService: (any SessionRotationService)?
+    /// 代入時は角度購読を張り替える（4.1 で結線済み）。
+    var rotationService: (any SessionRotationService)? {
+        didSet { resetRotationSubscription() }
+    }
+    /// 結線中の角度購読（代入のたびに張り替える。nil 代入時は解除する）。
+    private var rotationAnglesSubscription: AnyCancellable?
     /// Session 所有のプレビュー層（coordinator 初期化用・View 注入用）。
-    /// 所有権は Session（View 側で生成しない）。View への注入結線は task 4.1。
+    /// 所有権は Session（View 側で生成しない）。View への注入は 4.1 で結線済み。
     /// 生成は遅延（初回再生成指示時）し、以後同一インスタンスを使い回す。
     private(set) var ownedPreviewLayer: AVCaptureVideoPreviewLayer?
     /// 直近に確定したカメラデバイス（層出現時の再生成用。確定通知の結線は 4.1）。
@@ -90,6 +113,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         self.snapshot = SessionSnapshot()
         super.init()
         setupSettingsObservation()
+        setupRotationWiring()
     }
 
     /// Preview・テスト用: 任意の snapshot で初期化する。
@@ -98,6 +122,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         self.snapshot = snapshot
         super.init()
         setupSettingsObservation()
+        setupRotationWiring()
     }
 
     private func setupSettingsObservation() {
@@ -118,7 +143,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var lastKnownCaptureAngle: CGFloat?
 
     /// 回転角変更時の新トリガ（requirements 2.1–2.4, 3.1, 3.2, 4.1）。
-    /// `DeviceRotationService` の変更配信の受口。実購読の結線は task 4.1。
+    /// `DeviceRotationService` の変更配信の受口。購読結線は 4.1 で結線済み。
     /// テストは角度値を直接注入して駆動する。
     /// - Parameters:
     ///   - preview: preview用回転角（度）。View が Service を直接購読するため
@@ -162,14 +187,95 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         return !isPortrait
     }
 
+    /// 回転サービスの結線（4.1 実結線）。購読の張り替えは didSet 経由で一本化する。
+    /// テストは Fake を渡して TestDouble 駆動する。
+    /// Session と View は本メソッドで結線した同一インスタンスを共有する
+    /// （`rotationServiceForPreview` 経由。二重解決・隠れた共有所有を作らない）。
+    func attachRotationService(_ service: (any SessionRotationService)?) {
+        rotationService = service
+    }
+
+    /// View 注入用の同一 Service インスタンス（4.1 実結線）。
+    /// 未結線時は nil（View は購読しない。3.2 の既定動作）。
+    var rotationServiceForPreview: (any PreviewRotationAngleSource)? {
+        rotationService as? any PreviewRotationAngleSource
+    }
+
+    /// View 注入用の Session 所有プレビュー層（4.1 実結線）。
+    /// 初回アクセス時に生成し以後同一インスタンスを使い回す（所有権は Session）。
+    var previewLayerForInjection: AVCaptureVideoPreviewLayer {
+        ensureOwnedPreviewLayer()
+    }
+
+    /// カメラ確定デバイスの受口（4.1 実結線。`CameraSessionManager.deviceFinalizedHandler` の接続先）。
+    /// 初回は本番 Service を生成して購読結線し、以後は所有層で recreate する。
+    /// 生成直後の start は Motion 稼働 parity（稼働中のみ開始。暗転中継続・背景停止は既存則）。
+    ///
+    /// 順序・キュー保証（初回・切替・層再出現の3ケース）：
+    /// 本受口は sessionQueue 上の構成ブロック由来で Main に直列化され、
+    /// recreate→publish（同期・最新値上書き）→capture角転送（sessionQueue FIFO）の順に確定する。
+    /// 初回・切替では構成（直前角の再適用）の後に新角が適用され、
+    /// 層再出現（`handlePreviewLayerAppeared`）では適用のみ行われる。
+    /// いずれも最終値は最新角であり、古い角による上書きは起きない。
+    /// KVO 配送はメイン、読取りはメイン、最新値の上書きのみ。
+    private func handleCameraDeviceFinalized(_ device: AVCaptureDevice) {
+        lastFinalizedCameraDevice = device
+        if rotationService == nil {
+            let service = DeviceRotationService(device: device, previewLayer: ensureOwnedPreviewLayer())
+            attachRotationService(service)
+            if motionService.isRunning {
+                service.start()
+            }
+        }
+        requestRotationRecreate(for: device)
+    }
+
+    /// 角度購読の張り替え（4.1 実結線）。購読非対応時は解除のみ行う。
+    /// 購読は CombineLatest の初期値で直ちに現行角を受け、初回確定として基準化する
+    /// （同一角の重複発火除外と同一則。再校正は起こさない）。
+    private func resetRotationSubscription() {
+        rotationAnglesSubscription?.cancel()
+        rotationAnglesSubscription = nil
+        guard let source = rotationService as? any SessionRotationAngleSource else { return }
+        rotationAnglesSubscription = source.rotationAnglesPublisher
+            .sink { [weak self] angles in
+                self?.deliverRotationAngles(preview: angles.preview, capture: angles.capture)
+            }
+    }
+
+    /// 結線された角度配信の受口。KVO 由来の本番配信はメイン配送が保証されるため
+    /// メインでは同期受渡しし、それ以外では MainActor へ hop する
+    /// （`DeviceRotationService.publish` と同一則。最新値の上書きのみ）。
+    private func deliverRotationAngles(preview: CGFloat, capture: CGFloat) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                self.handleRotationAngleChange(preview: preview, capture: capture)
+            }
+        } else {
+            Task { @MainActor [weak self] in
+                self?.handleRotationAngleChange(preview: preview, capture: capture)
+            }
+        }
+    }
+
+    /// 4.1 実結線：確定デバイス通知の受口登録。
+    /// ハンドラは sessionQueue 上で呼ばれるため Main へ hop して受口へ渡す。
+    private func setupRotationWiring() {
+        cameraManager.deviceFinalizedHandler = { [weak self] device in
+            Task { @MainActor [weak self] in
+                self?.handleCameraDeviceFinalized(device)
+            }
+        }
+    }
+
     /// カメラ確定時（カメラ構成時）に coordinator 再生成を指示する。
-    /// 確定デバイスの通知結線・順序保証は task 4.1。本メソッドは転送口を持つ。
+    /// 確定デバイスの通知結線・順序保証は 4.1 で結線済み。本メソッドは転送口を持つ。
     func requestRotationRecreate(for device: AVCaptureDevice) {
         lastFinalizedCameraDevice = device
         rotationService?.recreate(for: device, previewLayer: ensureOwnedPreviewLayer())
     }
 
-    /// プレビュー層出現時（View からのペイロードなし通知の受口。結線は 4.1）の
+    /// プレビュー層出現時（View からのペイロードなし通知の受口。4.1 で結線済み）の
     /// coordinator 再生成指示。Session が所有層・確定デバイスで recreate する。
     /// 未確定時は見送る（直前有効角の維持）。
     func handlePreviewLayerAppeared() {

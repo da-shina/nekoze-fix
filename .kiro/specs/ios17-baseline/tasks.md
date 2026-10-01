@@ -65,7 +65,7 @@
   - _Requirements: 5.2_
 
 - [ ] 4. 結合と移行
-- [ ] 4.1 実結線と順序保証
+- [x] 4.1 実結線と順序保証
   - Session がプレビュー層を生成して View へ注入する結線を含め、coordinator再生成と接続再構成（回転角適用順序）の順序・キュー保証を確定する（初回・切替・層再出現の3ケース）
   - 完了条件：結線後の回転角追従が動作し、3ケースの順序保証が確定している
   - _Boundary: DeviceRotationService, PostureSessionManager, CameraSessionManager, CameraPreviewView_
