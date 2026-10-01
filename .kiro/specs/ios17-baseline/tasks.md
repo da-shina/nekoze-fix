@@ -83,7 +83,7 @@
   - _Boundary: DeviceOrientationMonitor, PostureSessionManager, CameraSessionManager, CameraPreviewView_
   - _Depends: 4.1, 4.2_
   - _Requirements: 1.1_
-- [ ] 4.4 移行完了条件の確定（設定・表記）
+- [x] 4.4 移行完了条件の確定（設定・表記）
   - 配置目標が全構成で17.0であることを確認し、分岐が残存しないことを検証する
   - 関連設計書・タスクの旧OS表記更新を含め、残存ゼロをgrepで確認する
   - 完了条件：設定・表記の残存チェックがすべて通過する

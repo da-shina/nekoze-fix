@@ -87,7 +87,7 @@ graph TB
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| Services | CoreMotion CMMotionManager / iOS 16+ | 重力取得 | プラットフォーム標準を採用、自作傾き推定は不採用 |
+| Services | CoreMotion CMMotionManager / iOS 17.0 | 重力取得 | プラットフォーム標準を採用、自作傾き推定は不採用 |
 | Domain | Swift 構造体 純粋関数 | 解決・角度算出 | 新規依存なし |
 | UI | SwiftUI 既存 Overlay | 基準線描画 | 見た目変更なし |
 | Config | Info plist NSMotionUsageDescription | 権限文言 | カメラ文言の既存方式に倣う |
