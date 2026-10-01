@@ -51,7 +51,7 @@ iPhoneをデスクに置くだけで、リアルタイムに猫背を検知し�
 - **Adjacent**: なし
 
 ## Constraints
-- iOS 16+ が必要（VNDetectHumanBodyPoseRequestはiOS 13+から利用可能だが、SwiftUI Concurrencyや最新APIの活用のためiOS 16を下限とする）
+- iOS 17+ が必要（VNDetectHumanBodyPoseRequestはiOS 13+から利用可能だが、SwiftUI Concurrencyや最新APIの活用のためiOS 17を下限とする）
 - フロントカメラ必須
 - アプリ起動中のみ監視（バックグラウンド監視なし）
 - ユーザーはカメラに向かい合って座る前提（横顔・後ろ姿は想定外）
