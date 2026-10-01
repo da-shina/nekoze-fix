@@ -39,7 +39,7 @@
   - 完了条件：TestDouble角度でpreview接続へ回転角が適用され、UIDevice直接参照がgrepで検出されない
   - _Boundary: CameraPreviewView_
   - _Requirements: 2.1, 2.2_
-- [ ] 3.3 (P) セッション購読の一本化改修
+- [x] 3.3 (P) セッション購読の一本化改修
   - 新トリガ署名へ移管し、capture用回転角を撮影管理へ転送する（preview用回転角は転送しない。実結線は4.1）
   - カメラ確定時・プレビュー層出現時にcoordinator再生成を指示する
   - Motion起停と完全同一箇所で回転サービスの起停を駆動する（暗転中継続・背景移行停止を含む）

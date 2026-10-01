@@ -5,6 +5,21 @@ import AVFoundation
 /// セッション層: 姿勢監視セッションの状態マシン。
 /// design.md "PostureSessionManager" セクション参照。
 
+/// 回転サービスの Session 側シーム。`DeviceRotationService` が適合し、
+/// テストでは `FakeDeviceRotationService` が適合する（test target の extension）。
+/// 起停は Motion 起停と完全同一箇所で駆動する。実結線は task 4.1。
+/// design.md PostureSessionManager（改修）：購読とトリガ・再生成指示は Session。
+protocol SessionRotationService: AnyObject {
+    /// 監視・校正開始時に呼ぶ（Motion 起停と同一則）。
+    func start()
+    /// 監視停止・背景移行時に呼ぶ（Motion 起停と同一則）。
+    func stop()
+    /// カメラ確定時・プレビュー層出現時に Session が呼ぶ再生成。
+    func recreate(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
+}
+
+extension DeviceRotationService: SessionRotationService {}
+
 @MainActor
 final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     // MARK: - 公開プロパティ
@@ -23,7 +38,16 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     let motionService = MotionService()
     private var calibrationLogic = CalibrationLogic()
     let settingsStore: SettingsStore
-    private let orientationMonitor = DeviceOrientationMonitor()
+    /// 回転角サービス（起停・再生成の指示先。実結線は task 4.1）。
+    /// nil 時は指示を見送る（監視・校正フロー自体は継続）。
+    /// 起停は Motion 起停と完全同一箇所で駆動する（暗転中継続・背景移行停止を含む）。
+    var rotationService: (any SessionRotationService)?
+    /// Session 所有のプレビュー層（coordinator 初期化用・View 注入用）。
+    /// 所有権は Session（View 側で生成しない）。View への注入結線は task 4.1。
+    /// 生成は遅延（初回再生成指示時）し、以後同一インスタンスを使い回す。
+    private(set) var ownedPreviewLayer: AVCaptureVideoPreviewLayer?
+    /// 直近に確定したカメラデバイス（層出現時の再生成用。確定通知の結線は 4.1）。
+    private(set) weak var lastFinalizedCameraDevice: AVCaptureDevice?
 
     // 通知音（design.md "AlertPlayer" Q17/Q23: 確定猫背で即再生 + 30秒間隔で繰り返し）
     private lazy var alertPlayer: AlertPlayer? = {
@@ -66,7 +90,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         self.snapshot = SessionSnapshot()
         super.init()
         setupSettingsObservation()
-        setupOrientationObservation()
     }
 
     /// Preview・テスト用: 任意の snapshot で初期化する。
@@ -75,7 +98,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         self.snapshot = snapshot
         super.init()
         setupSettingsObservation()
-        setupOrientationObservation()
     }
 
     private func setupSettingsObservation() {
@@ -92,32 +114,30 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             .store(in: &cancellables)
     }
 
-    private func setupOrientationObservation() {
-        orientationMonitor.$currentVideoOrientation
-            .sink { [weak self] orientation in
-                self?.handleVideoOrientationChange(orientation)
-            }
-            .store(in: &cancellables)
-    }
+    /// 直近の確定 capture 角（度。初回確定・同一角の重複発火を除外する）。
+    private var lastKnownCaptureAngle: CGFloat?
 
-    /// 直前の確定向き（初期購読・同一向きの重複発火を除外する）。
-    private var lastKnownVideoOrientation: AVCaptureVideoOrientation?
-
+    /// 回転角変更時の新トリガ（requirements 2.1–2.4, 3.1, 3.2, 4.1）。
+    /// `DeviceRotationService` の変更配信の受口。実購読の結線は task 4.1。
+    /// テストは角度値を直接注入して駆動する。
+    /// - Parameters:
+    ///   - preview: preview用回転角（度）。View が Service を直接購読するため
+    ///     Session は転送しない（受口の対称性のためのみ受け取る）。
+    ///   - capture: capture用回転角（度）。data-output 接続への適用・
+    ///     `isLandscape` 導出・自動再校正トリガの唯一の駆動源。
     /// 向き変化時の自動再校正遷移（要件 2.3/2.4/7.1）。
     /// monitoring中のみ旧基準（角度・距離・ロック側）と猫背ゲートを破棄して
     /// 校正へ自動遷移し、再校正完了まで監視を停止する（calibrating滞留）。
     /// Motion再始動・校正リセットは既存 startCalibration フローへ委譲し重複実装しない。
-    /// calibrating中・idle・同一向きの再通知は対象外。
-    /// トリガは既存 DeviceOrientationMonitor.currentVideoOrientation の購読のみ
-    /// （モニタ自体は無改修）。テストは直接呼んで向き変化を再現できる。
-    func handleVideoOrientationChange(_ orientation: AVCaptureVideoOrientation) {
-        cameraManager.updateVideoOrientation(orientation)
+    /// calibrating中・idle・同一角の再通知は対象外。
+    func handleRotationAngleChange(preview: CGFloat, capture: CGFloat) {
+        cameraManager.updateCaptureRotationAngle(capture)
         // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
-        snapshot.isLandscape = (
-            orientation == .landscapeLeft || orientation == .landscapeRight
-        )
-        defer { lastKnownVideoOrientation = orientation }
-        guard let previous = lastKnownVideoOrientation, previous != orientation else { return }
+        // 旧分岐（landscapeLeft／landscapeRight→true）の意味を保ち、
+        // 入力のみ旧向き値から capture 角へ替える（対応表への表現替えは task 3.4）。
+        snapshot.isLandscape = Self.isLandscapeCaptureAngle(capture)
+        defer { lastKnownCaptureAngle = capture }
+        guard let previous = lastKnownCaptureAngle, previous != capture else { return }
         guard snapshot.phase == .monitoring else { return }
         snapshot.referenceAngle = nil
         snapshot.referenceDistances = [:]
@@ -125,6 +145,40 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
         startCalibration()
+    }
+
+    /// capture用回転角（度）からのランドスケープ判定。
+    /// 旧分岐の意味を保つ：転送対応（portrait=0、landscapeRight=90、
+    /// portraitUpsideDown=180、landscapeLeft=270）に整合するよう
+    /// 90°±45°／270°±45° をランドスケープとする。
+    /// 対応表への表現替え・境界ヒステリシスは task 3.4（初期実装なし）。
+    private static func isLandscapeCaptureAngle(_ degrees: CGFloat) -> Bool {
+        var normalized = degrees.truncatingRemainder(dividingBy: 360)
+        if normalized < 0 { normalized += 360 }
+        return (normalized >= 45 && normalized < 135) || (normalized >= 225 && normalized < 315)
+    }
+
+    /// カメラ確定時（カメラ構成時）に coordinator 再生成を指示する。
+    /// 確定デバイスの通知結線・順序保証は task 4.1。本メソッドは転送口を持つ。
+    func requestRotationRecreate(for device: AVCaptureDevice) {
+        lastFinalizedCameraDevice = device
+        rotationService?.recreate(for: device, previewLayer: ensureOwnedPreviewLayer())
+    }
+
+    /// プレビュー層出現時（View からのペイロードなし通知の受口。結線は 4.1）の
+    /// coordinator 再生成指示。Session が所有層・確定デバイスで recreate する。
+    /// 未確定時は見送る（直前有効角の維持）。
+    func handlePreviewLayerAppeared() {
+        guard let device = lastFinalizedCameraDevice else { return }
+        rotationService?.recreate(for: device, previewLayer: ensureOwnedPreviewLayer())
+    }
+
+    /// 所有プレビュー層の遅延生成（初回再生成指示時）。以後同一インスタンスを使う。
+    private func ensureOwnedPreviewLayer() -> AVCaptureVideoPreviewLayer {
+        if let ownedPreviewLayer { return ownedPreviewLayer }
+        let layer = AVCaptureVideoPreviewLayer(session: cameraManager.captureSession)
+        self.ownedPreviewLayer = layer
+        return layer
     }
 
     // MARK: - 公開メソッド
@@ -136,6 +190,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         case .authorized:
             setPhase(.calibrating)
             motionService.start()
+            rotationService?.start() // Motion起停と同一則
             await startCameraPipeline()
         case .denied:
             setPhase(.permissionDenied)
@@ -148,6 +203,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func startCalibration() {
         setPhase(.calibrating)
         motionService.start()
+        rotationService?.start() // Motion起停と同一則
         calibrationLogic.start()
         smoothedPoints = []
         lastShoulderSeenTime = nil
@@ -166,6 +222,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
         motionService.start()
+        rotationService?.start() // Motion起停と同一則
         Task {
             await startCameraPipeline()
         }
@@ -179,6 +236,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
         motionService.stop()
+        rotationService?.stop() // Motion起停と同一則
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
     }
@@ -192,7 +250,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         alertPlayer?.stop()
         cameraManager.stop()
         motionService.stop()
-        if snapshot.phase == .monitoring || snapshot.phase == .calibrating || snapshot.phase == .rotating {
+        rotationService?.stop() // Motion起停と同一則
+        if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             setPhase(.idle)
         }
         snapshot.isMonitoringEnabled = settingsStore.isMonitoringEnabled
@@ -462,6 +521,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     ) {
         setPhase(.monitoring)
         motionService.start()
+        rotationService?.start() // Motion起停と同一則
         snapshot.isMonitoringEnabled = true
         settingsStore.isMonitoringEnabled = true // 校正完了＝監視開始。復帰判定の単一ソース
         snapshot.referenceAngle = referenceNearAngleDegrees
