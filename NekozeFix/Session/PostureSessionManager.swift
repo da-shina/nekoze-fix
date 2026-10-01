@@ -435,7 +435,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
 
         // iPadOS 18 以降、videoDataOutput のバッファはインターフェース向きに
-        // 自動回転して配信される（connection.videoOrientation は参考値にすぎない）。
+        // 自動回転して配信される（connection.videoRotationAngle は参考値にすぎない）。
         // したがって Vision には常に .up を渡す。
         //
         // ポーズ検出はキャプチャキュー（sessionQueue）上で同期的に実行する。

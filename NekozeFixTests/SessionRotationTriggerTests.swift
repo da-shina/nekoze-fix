@@ -6,7 +6,7 @@ import AVFoundation
 /// requirements.md 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1。
 /// design.md PostureSessionManager（改修）：新トリガ署名への移管、capture 角転送
 /// （preview 非転送）、coordinator 再生成指示、Motion 起停と同一則の回転起停。
-/// 旧 `handleVideoOrientationChange` は削除済み（旧呼出し側の更新は task 4.2）。
+/// 旧向き通知ハンドラは削除済み（旧呼出し側の更新は task 4.2）。
 /// 実購読結線・順序保証は task 4.1。本ファイルでは角度値の直接注入で駆動する
 /// （OrientationRecalibrationTests の直接呼出し方式と同一パターン）。
 ///

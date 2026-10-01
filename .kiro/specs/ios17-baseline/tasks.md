@@ -77,7 +77,7 @@
   - 完了条件：更新対象テストがすべて成功し、ビルドが通る（全回帰は5.1）
   - _Depends: 3.3, 3.5_
   - _Requirements: 5.1, 5.2_
-- [ ] 4.3 旧経路の削除
+- [x] 4.3 旧経路の削除
   - 旧向き監視ファイルの削除と旧シンボル残存ゼロをgrepで確認する
   - 完了条件：旧シンボルが検出されず、新旧経路が混在しない
   - _Boundary: DeviceOrientationMonitor, PostureSessionManager, CameraSessionManager, CameraPreviewView_

@@ -13,7 +13,6 @@
 		20DBBB21304EEE9200B43650 /* TimedConditionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAEF304EEE2E00B43650 /* TimedConditionGate.swift */; };
 		20DBBB22304EEE9B00B43650 /* AlertPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */; };
 		20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */; };
-		20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */; };
 		20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */; };
 		20DBBC01304EEE9B00B43650 /* MotionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC00304EEE2E00B43650 /* MotionService.swift */; };
 		20DBBC03304EEE9B00B43650 /* DeviceRotationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC02304EEE2E00B43650 /* DeviceRotationService.swift */; };
@@ -49,7 +48,6 @@
 		20DBBAF2304EEE2E00B43650 /* usagi-to-kame.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "usagi-to-kame.caf"; sourceTree = "<group>"; };
 		20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertPlayer.swift; sourceTree = "<group>"; };
 		20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionManager.swift; sourceTree = "<group>"; };
-		20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceOrientationMonitor.swift; sourceTree = "<group>"; };
 		20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PoseDetector.swift; sourceTree = "<group>"; };
 		20DBBC00304EEE2E00B43650 /* MotionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionService.swift; sourceTree = "<group>"; };
 		20DBBC02304EEE2E00B43650 /* DeviceRotationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRotationService.swift; sourceTree = "<group>"; };
@@ -121,7 +119,6 @@
 			children = (
 				20DBBAF4304EEE2E00B43650 /* AlertPlayer.swift */,
 				20DBBAF6304EEE2E00B43650 /* CameraSessionManager.swift */,
-				20DBBAF7304EEE2E00B43650 /* DeviceOrientationMonitor.swift */,
 				20DBBAF8304EEE2E00B43650 /* PoseDetector.swift */,
 				20DBBC00304EEE2E00B43650 /* MotionService.swift */,
 				20DBBC02304EEE2E00B43650 /* DeviceRotationService.swift */,
@@ -322,7 +319,6 @@
 				20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */,
 				20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */,
 				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
-				20DBBB25304EEE9B00B43650 /* DeviceOrientationMonitor.swift in Sources */,
 				20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */,
 				20DBBC01304EEE9B00B43650 /* MotionService.swift in Sources */,
 				20DBBC03304EEE9B00B43650 /* DeviceRotationService.swift in Sources */,

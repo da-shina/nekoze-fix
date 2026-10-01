@@ -7,7 +7,7 @@ import Combine
 ///
 /// 角度値の直接注入が配信シーム（@Published preview／capture角）を駆動することを検証する。
 /// 注入パターンは既存の合成フレーム注入シーム（OrientationRecalibrationTests が
-/// `handleVideoOrientationChange`／`processDetection(.pose(frame))` を直接呼ぶ方式）と同一である。
+/// 旧トリガ／`processDetection(.pose(frame))` を直接呼んだ方式）と同一である。
 ///
 /// simulator 制約（事前 probe で確認）：iPhone 17 Pro simulator には video デバイスが
 /// 存在しない（front／back／any いずれも nil）。そのため hardware を要する署名

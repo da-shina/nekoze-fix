@@ -6,8 +6,8 @@ import Combine
 /// design.md「DeviceRotationService Service Interface」の可観測形状を写す seam であり、
 /// task 2.1 の本実装は `DeviceRotationServiceProtocol` へ適合させること。
 /// 角度値の直接注入は既存の合成フレーム注入シームと同一パターンである
-/// （OrientationRecalibrationTests が `handleVideoOrientationChange`／
-/// `processDetection(.pose(frame))` を直接呼ぶ方式）。
+/// （OrientationRecalibrationTests が旧トリガ／
+/// `processDetection(.pose(frame))` を直接呼んだ方式）。
 ///
 /// 【coordinator 初期化 API 署名の確定（SDK 対照済み）】
 /// iOS 17 SDK ヘッダ（Xcode同梱 iPhoneOS.sdk、

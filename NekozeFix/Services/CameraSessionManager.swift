@@ -14,24 +14,6 @@ protocol CaptureVideoRotationConnection: AnyObject {
 
 extension AVCaptureConnection: CaptureVideoRotationConnection {}
 
-extension AVCaptureVideoOrientation {
-    /// Task 3.1 互換シム（非推奨）。`DeviceOrientationMonitor`・`CameraPreviewView` が
-    /// 参照するためフルビルド green 維持のために保持する。内部利用はしない。
-    /// 削除は task 4.3（旧経路の削除）で行う。UIDevice 直接参照の除去は当該 task で完了する。
-    @available(*, deprecated, message: "Use DeviceRotationService capture angle + updateCaptureRotationAngle instead. Removal in 4.3.")
-    static func fromDeviceOrientation(_ orientation: UIDeviceOrientation, fallbackScene: UIWindowScene? = nil) -> AVCaptureVideoOrientation? {
-        switch orientation {
-        case .portrait:           return .portrait
-        case .portraitUpsideDown: return .portraitUpsideDown
-        case .landscapeLeft:     return .landscapeRight
-        case .landscapeRight:    return .landscapeLeft
-        default:
-            guard let scene = fallbackScene else { return nil }
-            return AVCaptureVideoOrientation(rawValue: scene.interfaceOrientation.rawValue)
-        }
-    }
-}
-
 /// フロントカメラのセッション管理とパーミッション。
 ///
 /// `.high` プリセット (720p)、シリアルキャプチャキュー、
