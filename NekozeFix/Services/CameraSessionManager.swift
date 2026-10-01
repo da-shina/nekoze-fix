@@ -87,22 +87,6 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
-    /// Task 3.1 互換シム（非推奨）。`PostureSessionManager.handleVideoOrientationChange`
-    /// が参照するためフルビルド green 維持のために保持する。内部では新経路へ転送する。
-    /// 削除は task 4.2（テスト更新での green 復帰時）で行う。
-    @available(*, deprecated, message: "Use updateCaptureRotationAngle instead. Removal in 4.2.")
-    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
-        let degrees: CGFloat
-        switch orientation {
-        case .portrait: degrees = 0
-        case .portraitUpsideDown: degrees = 180
-        case .landscapeRight: degrees = 90
-        case .landscapeLeft: degrees = 270
-        @unknown default: degrees = 0
-        }
-        updateCaptureRotationAngle(degrees)
-    }
-
     /// `sessionQueue` 上でのみ呼ぶ回転適用本体。実行時に対応可否を判定し、
     /// 非対応時は見送る（退行則）。preview 接続には触らない。
     private func applyCaptureRotationAngleLocked(_ degrees: CGFloat) {

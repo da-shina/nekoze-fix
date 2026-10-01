@@ -122,9 +122,13 @@ final class PostureSessionManagerTests: XCTestCase {
 
     // MARK: - フェーズ遷移（setPhase 不変条件の検証）
 
-    func testSetPhase_rotating_disablesIdleTimer() {
-        // rotating は直接セット不可だが、監視停止後の退避で .idle へ戻ることで
-        // isIdleTimerDisabled == false を確認できる
+    // `.rotating` case は除去済み（ios17-baseline 3.5）。回転過渡の停止は
+    // 自動再校正経路に一本化され、wake lock 不変条件
+    // `isIdleTimerDisabled == (phase == .monitoring)` で強制される。
+    // 本テストは監視停止後の退避で .idle へ戻り OFF になることを確認する。
+    func testRotationTransient_unifiedAutoRecalibrationPath_restoresIdleTimerDisabled() {
+        // 自動再校正への一本化により .rotating 経由の停止は存在しないが、
+        // 監視停止後の退避で .idle へ戻ることで isIdleTimerDisabled == false を確認できる
         sut.startMonitoring()
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
         sut.stopMonitoring()

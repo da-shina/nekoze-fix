@@ -71,7 +71,7 @@
   - _Boundary: DeviceRotationService, PostureSessionManager, CameraSessionManager, CameraPreviewView_
   - _Depends: 2.1, 3.1, 3.2, 3.3, 3.4_
   - _Requirements: 1.1, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1_
-- [ ] 4.2 テスト更新
+- [x] 4.2 テスト更新
   - 回転角再校正テストを角度注入に書き換え、回転中系テストを更新する
   - 本タスク完了時点でフルビルドのgreenを復帰させる（3.3・3.5で持ち越した赤状態の解消）
   - 完了条件：更新対象テストがすべて成功し、ビルドが通る（全回帰は5.1）
