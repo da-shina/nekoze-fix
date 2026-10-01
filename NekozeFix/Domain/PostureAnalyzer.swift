@@ -15,6 +15,9 @@ struct PostureAnalyzer {
     ///
     /// 重力は値として受け取る（Domain は Services を参照しない）。nil は代替解決を意味し、
     /// gravity 以外の入力が同一なら従来と同一の近側・距離・判定を返す（不変条件）。
+    /// captureAngleDegrees は capture用回転角（度、任意）。重力はデバイスセンサ座標系で
+    /// 得られるがキーポイントは回転済みバッファ座標系に存在するため、重力由来の基準値のみを
+    /// バッファ座標系へ−θ回転させる（nil・0°では無回転で従来通り）。代替経路は回転しない。
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
@@ -22,7 +25,8 @@ struct PostureAnalyzer {
         distanceMetric: DistanceMetric? = nil,          // ロック側ペアと基準距離（8.3 までは未使用）
         slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
         previousNearSide: Side? = nil,
-        gravityInKeypointSpace: SIMD2<Double>? = nil    // MotionService 変換済みか nil（12.2）
+        gravityInKeypointSpace: SIMD2<Double>? = nil,    // MotionService 変換済みか nil（12.2）
+        captureAngleDegrees: Double? = nil               // capture用回転角（度）。nil は無回転
     ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ReferenceVector) {
 
         // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.3）
@@ -68,11 +72,11 @@ struct PostureAnalyzer {
             nearShoulder = frame.rightShoulder
             farSideDetected = false
         } else {
-            return (nil, .insufficientKeypoints, Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame))
+            return (nil, .insufficientKeypoints, Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees))
         }
 
         // ステップ3: 解決済み基準ベクトル（重力→肩ライン直交→画像垂直）と鋭角を計算（0〜90度）
-        let reference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame)
+        let reference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees)
         let perpX = reference.x
         let perpY = reference.y
 
@@ -148,19 +152,22 @@ struct PostureAnalyzer {
 
     /// 重力・肩直交・画像垂直の三段解決を純粋に所有する（要件4.1）。
     ///
-    /// 入力は重力値（キーポイント空間、任意）とフレームのみ。時刻・状態を持たない。
+    /// 入力は重力値（デバイスセンサ座標系）・capture角（度、任意）とフレームのみ。時刻・状態を持たない。
     /// 解決順序は gravity → shoulderLine → imageVertical に固定する。
-    /// 肩直交の算出式は従来式をそのまま移設したもの。常に単位ベクトル相当（長さ 1±1e-9）を返す。
+    /// 重力由来の基準値のみ capture角θでバッファ座標系へ−θ回転させる（配信バッファがθ回転済みのため）。
+    /// 肩直交・画像垂直は元々バッファ座標系のため回転しない。
     /// Analyzer からのみ呼ぶ。Session は直接呼ばない（単一解決）。
     private static func resolve(
         gravityInKeypointSpace: SIMD2<Double>?,
-        frame: PoseFrame
+        frame: PoseFrame,
+        captureAngleDegrees: Double? = nil
     ) -> ReferenceVector {
         // 第一段: 重力（有効な単位化可能ベクトルのみ採用）
         if let gravity = gravityInKeypointSpace {
             let length = sqrt(gravity.x * gravity.x + gravity.y * gravity.y)
             if length.isFinite && length > 1e-9 {
-                return gravity / length
+                let rotated = rotateToBufferSpace(gravity / length, captureAngleDegrees: captureAngleDegrees)
+                return rotated
             }
         }
         // 第二段: 両肩ライン直交上向き法線（従来式を移設）
@@ -180,6 +187,18 @@ struct PostureAnalyzer {
         }
         // 第三段（終端）: 画像垂直
         return ReferenceVector(0.0, 1.0)
+    }
+
+    /// デバイス座標系ベクトルをバッファ座標系へ回転させる（−capture角θ）。
+    /// 配信バッファはθ回転済みのため、固定ベクトルをバッファ座標で表すには−θ回転する。
+    /// nil・0°では恒等。回転は長さを保存する。
+    static func rotateToBufferSpace(_ v: SIMD2<Double>, captureAngleDegrees: Double?) -> SIMD2<Double> {
+        guard let degrees = captureAngleDegrees, degrees != 0 else { return v }
+        let rad = -degrees * .pi / 180.0
+        return SIMD2<Double>(
+            v.x * cos(rad) - v.y * sin(rad),
+            v.x * sin(rad) + v.y * cos(rad)
+        )
     }
 
     private func isValidPair(ear: Keypoint?, shoulder: Keypoint?) -> Bool {

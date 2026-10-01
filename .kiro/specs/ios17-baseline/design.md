@@ -240,7 +240,7 @@ final class DeviceRotationService {
   |----------------|------|
   | 0°±45°、180°±45° | ポートレート（`isLandscape = false`） |
   | 90°±45°、270°±45° | ランドスケープ（`isLandscape = true`） |
-- 描画基準線（referenceVector）は重力解決の返値をそのまま受渡しし、回転角の preview／capture 選択の影響を受けない
+- 描画基準線（referenceVector）は重力解決の返値に直近capture角の−θ回転を適用して受渡す（重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため。未確定時は無回転）。preview用回転角は転送しない
 - `.rotating`／`isRotating` の死経路は除去する。過渡停止は自動再校正経路に一本化する（振る舞い不変）
 - 状態機械・ゲート・通知・暗転・スリープ則は変えない
 

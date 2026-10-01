@@ -60,7 +60,7 @@
 - 単方向レイヤード構成。Domain は副作用なし純粋関数。Session（`@MainActor`）が唯一の状態所有者。
 - `PostureAnalyzer.analyze` が基準ベクトル `perp` を内部算出しているため、重力対応の自然な拡張点は引数注入である。
 - `snapshot.videoAspectRatio`・EMA 平滑・personMissing／shoulderMissing 猶予（各 0.5 秒）の前例があり、フォールバック保持時間の設計前例として流用できる。
-- `captureOutput` は出力バッファがインターフェース向きに自動回転して配信されるため Vision に `.up` 固定で渡す（`PostureSessionManager.captureOutput`、`connection.videoOrientation` は参考値）。キーポイント空間上向きは画面上向きと一致し、デバイス座標の天方向 `K=normalize(−gx,−gy)` と軸一致する。これが向き非依存が成立する要点である。
+- `captureOutput` は出力バッファがインターフェース向きに自動回転して配信されるため Vision に `.up` 固定で渡す（`PostureSessionManager.captureOutput`、`connection.videoOrientation` は参考値）。キーポイント空間上向きは画面上向きと一致する。一方、デバイス座標の天方向 `K=normalize(−gx,−gy)` はセンサ固定のため、バッファ座標系で表すには直近capture角θの−θ回転が必要である（landscape実機不具合の修正。回転はSession受渡し時に適用し、取得式自体は向き非依存のまま）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -286,9 +286,9 @@ final class MotionService {
 - Validation: 向き非依存の変換テスト（傾き鏡像回帰含む）＋単一ホールドテスト＋平置き無効テスト。
 - Risks: バッテリは起停限定と 1/30 間隔で抑制する。実機検証タスクを残す。
 
-##### 変換則（向き非依存、14.2 実機知見で確定）
+##### 変換則（取得は向き非依存・受渡し時に−θ回転、14.2 実機知見＋landscape修正で確定）
 
-- 合成規則: 天方向 `K = normalize(u)`、`u = (−gx, −gy)`。出力バッファはインターフェース向きに自動回転して配信され Vision には `.up` 固定で渡すため（`PostureSessionManager.captureOutput`）、キーポイント空間上向きは画面上向きと一致する。デバイス姿勢別の回転表・鏡像は不要である。
+- 合成規則: 天方向 `K = normalize(u)`、`u = (−gx, −gy)`。出力バッファはインターフェース向きに自動回転して配信され Vision には `.up` 固定で渡すため（`PostureSessionManager.captureOutput`）、キーポイント空間上向きは画面上向きと一致する。ただしKはデバイス座標系の値であり、バッファ座標系のキーポイントと混ぜる前に直近capture角θの−θ回転を適用する（Session受渡し時。未確定時は無回転）。デバイス姿勢別の回転表・鏡像は不要のままである。
 - 旧表（grill Q2決定の向き別4行）はセンサ固定フレームの誤った想定＋前面鏡の適用誤りであり、縦持ち右傾きで緑線が鏡像反転する実機不具合として発覚したため撤去した（黄線＝キーポイントは正しく左傾き、緑のみ右傾きという観測が決定打）。
 - 世界直立人物の耳ー肩ベクトルは全向きで K と一致し、向き毎の直立約0度の不変条件が成立する。
 - 平置き（z支配）は nil で代替鎖へ退行させる。
@@ -384,7 +384,7 @@ final class MotionService {
 
 ## Open Questions / Risks
 
-- 変換則は向き非依存（K=normalize(−gx,−gy)）で確定済み。旧向き別表の残滓がないか注意。向き遷移後のオフセット変化は自動再校正遷移で吸収する。
+- 変換則の取得式は向き非依存（K=normalize(−gx,−gy)）で確定済み。受渡し時は直近capture角の−θ回転を適用する（landscape修正）。旧向き別表の残滓がないか注意。向き遷移後のオフセット変化は自動再校正遷移で吸収する。
 - 校正 5 度閾値は角度分布変化でリセット頻発の可能性があり、実機で要否を判断する（設計値は変えない）。
 - シミュレータでは重力が恒常 nil となり代替パスのみ検証できる。実機レーンの確保が前提である。
 
@@ -397,3 +397,4 @@ final class MotionService {
 *改訂 2026-09-28（ponytail-3）: ReferenceSource を削除し ReferenceVector を SIMD2 別名に一本化、MotionService を@testable 代入に簡素化、三つ組保持を有効ベクトル保持に縮約、Traceability・File Structure を差分のみに削減*
 *改訂 2026-09-28（grill R1・R2）: Q1距離スキップ一本化（fallback枝削除）、Q2変換表の全組み合わせ固定、Q3/Q5/Q6向き変化時の自動再校正遷移（monitoring限定・旧基準破棄）、Q7境界更新、Q4用語集反映（CONTEXT.md）*
 *改訂 2026-09-29（14.2 実機検収）: 向き別変換表を撤去し向き非依存の K=normalize(−gx,−gy) に一本化（縦持ち右傾きで緑線が鏡像反転する実機不具合対応。黄線＝キーポイントは正しく左傾き、緑のみ右傾きの観測が決定打）*
+*改訂 2026-10-02（landscape実機不具合）: Kの取得式は向き非依存のまま、Session受渡し時に直近capture角の−θ回転を適用（デバイス座標→バッファ座標の90°ずれ対応。代替経路は回転なし。ReferenceVectorRotationTestsで検証）*

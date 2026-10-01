@@ -16,7 +16,8 @@ struct PostureOverlayView: View {
     var isMirrored: Bool = true
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
-    /// 判定と同一の基準線ベクトル（Vision座標系、y上向き）。
+    /// 判定と同一の基準線ベクトル（バッファ座標系、y上向き。analyze 済みで
+    /// capture角の−θ回転が適用されている）。
     /// Session が `analyze` の返値をそのまま受渡しする（単一解決）。
     /// 肩点起点に描画し、代替時も色・太さを変えない（無区別原則）。
     /// プレビューはダミー垂直 (0,1)。
