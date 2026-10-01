@@ -104,4 +104,4 @@
 - SDK実測：`RotationCoordinator(device:previewLayer:)` のpreviewLayerは `CALayer?`（AVCaptureDevice.h）。Service公開APIは所有権規律により `AVCaptureVideoPreviewLayer?` に絞り、coordinatorへupcastする（1.2で確定。2.1は本実装を `DeviceRotationServiceProtocol` に適合させ、`init(device:previewLayer:)` 署名一致をレビューで再確認すること）
 - 警告集計は `clean build`（アプリのみ）と `clean test`（テストバンドル含む）で件数が変わる。5.1ゲートの基準はbaseline.md定義の「アプリ由来AVCapture系15件ゼロ」。テスト側の既存警告（OrientationRecalibrationTests.swift:38）は4.2で書換え予定
 - ビルド警告はログ内で重複出力されるため `sort -u` で重複除去して数えること（`tail` では欠落する）
-- 後続対応（本spec範囲外）：nekoze-fix specのfloor文言更新（requirements.md:266 Constraints「iOS 16+ / iPadOS 16+ が必要」＋brief.md:54「iOS 16を下限」→17.0）。製品下限はpbxproj 6/6=17.0で充足済みのため別タスク化
+- 後続対応（本spec範囲外）：nekoze-fix specのfloor文言更新（requirements.md:266 Constraints「iOS 16+ / iPadOS 16+ が必要」＋brief.md:54「iOS 16を下限」→17.0）。製品下限はpbxproj 6/6=17.0で充足済みのため別タスク化 → 2026-10-02対応済み
