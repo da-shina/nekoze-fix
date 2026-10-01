@@ -113,6 +113,50 @@ final class SessionRotationTriggerTests: XCTestCase {
         XCTAssertTrue(sut.snapshot.isLandscape, "capture 270°＝ランドスケープ")
     }
 
+    // MARK: - isLandscape 対応表（task 3.4, requirements 2.1, 2.2）
+
+    /// design.md PostureSessionManager の対応表を境界値で固定する。
+    /// 0°±45°・180°±45° → portrait、90°±45°・270°±45° → landscape。
+    /// 境界はランドスケープ側に含める（45°→true、135°→false、225°→true、315°→false）。
+    /// 境界ヒステリシスなし。
+    func testIsLandscapeTable_boundaries() {
+        let cases: [(capture: CGFloat, expected: Bool, label: String)] = [
+            (0.0, false, "0° portrait"),
+            (44.9, false, "45°直前 portrait"),
+            (45.0, true, "45°境界 landscape"),
+            (90.0, true, "90° landscape"),
+            (134.9, true, "135°直前 landscape"),
+            (135.0, false, "135°境界 portrait"),
+            (180.0, false, "180° portrait"),
+            (224.9, false, "225°直前 portrait"),
+            (225.0, true, "225°境界 landscape"),
+            (270.0, true, "270° landscape"),
+            (314.9, true, "315°直前 landscape"),
+            (315.0, false, "315°境界 portrait"),
+            (360.0, false, "360° wrap portrait"),
+            (-90.0, true, "-90° wrap landscape"),
+            (-45.0, false, "-45° wrap portrait"),
+        ]
+        for c in cases {
+            sut.handleRotationAngleChange(preview: 0.0, capture: c.capture)
+            XCTAssertEqual(sut.snapshot.isLandscape, c.expected, "capture \(c.label)")
+        }
+    }
+
+    /// capture 角は Vision バッファと一致し軸方向のみを見るため、前面鏡の
+    /// 影響を受けない。前面／背面の例値で同等性を smoke 確認する（行列なし）。
+    func testIsLandscapeTable_frontBackSmokeEquivalence() {
+        let originalPosition = sut.settingsStore.cameraPosition
+        defer { sut.settingsStore.cameraPosition = originalPosition }
+        for position in [CameraPosition.front, CameraPosition.back] {
+            sut.settingsStore.cameraPosition = position
+            sut.handleRotationAngleChange(preview: 0.0, capture: 90.0)
+            XCTAssertTrue(sut.snapshot.isLandscape, "\(position) capture 90°＝landscape")
+            sut.handleRotationAngleChange(preview: 0.0, capture: 0.0)
+            XCTAssertFalse(sut.snapshot.isLandscape, "\(position) capture 0°＝portrait")
+        }
+    }
+
     // MARK: - 自動再校正トリガ（capture 角変化。requirements 2.3, 2.4）
 
     /// monitoring 中の capture 角変化で旧基準破棄→校正へ自動遷移する。

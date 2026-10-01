@@ -133,8 +133,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleRotationAngleChange(preview: CGFloat, capture: CGFloat) {
         cameraManager.updateCaptureRotationAngle(capture)
         // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
-        // 旧分岐（landscapeLeft／landscapeRight→true）の意味を保ち、
-        // 入力のみ旧向き値から capture 角へ替える（対応表への表現替えは task 3.4）。
+        // design.md 対応表（0°±45°・180°±45°→portrait、90°±45°・270°±45°→landscape）。
+        // capture 角は Vision バッファと一致し前面鏡の影響を受けない。ヒステリシスなし。
         snapshot.isLandscape = Self.isLandscapeCaptureAngle(capture)
         defer { lastKnownCaptureAngle = capture }
         guard let previous = lastKnownCaptureAngle, previous != capture else { return }
@@ -147,15 +147,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         startCalibration()
     }
 
-    /// capture用回転角（度）からのランドスケープ判定。
-    /// 旧分岐の意味を保つ：転送対応（portrait=0、landscapeRight=90、
-    /// portraitUpsideDown=180、landscapeLeft=270）に整合するよう
-    /// 90°±45°／270°±45° をランドスケープとする。
-    /// 対応表への表現替え・境界ヒステリシスは task 3.4（初期実装なし）。
+    /// capture用回転角（度）からのランドスケープ判定（requirements 2.1, 2.2）。
+    /// design.md PostureSessionManager の対応表そのままの表現：
+    /// 0°±45°・180°±45° → ポートレート、90°±45°・270°±45° → ランドスケープ。
+    /// capture用回転角は Vision バッファと一致し、判定は軸方向のみを見るため
+    /// 前面鏡の影響を受けない。境界ヒステリシスはなし（実測後の追加検討）。
+    /// 境界はランドスケープ側に含める（45°→landscape、135°→portrait、
+    /// 225°→landscape、315°→portrait）。
     private static func isLandscapeCaptureAngle(_ degrees: CGFloat) -> Bool {
         var normalized = degrees.truncatingRemainder(dividingBy: 360)
         if normalized < 0 { normalized += 360 }
-        return (normalized >= 45 && normalized < 135) || (normalized >= 225 && normalized < 315)
+        let isPortrait = (normalized < 45 || normalized >= 315)
+            || (normalized >= 135 && normalized < 225)
+        return !isPortrait
     }
 
     /// カメラ確定時（カメラ構成時）に coordinator 再生成を指示する。
