@@ -1,8 +1,24 @@
 import AVFoundation
 import UIKit
 
+/// data-output 接続の回転適用に使う接続シーム（テスト容易性）。
+/// 本番は `AVCaptureConnection` が適合する。テストは Fake を注入する。
+/// simulator には video デバイスが存在しないため、単体テストは
+/// `rotationConnectionForTesting` へ Fake を注入して分離検証する（実転送結線は task 4.1）。
+protocol CaptureVideoRotationConnection: AnyObject {
+    func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool
+    var videoRotationAngle: CGFloat { get set }
+    var isVideoMirroringSupported: Bool { get }
+    var isVideoMirrored: Bool { get set }
+}
+
+extension AVCaptureConnection: CaptureVideoRotationConnection {}
+
 extension AVCaptureVideoOrientation {
-    /// UIDevice.Orientation から変換。unknown/face-up/face-down は fallbackScene から推定。
+    /// Task 3.1 互換シム（非推奨）。`DeviceOrientationMonitor`・`CameraPreviewView` が
+    /// 参照するためフルビルド green 維持のために保持する。内部利用はしない。
+    /// 削除は task 4.3（旧経路の削除）で行う。UIDevice 直接参照の除去は当該 task で完了する。
+    @available(*, deprecated, message: "Use DeviceRotationService capture angle + updateCaptureRotationAngle instead. Removal in 4.3.")
     static func fromDeviceOrientation(_ orientation: UIDeviceOrientation, fallbackScene: UIWindowScene? = nil) -> AVCaptureVideoOrientation? {
         switch orientation {
         case .portrait:           return .portrait
@@ -31,14 +47,73 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     let captureSession = AVCaptureSession()
 
-    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+    /// テスト注入用接続シーム。nil 時は `videoOutput` の実接続を使う。
+    /// `@testable` 経由でテストが Fake を注入する。
+    var rotationConnectionForTesting: CaptureVideoRotationConnection?
+
+    /// 直近の有効 capture 角（度）。再構成時（カメラ切替）の再適用用に保持する。
+    private(set) var lastCaptureRotationAngle: CGFloat = 0
+
+    /// Session から転送される capture 用回転角（度）を data-output 接続へ適用する。
+    /// preview 接続には触らない（`CameraPreviewView` が所有）。
+    /// 対応可否を実行時判定し、非対応時は適用を見送る（退行則。クラッシュさせない）。
+    /// Vision へ渡すバッファ向き（`.up` 固定）は `PostureSessionManager.captureOutput` 側で保つ。
+    func updateCaptureRotationAngle(_ degrees: CGFloat) {
         sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            if let connection = self.videoOutput?.connection(with: .video) {
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = orientation
-                }
-            }
+            guard let self else { return }
+            self.lastCaptureRotationAngle = degrees
+            self.applyCaptureRotationAngleLocked(degrees)
+        }
+    }
+
+    /// テスト用フラッシュ：`sessionQueue` に積まれた保留作業の完了を待つ。
+    func flushRotationWorkForTesting() {
+        sessionQueue.sync {}
+    }
+
+    /// 前面／背面切替時のミラー設定。前面のみミラー有効にする。
+    /// `configureSession` からも呼ばれる（前面ミラー設定は維持）。
+    /// デバイス姿勢の推測は行わない（前面／背面の位置情報のみで決定）。
+    func updateMirrorSetting(for position: AVCaptureDevice.Position) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.applyMirrorSettingLocked(for: position)
+        }
+    }
+
+    /// Task 3.1 互換シム（非推奨）。`PostureSessionManager.handleVideoOrientationChange`
+    /// が参照するためフルビルド green 維持のために保持する。内部では新経路へ転送する。
+    /// 削除は task 4.2（テスト更新での green 復帰時）で行う。
+    @available(*, deprecated, message: "Use updateCaptureRotationAngle instead. Removal in 4.2.")
+    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        let degrees: CGFloat
+        switch orientation {
+        case .portrait: degrees = 0
+        case .portraitUpsideDown: degrees = 180
+        case .landscapeRight: degrees = 90
+        case .landscapeLeft: degrees = 270
+        @unknown default: degrees = 0
+        }
+        updateCaptureRotationAngle(degrees)
+    }
+
+    /// `sessionQueue` 上でのみ呼ぶ回転適用本体。実行時に対応可否を判定し、
+    /// 非対応時は見送る（退行則）。preview 接続には触らない。
+    private func applyCaptureRotationAngleLocked(_ degrees: CGFloat) {
+        let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
+            ?? self.videoOutput?.connection(with: .video)
+        guard let connection else { return }
+        guard connection.isVideoRotationAngleSupported(degrees) else { return }
+        connection.videoRotationAngle = degrees
+    }
+
+    /// `sessionQueue` 上でのみ呼ぶミラー適用本体。前面のみ有効化する。
+    private func applyMirrorSettingLocked(for position: AVCaptureDevice.Position) {
+        let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
+            ?? self.videoOutput?.connection(with: .video)
+        guard let connection else { return }
+        if connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = (position == .front)
         }
     }
 
@@ -107,17 +182,6 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
-    // MARK: - ヘルパー
-
-    /// 現在のデバイス向きから AVCaptureVideoOrientation を推定する。
-    /// UIDevice.orientation が .unknown の場合は windowScene からフォールバック。
-    private func currentDeviceVideoOrientation() -> AVCaptureVideoOrientation {
-        let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive })
-        return .fromDeviceOrientation(UIDevice.current.orientation, fallbackScene: scene) ?? .portrait
-    }
-
     // MARK: - サンプルバッファデリゲート
 
     func setSampleBufferDelegate(_ delegate: AVCaptureVideoDataOutputSampleBufferDelegate) {
@@ -168,12 +232,16 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
             captureSession.addOutput(output)
             self.videoOutput = output
 
-            // ビデオ向きを現在のデバイス向きに設定
-            if let connection = output.connection(with: .video) {
-                if connection.isVideoOrientationSupported {
-                    connection.videoOrientation = currentDeviceVideoOrientation()
+            // data-output 接続へ直近有効角を再適用する（カメラ切替時の継続）。
+            // preview 接続には触らない。デバイス姿勢の推測は行わない。
+            // 対応可否は実行時判定し、非対応時は見送る（退行則）。
+            // 前面ミラー設定は維持する。
+            let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
+                ?? output.connection(with: .video)
+            if let connection {
+                if connection.isVideoRotationAngleSupported(self.lastCaptureRotationAngle) {
+                    connection.videoRotationAngle = self.lastCaptureRotationAngle
                 }
-                // 前面カメラの時のみミラー処理を有効にする
                 if connection.isVideoMirroringSupported {
                     connection.isVideoMirrored = (position == .front)
                 }
