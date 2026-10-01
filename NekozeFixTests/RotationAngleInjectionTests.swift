@@ -116,4 +116,97 @@ final class RotationAngleInjectionTests: XCTestCase {
         XCTAssertEqual(fake.previewRotationAngle, 0.0)
         XCTAssertEqual(fake.captureRotationAngle, 0.0)
     }
+
+    // MARK: - Task 2.2: 回転角サービスの単体テスト（requirements.md 2.1, 3.1, 4.1, 5.1）
+
+    /// 両角配信：preview／capture の両チャネルが @Published で同時に配信され、
+    /// 各チャネルが独立した角（divergent 値）を運ぶ。requirements.md 2.1。
+    /// design.md Service Interface（preview／capture の両角 @Published 配信）。
+    /// 既存 testInjectPreviewAndCaptureAngles（値の保持）と
+    /// testInjectedAngles_areDeliveredViaPublished（preview 単チャネル配信）を
+    /// 補完する両角同時配信の証明であり重複ではない。
+    func testBothAngles_areDeliveredSimultaneouslyWithIndependentValues() {
+        let fake = FakeDeviceRotationService()
+        let previewDelivered = expectation(description: "preview angle published")
+        let captureDelivered = expectation(description: "capture angle published")
+        var receivedPreview: [CGFloat] = []
+        var receivedCapture: [CGFloat] = []
+        let previewCancellable = fake.$previewRotationAngle
+            .dropFirst() // 購読直後の初期値（0°）を除外する
+            .sink { angle in
+                receivedPreview.append(angle)
+                previewDelivered.fulfill()
+            }
+        let captureCancellable = fake.$captureRotationAngle
+            .dropFirst() // 購読直後の初期値（0°）を除外する
+            .sink { angle in
+                receivedCapture.append(angle)
+                captureDelivered.fulfill()
+            }
+        defer { _ = (previewCancellable, captureCancellable) }
+
+        fake.inject(preview: 90.0, capture: 270.0)
+
+        waitForExpectations(timeout: 1.0)
+        XCTAssertEqual(receivedPreview, [90.0], "preview チャネルは preview 角のみを配信する")
+        XCTAssertEqual(receivedCapture, [270.0], "capture チャネルは capture 角のみを配信する")
+    }
+
+    /// 切替再生成の simulator 実行可能スライス：Fake の recreate 機構が
+    /// 新デバイスを記録し、fresh 角（0°）へリセットする。requirements.md 3.1。
+    /// design.md Invariants「カメラ切替後は新デバイスの角度を返す」の機構側。
+    /// video デバイス不在時は audio デバイスで機構のみ実行する（Fake は
+    /// デバイス種別に依存しない記録＋リセットである）。全種不在時は
+    /// graceful-skip（1.2／2.1 パターン）。前面→背面の意味的検証
+    /// （新デバイスの実角採用）は HW-gated テストと 5.2 実機に委ねる。
+    func testRecreateWithAvailableDevice_recordsDeviceAndResetsToFresh() {
+        guard let device = AVCaptureDevice.default(for: .video) ?? AVCaptureDevice.default(for: .audio) else {
+            return // simulator には capture デバイスがない。意味的検証は HW-gated テスト＋実機で行う
+        }
+        let fake = FakeDeviceRotationService()
+        fake.inject(preview: 90.0, capture: 270.0)
+
+        fake.recreate(for: device, previewLayer: nil)
+
+        XCTAssertEqual(fake.recreateCallCount, 1, "再生成指示が1回記録される")
+        XCTAssertTrue(fake.recreatedDevice === device, "新デバイスが記録される")
+        XCTAssertNil(fake.recreatedLayer, "nil 層の再生成が受け付けられる")
+        XCTAssertEqual(fake.previewRotationAngle, 0.0, "再生成後は fresh 状態（0°）から開始する")
+        XCTAssertEqual(fake.captureRotationAngle, 0.0, "再生成後は fresh 状態（0°）から開始する")
+    }
+
+    /// 不明時維持の smoke 確認：無イベント時（stop 経路）に直前有効角を保持し、
+    /// nil や推測角を流さない。requirements.md 4.1。
+    /// design.md「デバイス姿勢不明時はイベントを発火せず直前の有効角を保持」、
+    /// Error Handling「デバイス姿勢不明・平置き → 直前有効角を維持」。
+    /// 不明事象の TestDouble 再現は行わない（design 明記）。真の不明事象は
+    /// 5.2 の実機 smoke に委ねる。既存 testStartStop_tracksLifecycle
+    /// （起停記録のみ）と本番型の HW-gated 保持テストを補完する
+    /// simulator 実行可能な角度保持の証明であり重複ではない。
+    func testStopHoldsLastValidAngles_smokeHoldRuleOnly() {
+        let fake = FakeDeviceRotationService()
+        fake.inject(preview: 90.0, capture: 270.0)
+        fake.start()
+        fake.stop()
+
+        XCTAssertFalse(fake.isStarted)
+        XCTAssertEqual(
+            fake.previewRotationAngle, 90.0,
+            "stop は preview 保持角を破棄しない（直前有効角の維持・nil 不可）"
+        )
+        XCTAssertEqual(
+            fake.captureRotationAngle, 270.0,
+            "stop は capture 保持角を破棄しない（直前有効角の維持・nil 不可）"
+        )
+
+        fake.start()
+        XCTAssertEqual(
+            fake.previewRotationAngle, 90.0,
+            "再 start は保持角をリセットしない（最新値の上書きのみ）"
+        )
+        XCTAssertEqual(
+            fake.captureRotationAngle, 270.0,
+            "再 start は保持角をリセットしない（最新値の上書きのみ）"
+        )
+    }
 }
