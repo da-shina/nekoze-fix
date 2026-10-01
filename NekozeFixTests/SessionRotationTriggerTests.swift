@@ -100,42 +100,42 @@ final class SessionRotationTriggerTests: XCTestCase {
 
     // MARK: - isLandscape 導出（意味不変。対応表化は 3.4）
 
-    /// 基数角での旧分岐と一致する（portrait 系 false／landscape 系 true）。
-    /// 境界値の振る舞いは 3.4 が所有するため基数値のみ確認する。
+    /// coordinator実機規約での基数角確認（portrait {90,270}＝false／landscape {0,180}＝true）。
+    /// センサがランドスケープネイティブのためポートレートで90°を取る（WWDC23 10106）。
     func testHandleRotationAngleChange_updatesIsLandscapeFromCaptureAngle() {
         sut.handleRotationAngleChange(preview: 0.0, capture: 0.0)
-        XCTAssertFalse(sut.snapshot.isLandscape, "capture 0°＝ポートレート")
+        XCTAssertTrue(sut.snapshot.isLandscape, "capture 0°＝ランドスケープ")
         sut.handleRotationAngleChange(preview: 0.0, capture: 90.0)
-        XCTAssertTrue(sut.snapshot.isLandscape, "capture 90°＝ランドスケープ")
+        XCTAssertFalse(sut.snapshot.isLandscape, "capture 90°＝ポートレート")
         sut.handleRotationAngleChange(preview: 0.0, capture: 180.0)
-        XCTAssertFalse(sut.snapshot.isLandscape, "capture 180°＝ポートレート")
+        XCTAssertTrue(sut.snapshot.isLandscape, "capture 180°＝ランドスケープ")
         sut.handleRotationAngleChange(preview: 0.0, capture: 270.0)
-        XCTAssertTrue(sut.snapshot.isLandscape, "capture 270°＝ランドスケープ")
+        XCTAssertFalse(sut.snapshot.isLandscape, "capture 270°＝ポートレート")
     }
 
     // MARK: - isLandscape 対応表（task 3.4, requirements 2.1, 2.2）
 
     /// design.md PostureSessionManager の対応表を境界値で固定する。
-    /// 0°±45°・180°±45° → portrait、90°±45°・270°±45° → landscape。
+    /// 90°±45°・270°±45° → portrait、0°±45°・180°±45° → landscape（実機規約）。
     /// 境界はランドスケープ側に含める（45°→true、135°→false、225°→true、315°→false）。
     /// 境界ヒステリシスなし。
     func testIsLandscapeTable_boundaries() {
         let cases: [(capture: CGFloat, expected: Bool, label: String)] = [
-            (0.0, false, "0° portrait"),
-            (44.9, false, "45°直前 portrait"),
-            (45.0, true, "45°境界 landscape"),
-            (90.0, true, "90° landscape"),
-            (134.9, true, "135°直前 landscape"),
-            (135.0, false, "135°境界 portrait"),
-            (180.0, false, "180° portrait"),
-            (224.9, false, "225°直前 portrait"),
-            (225.0, true, "225°境界 landscape"),
-            (270.0, true, "270° landscape"),
-            (314.9, true, "315°直前 landscape"),
-            (315.0, false, "315°境界 portrait"),
-            (360.0, false, "360° wrap portrait"),
-            (-90.0, true, "-90° wrap landscape"),
-            (-45.0, false, "-45° wrap portrait"),
+            (0.0, true, "0° landscape"),
+            (44.9, true, "45°直前 landscape"),
+            (45.0, false, "45°境界 portrait"),
+            (90.0, false, "90° portrait"),
+            (134.9, false, "135°直前 portrait"),
+            (135.0, true, "135°境界 landscape"),
+            (180.0, true, "180° landscape"),
+            (224.9, true, "225°直前 landscape"),
+            (225.0, false, "225°境界 portrait"),
+            (270.0, false, "270° portrait"),
+            (314.9, false, "315°直前 portrait"),
+            (315.0, true, "315°境界 landscape"),
+            (360.0, true, "360° wrap landscape"),
+            (-90.0, false, "-90° wrap portrait"),
+            (-45.0, true, "-45° wrap landscape"),
         ]
         for c in cases {
             sut.handleRotationAngleChange(preview: 0.0, capture: c.capture)
@@ -151,9 +151,9 @@ final class SessionRotationTriggerTests: XCTestCase {
         for position in [CameraPosition.front, CameraPosition.back] {
             sut.settingsStore.cameraPosition = position
             sut.handleRotationAngleChange(preview: 0.0, capture: 90.0)
-            XCTAssertTrue(sut.snapshot.isLandscape, "\(position) capture 90°＝landscape")
+            XCTAssertFalse(sut.snapshot.isLandscape, "\(position) capture 90°＝portrait")
             sut.handleRotationAngleChange(preview: 0.0, capture: 0.0)
-            XCTAssertFalse(sut.snapshot.isLandscape, "\(position) capture 0°＝portrait")
+            XCTAssertTrue(sut.snapshot.isLandscape, "\(position) capture 0°＝landscape")
         }
     }
 

@@ -3,9 +3,10 @@ import XCTest
 
 /// 基準線ベクトルの座標系回転（kiro-debug報告の修正）。
 /// 重力Kはデバイスセンサ座標系で得られるが、キーポイントは回転済みバッファ
-/// 座標系に存在する。capture角θで配信バッファが回転している場合、重力由来の
-/// 基準値はバッファ座標系へ−θ回転させなければならない（ポートレートθ=0では恒等）。
-/// 代替経路（肩直交・画像垂直）は元々バッファ座標系のため回転しない。
+/// 座標系に存在する。coordinatorのcapture角θはセンサ基準であり、ポートレートで
+/// 90°・ランドスケープで0°/180°を取る（センサがランドスケープネイティブのため。
+/// WWDC23 10106: ポートレート表示には90°回転が必要）。バッファ座標系への変換は
+/// (θ−90°)回転である。代替経路（肩直交・画像垂直）は元々バッファ座標系のため回転しない。
 final class ReferenceVectorRotationTests: XCTestCase {
     private func uprightFrame() -> PoseFrame {
         PoseFrame(
@@ -31,28 +32,29 @@ final class ReferenceVectorRotationTests: XCTestCase {
         return ref
     }
 
-    func testPortraitAngleZero_deviceUpStaysBufferUp() {
-        let ref = reference(gravity: SIMD2<Double>(0, 1), captureAngleDegrees: 0)
+    func testPortraitAngle90_deviceUpStaysBufferUp() {
+        // ポートレート（capture角90°）: デバイス上(0,1)はバッファ上(0,1)。
+        let ref = reference(gravity: SIMD2<Double>(0, 1), captureAngleDegrees: 90)
         XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
         XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
     }
 
-    func testLandscape90_deviceLeftUpBecomesBufferUp() {
-        // 画面上がデバイス左向き（capture角90°）のとき、デバイス(−1,0)はバッファ(0,1)。
-        let ref = reference(gravity: SIMD2<Double>(-1, 0), captureAngleDegrees: 90)
+    func testLandscape0_deviceLeftUpBecomesBufferUp() {
+        // ランドスケープ（capture角0°）: 画面上＝デバイス左(−1,0)はバッファ上(0,1)。
+        let ref = reference(gravity: SIMD2<Double>(-1, 0), captureAngleDegrees: 0)
         XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
         XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
     }
 
-    func testLandscape270_deviceRightUpBecomesBufferUp() {
-        // 画面上がデバイス右向き（capture角270°）のとき、デバイス(1,0)はバッファ(0,1)。
-        let ref = reference(gravity: SIMD2<Double>(1, 0), captureAngleDegrees: 270)
+    func testLandscape180_deviceRightUpBecomesBufferUp() {
+        // ランドスケープ（capture角180°）: 画面上＝デバイス右(1,0)はバッファ上(0,1)。
+        let ref = reference(gravity: SIMD2<Double>(1, 0), captureAngleDegrees: 180)
         XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
         XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
     }
 
     func testNilAngle_preservesLegacyPassthrough() {
-        // 角度不明時（nil）は従来通り無回転で受け渡す。
+        // 角度未確定時（nil）は無回転で受け渡す。
         let ref = reference(gravity: SIMD2<Double>(-1, 0), captureAngleDegrees: nil)
         XCTAssertEqual(ref.x, -1, accuracy: 1e-6)
         XCTAssertEqual(ref.y, 0, accuracy: 1e-6)
@@ -60,7 +62,7 @@ final class ReferenceVectorRotationTests: XCTestCase {
 
     func testFallbackPaths_notRotatedByAngle() {
         // 重力なし（代替経路）はcapture角の影響を受けない。
-        let angled = reference(gravity: nil, captureAngleDegrees: 90)
+        let angled = reference(gravity: nil, captureAngleDegrees: 0)
         let unangled = reference(gravity: nil, captureAngleDegrees: nil)
         XCTAssertEqual(angled.x, unangled.x, accuracy: 1e-9)
         XCTAssertEqual(angled.y, unangled.y, accuracy: 1e-9)

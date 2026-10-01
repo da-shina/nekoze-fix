@@ -10,7 +10,7 @@ import Foundation
 /// 方向の扱い（14.2 実機検収の知見＋landscape修正）:
 /// キャプチャ接続の videoRotationAngle により、Vision に渡るバッファは常に向き補正済み
 /// （デバイス上端＝バッファ上端）で渡る。重力のデバイス座標 (gx, gy) から求まる天方向 K は
-/// センサ固定のため、バッファ座標系で表すには直近capture角θの−θ回転が必要であり、
+/// センサ固定のため、バッファ座標系で表すには直近capture角θの(θ−90°)回転が必要であり、
 /// Session受渡し時（analyze）に適用する（未確定時は無回転）。取得式自体は向き非依存のまま。
 /// 旧来の向き別変換表はセンサ固定フレームの誤った想定＋前面鏡の二重適用であり、14.2 で
 /// 右傾き時の鏡像反転として発覚したため撤去した。Session 側の向き購読（自動再校正・
@@ -66,7 +66,7 @@ final class MotionService {
     /// 重力→天方向の純粋変換。平置き・正規化不能は nil。
     ///
     /// 天方向 `u = (−gx, −gy)` を単位化して返す（デバイス座標系。向き非依存）。
-    /// バッファ座標系への−θ回転は Session受渡し時（analyze の captureAngleDegrees）に適用する。
+    /// バッファ座標系への(θ−90°)回転は Session受渡し時（analyze の captureAngleDegrees）に適用する。
     /// したがって向き別の回転表・鏡像は不要であり、向き引数は持たない。
     /// 平置き（z支配）は無効として代替鎖へ退行させる。
     static func convert(gravity: CMAcceleration) -> SIMD2<Double>? {

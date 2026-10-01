@@ -33,14 +33,14 @@ final class OrientationRecalibrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
     }
 
-    /// 初期角（capture 0°＝ポートレート）を確定させた上で回転角変化を起こす。
+    /// 初期角（capture 0°＝ランドスケープ・実機規約）を確定させた上で回転角変化を起こす。
     /// 実機の購読は初期値で一度発火するため、テストでも同順序を再現する
     /// （初回確定は重複扱いで再校正しない。旧ハンドラと同一則）。
-    /// preview 角は 0° のまま変えず、capture 角のみを変化させることで
+    /// preview 角は 90° のまま変えず、capture 角のみを変化させることで
     /// capture 角が自動再校正トリガの唯一の駆動源であることを示す。
     private func changeCaptureAngle(to capture: CGFloat) {
-        sut.handleRotationAngleChange(preview: 0.0, capture: 0.0)
-        sut.handleRotationAngleChange(preview: 0.0, capture: capture)
+        sut.handleRotationAngleChange(preview: 90.0, capture: 0.0)
+        sut.handleRotationAngleChange(preview: 90.0, capture: capture)
     }
 
     /// 監視中なら即 .slouch になる前出しフレーム（右距離0.21＝基準比116.7%）。
@@ -70,7 +70,7 @@ final class OrientationRecalibrationTests: XCTestCase {
         changeCaptureAngle(to: 90.0)
 
         XCTAssertEqual(sut.snapshot.phase, .calibrating, "monitoring中の回転角変化で校正へ自動遷移")
-        XCTAssertTrue(sut.snapshot.isLandscape, "capture 90°＝ランドスケープ")
+        XCTAssertFalse(sut.snapshot.isLandscape, "capture 90°＝ポートレート（実機規約）")
         XCTAssertNil(sut.snapshot.referenceAngle, "旧基準角度を破棄")
         XCTAssertEqual(sut.snapshot.referenceDistances, [:], "旧基準距離を破棄")
         XCTAssertNil(sut.snapshot.referenceSide, "ロック側を破棄")

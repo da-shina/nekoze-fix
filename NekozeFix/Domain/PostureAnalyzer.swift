@@ -17,7 +17,7 @@ struct PostureAnalyzer {
     /// gravity 以外の入力が同一なら従来と同一の近側・距離・判定を返す（不変条件）。
     /// captureAngleDegrees は capture用回転角（度、任意）。重力はデバイスセンサ座標系で
     /// 得られるがキーポイントは回転済みバッファ座標系に存在するため、重力由来の基準値のみを
-    /// バッファ座標系へ−θ回転させる（nil・0°では無回転で従来通り）。代替経路は回転しない。
+    /// バッファ座標系へ(θ−90°)回転させる（nil・未確定時は無回転で従来通り）。代替経路は回転しない。
     func analyze(
         frame: PoseFrame,
         referenceNearAngleDegrees: Double?,
@@ -154,7 +154,7 @@ struct PostureAnalyzer {
     ///
     /// 入力は重力値（デバイスセンサ座標系）・capture角（度、任意）とフレームのみ。時刻・状態を持たない。
     /// 解決順序は gravity → shoulderLine → imageVertical に固定する。
-    /// 重力由来の基準値のみ capture角θでバッファ座標系へ−θ回転させる（配信バッファがθ回転済みのため）。
+    /// 重力由来の基準値のみ capture角θでバッファ座標系へ(θ−90°)回転させる（センサ基準角のため）。
     /// 肩直交・画像垂直は元々バッファ座標系のため回転しない。
     /// Analyzer からのみ呼ぶ。Session は直接呼ばない（単一解決）。
     private static func resolve(
@@ -189,12 +189,13 @@ struct PostureAnalyzer {
         return ReferenceVector(0.0, 1.0)
     }
 
-    /// デバイス座標系ベクトルをバッファ座標系へ回転させる（−capture角θ）。
-    /// 配信バッファはθ回転済みのため、固定ベクトルをバッファ座標で表すには−θ回転する。
-    /// nil・0°では恒等。回転は長さを保存する。
+    /// デバイス座標系ベクトルをバッファ座標系へ回転させる（capture角θの(θ−90°)回転）。
+    /// coordinator角はセンサ基準であり、ポートレートで90°・ランドスケープで0°/180°を取る
+    /// （センサがランドスケープネイティブ。WWDC23 10106）。nil（未確定）では恒等。
+    /// 回転は長さを保存する。
     static func rotateToBufferSpace(_ v: SIMD2<Double>, captureAngleDegrees: Double?) -> SIMD2<Double> {
-        guard let degrees = captureAngleDegrees, degrees != 0 else { return v }
-        let rad = -degrees * .pi / 180.0
+        guard let degrees = captureAngleDegrees else { return v }
+        let rad = (degrees - 90) * .pi / 180.0
         return SIMD2<Double>(
             v.x * cos(rad) - v.y * sin(rad),
             v.x * sin(rad) + v.y * cos(rad)

@@ -233,14 +233,14 @@ final class DeviceRotationService {
 - 新トリガ署名：`handleRotationAngleChange(preview: CGFloat, capture: CGFloat)`（いずれも度単位）。旧 `handleVideoOrientationChange(_: AVCaptureVideoOrientation)` は削除する
 - Session は capture用回転角を `CameraSessionManager` へ転送する。preview用回転角の転送は行わない（View が Service を直接購読するため）
 - coordinator 再生成の指示元である：device 確定時（カメラ構成時）とプレビュー層出現時に `recreate` を呼ぶ
-- `isLandscape` 導出則：capture用回転角を用い、下表で判定する（既存のデバイス姿勢分岐の維持であり、判定ロジックの変更ではない。capture用回転角は Vision バッファと一致し、`isLandscape` の判定は軸方向のみを見るため前面鏡の影響を受けない。実機で検証条件化する）。
+- `isLandscape` 導出則：capture用回転角を用い、下表で判定する（coordinator実機規約はセンサ基準であり、ポートレートで90°・ランドスケープで0°/180°を取る。センサがランドスケープネイティブのため。WWDC23 10106。capture用回転角は Vision バッファと一致し、`isLandscape` の判定は軸方向のみを見るため前面鏡の影響を受けない。実機で検証条件化する）。
   - 境界ヒステリシスは実測後に追加検討する（初期実装なし）
 
   | capture角（度） | 判定 |
   |----------------|------|
-  | 0°±45°、180°±45° | ポートレート（`isLandscape = false`） |
-  | 90°±45°、270°±45° | ランドスケープ（`isLandscape = true`） |
-- 描画基準線（referenceVector）は重力解決の返値に直近capture角の−θ回転を適用して受渡す（重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため。未確定時は無回転）。preview用回転角は転送しない
+  | 90°±45°、270°±45° | ポートレート（`isLandscape = false`） |
+  | 0°±45°、180°±45° | ランドスケープ（`isLandscape = true`） |
+- 描画基準線（referenceVector）は重力解決の返値に直近capture角θの(θ−90°)回転を適用して受渡す（重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため。未確定時は無回転）。preview用回転角は転送しない
 - `.rotating`／`isRotating` の死経路は除去する。過渡停止は自動再校正経路に一本化する（振る舞い不変）
 - 状態機械・ゲート・通知・暗転・スリープ則は変えない
 
