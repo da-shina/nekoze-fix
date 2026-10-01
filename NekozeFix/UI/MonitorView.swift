@@ -209,8 +209,6 @@ struct MonitorView: View {
         switch sessionManager.snapshot.phase {
         case .monitoring:
             return "antenna.radiowaves.left.and.right"
-        case .rotating:
-            return "arrow.triangle.2.circlepath"
         default:
             return "stop.circle"
         }
@@ -224,8 +222,6 @@ struct MonitorView: View {
         switch sessionManager.snapshot.phase {
         case .monitoring:
             return "監視中"
-        case .rotating:
-            return "回転中..."
         default:
             return "停止中"
         }

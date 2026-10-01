@@ -22,8 +22,6 @@ struct RootView: View {
                 MonitorView()
             case .idle:
                 PermissionView()
-            case .rotating:
-                MonitorView()
             }
         }
         .onAppear {

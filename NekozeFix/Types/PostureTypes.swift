@@ -70,7 +70,6 @@ enum SessionPhase: Equatable {
     case calibrating
     case idle
     case monitoring
-    case rotating
 }
 
 enum DisplayedPosture: Equatable {
