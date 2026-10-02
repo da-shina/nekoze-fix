@@ -38,6 +38,14 @@ final class MotionService {
     /// Session 駆動のライフサイクル状態（start 済み・未 stop）。テストは @testable で読む。
     /// シミュレータ等の取得不可環境でも start/stop の対応は保持する（値は持続 nil）。
     private(set) var isRunning = false
+    /// 重力が無効（nil）から有効値へ復帰した瞬間を検出するフラグ。
+    /// `latestGravityInKeypointSpace` が nil → 非nil に遷移した瞬間に `true` になり、
+    /// `PostureSessionManager` が読み取り後に自動リセットする（リセット責任は Session 側）。
+    private(set) var gravityDidRecover = false
+
+    /// 重力復帰フラグをリセットする（PostureSessionManager から呼ぶ専用）。
+    /// 呼び出し後、次の重力復帰（nil → 非nil 遷移）まで検知しない。
+    func resetGravityDidRecover() { gravityDidRecover = false }
 
     init() {}
 
@@ -95,11 +103,17 @@ final class MotionService {
     }
 
     /// 変換済みサンプル（nil＝無効）をホールド則で解決する。回復時は即時復帰、通知なし。
+    /// - Note: `latestGravityInKeypointSpace` が nil → 非nil に遷移した場合、
+    ///   `gravityDidRecover` フラグを立てる。Session 側が読み取り後にリセットする。
     func ingest(converted: SIMD2<Double>?, now: Date) {
+        let wasNil = latestGravityInKeypointSpace == nil
         if let converted {
             lastValidVector = converted
             lastValidTime = now
             latestGravityInKeypointSpace = converted
+            if wasNil {
+                gravityDidRecover = true
+            }
             return
         }
         guard let last = lastValidVector,
