@@ -27,7 +27,7 @@ struct PostureAnalyzer {
         previousNearSide: Side? = nil,
         gravityInKeypointSpace: SIMD2<Double>? = nil,    // MotionService 変換済みか nil（12.2）
         captureAngleDegrees: Double? = nil               // capture用回転角（度）。nil は無回転
-    ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ReferenceVector) {
+    ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ResolvedReferenceVector) {
 
         // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.3）
         let leftValid = isValidPair(ear: frame.leftEar, shoulder: frame.leftShoulder)
@@ -76,14 +76,14 @@ struct PostureAnalyzer {
         }
 
         // ステップ3: 解決済み基準ベクトル（重力→肩ライン直交→画像垂直）と鋭角を計算（0〜90度）
-        let reference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees)
-        let perpX = reference.x
-        let perpY = reference.y
+        let resolvedReference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees)
+        let perpX = resolvedReference.vector.x
+        let perpY = resolvedReference.vector.y
 
         let vx = nearEar!.x - nearShoulder!.x
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
-        guard length > 0 else { return (nil, .insufficientKeypoints, reference) }
+        guard length > 0 else { return (nil, .insufficientKeypoints, resolvedReference) }
 
         let cosTheta = (vx * perpX + vy * perpY) / length
         let clampedCos = max(-1.0, min(1.0, cosTheta))
@@ -97,26 +97,6 @@ struct PostureAnalyzer {
         // 角度のみで判定を継続する。校正中（nil）は近側の素値を記録するだけ。
         var reportedDistance = length
         var distanceOverThreshold = false
-        var farAngleDegrees: Double? = nil
-        var farDistanceValue: Double? = nil
-
-        // 両側検出時に遠側の角度・距離も計算
-        if farSideDetected {
-            let farEar = (nearSide! == .left) ? frame.rightEar : frame.leftEar
-            let farShoulder = (nearSide! == .left) ? frame.rightShoulder : frame.leftShoulder
-            if isValidPair(ear: farEar, shoulder: farShoulder) {
-                let fvx = farEar!.x - farShoulder!.x
-                let fvy = farEar!.y - farShoulder!.y
-                let flength = sqrt(fvx * fvx + fvy * fvy)
-                if flength > 0 {
-                    let fcosTheta = (fvx * perpX + fvy * perpY) / flength
-                    let fclampedCos = max(-1.0, min(1.0, fcosTheta))
-                    let fthetaDegrees = acos(fclampedCos) * 180.0 / .pi
-                    farAngleDegrees = min(fthetaDegrees, 180.0 - fthetaDegrees)
-                    farDistanceValue = flength
-                }
-            }
-        }
 
         if let metric = distanceMetric, metric.referenceDistance > 0 {
             let lockEar = (metric.side == .left) ? frame.leftEar : frame.rightEar
@@ -141,12 +121,10 @@ struct PostureAnalyzer {
                 nearSide: nearSide!,
                 nearAngleDegrees: acuteAngle,
                 farSideDetected: farSideDetected,
-                nearDistance: reportedDistance,
-                farAngleDegrees: farAngleDegrees,
-                farDistance: farDistanceValue
+                nearDistance: reportedDistance
             ),
             verdict,
-            reference
+            resolvedReference
         )
     }
 
@@ -161,13 +139,13 @@ struct PostureAnalyzer {
         gravityInKeypointSpace: SIMD2<Double>?,
         frame: PoseFrame,
         captureAngleDegrees: Double? = nil
-    ) -> ReferenceVector {
+    ) -> ResolvedReferenceVector {
         // 第一段: 重力（有効な単位化可能ベクトルのみ採用）
         if let gravity = gravityInKeypointSpace {
             let length = sqrt(gravity.x * gravity.x + gravity.y * gravity.y)
             if length.isFinite && length > 1e-9 {
                 let rotated = rotateToBufferSpace(gravity / length, captureAngleDegrees: captureAngleDegrees)
-                return rotated
+                return ResolvedReferenceVector(vector: rotated, source: .gravity)
             }
         }
         // 第二段: 両肩ライン直交上向き法線（従来式を移設）
@@ -182,11 +160,11 @@ struct PostureAnalyzer {
                 // (sdx, sdy) に直交し、Vision座標系で上向き (+y方向) の単位ベクトル:
                 // 内積: sdx * (-sdy) + sdy * sdx = 0 (直角)
                 // sdx >= 0 のため sdx / shoulderDist >= 0 (+y方向)
-                return ReferenceVector(-sdy / shoulderDist, sdx / shoulderDist)
+                return ResolvedReferenceVector(vector: ReferenceVector(-sdy / shoulderDist, sdx / shoulderDist), source: .shoulderLine)
             }
         }
         // 第三段（終端）: 画像垂直
-        return ReferenceVector(0.0, 1.0)
+        return ResolvedReferenceVector(vector: ReferenceVector(0.0, 1.0), source: .imageVertical)
     }
 
     /// デバイス座標系ベクトルをバッファ座標系へ回転させる（capture角θの(θ−90°)回転）。

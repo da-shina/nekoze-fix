@@ -21,8 +21,6 @@ struct CalibrationLogic {
 
     private var accumulatedAngles: [Double] = []
     private var accumulatedDistances: [Double] = []
-    private var accumulatedFarAngles: [Double] = []
-    private var accumulatedFarDistances: [Double] = []
     private var accumulatedPoints: [[CGPoint]] = []
     private var isAccumulating = false
     /// 有効サンプルが蓄積された時間の合計（秒）。脱落中は加算されない。
@@ -34,6 +32,9 @@ struct CalibrationLogic {
     /// 現在の蓄積窓を開始した近側（FQ1・validate-design Issue 1）。
     /// 左右の耳-肩距離には約8%の固有差があるため、側が切り替わったら窓をまたげない。
     private var windowSide: Side? = nil
+    /// 校正中の基準ベクトル解決元（Comment 1 対策: 校正値の整合性確保）。
+    /// 最初の有効サンプルで決定し、変更されたら即リセットする。
+    private var windowReferenceSource: ReferenceVectorSource? = nil
 
     // MARK: - 公開API
 
@@ -46,17 +47,23 @@ struct CalibrationLogic {
     /// 人物検出状態を処理する。
     /// - Parameters:
     ///   - sample: PostureAnalyzer からの角度サンプル（有効な角度がない場合は nil）
+    ///   - referenceSource: 基準ベクトルの解決元（Comment 1 対策: 校正値の整合性確保）
     ///   - presence: 人物検出状態（デバウンス確定済みの値を渡す。猶予期間中は .personDetected）
     ///   - now: 現在の時刻間隔
     ///   - points: 可視化ポイント（6点: 0左肩 1右肩 2左耳 3右耳 4近傍耳 5近傍肩）
     /// - Returns: キャリブレーション進捗状態
-    mutating func ingest(sample: AngleSample?, presence: DetectionPresence, now: TimeInterval, points: [CGPoint] = []) -> CalibrationProgress {
+    mutating func ingest(sample: AngleSample?, referenceSource: ReferenceVectorSource?, presence: DetectionPresence, now: TimeInterval, points: [CGPoint] = []) -> CalibrationProgress {
         // 有効サンプルがある場合は通常蓄積。personMissing はキーポイント脱落と同一扱いで
         // 脱落許容時間（dropoutTolerance）内は時間凍結、超過でリセット（else 節）。
         if let sample = sample, presence == .personDetected {
             if !isAccumulating {
                 // 最初の有効サンプルで蓄積を開始
-                return startNewWindow(sample: sample, now: now, points: points)
+                return startNewWindow(sample: sample, referenceSource: referenceSource, now: now, points: points)
+            }
+
+            // 基準ベクトル解決元が変わったら即リセット（Comment 1 対策: 校正値の整合性確保）
+            if let source = referenceSource, windowReferenceSource != source {
+                return startNewWindow(sample: sample, referenceSource: referenceSource, now: now, points: points)
             }
 
             // 安定性チェック: 直近 windowSize サンプルの中央値比。
@@ -66,7 +73,7 @@ struct CalibrationLogic {
             let median = Self.median(of: window)
             if abs(sample.nearAngleDegrees - median) > Self.angleResetThresholdDegrees || sample.nearSide != windowSide {
                 // 不安定な場合は蓄積をリセット（角度崩れ・側切り替わりは脱落と違い即時リセット）
-                return startNewWindow(sample: sample, now: now, points: points)
+                return startNewWindow(sample: sample, referenceSource: referenceSource, now: now, points: points)
             }
 
             // 前回の有効サンプルからの経過時間分だけ蓄積を進める。
@@ -74,7 +81,7 @@ struct CalibrationLogic {
             // 許容時間を超えている場合は姿勢崩れとしてリセットする。
             if dropoutActive {
                 if now - lastSampleTime > Self.dropoutTolerance {
-                    return startNewWindow(sample: sample, now: now, points: points)
+                    return startNewWindow(sample: sample, referenceSource: referenceSource, now: now, points: points)
                 }
                 dropoutActive = false
             } else {
@@ -85,8 +92,6 @@ struct CalibrationLogic {
             // 新しい角度を蓄積に追加
             accumulatedAngles.append(sample.nearAngleDegrees)
             accumulatedDistances.append(sample.nearDistance)
-            if let fa = sample.farAngleDegrees { accumulatedFarAngles.append(fa) }
-            if let fd = sample.farDistance { accumulatedFarDistances.append(fd) }
             if !points.isEmpty {
                 accumulatedPoints.append(points)
             }
@@ -98,9 +103,13 @@ struct CalibrationLogic {
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
                 let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
                 let finalPoints = accumulatedPoints.last ?? []
-                let avgFarAngle = accumulatedFarAngles.isEmpty ? nil : accumulatedFarAngles.reduce(0.0, +) / Double(accumulatedFarAngles.count)
-                let avgFarDistance = accumulatedFarDistances.isEmpty ? nil : accumulatedFarDistances.reduce(0.0, +) / Double(accumulatedFarDistances.count)
-                let completedProgress = CalibrationProgress.completed(referenceNearAngleDegrees: average, referenceDistance: averageDistance, referenceSide: sample.nearSide, referencePoints: finalPoints, referenceFarAngleDegrees: avgFarAngle, referenceFarDistance: avgFarDistance)
+                let completedProgress = CalibrationProgress.completed(
+                    referenceNearAngleDegrees: average,
+                    referenceDistance: averageDistance,
+                    referenceSide: sample.nearSide,
+                    referencePoints: finalPoints,
+                    referenceSource: windowReferenceSource ?? .imageVertical
+                )
 
                 resetAccumulation()
                 return completedProgress
@@ -127,28 +136,26 @@ struct CalibrationLogic {
     private mutating func resetAccumulation() {
         accumulatedAngles = []
         accumulatedDistances = []
-        accumulatedFarAngles = []
-        accumulatedFarDistances = []
         accumulatedPoints = []
         isAccumulating = false
         accumulatedDuration = 0
         lastSampleTime = 0
         dropoutActive = false
         windowSide = nil
+        windowReferenceSource = nil
     }
 
     /// リセット直後に新しいサンプルで蓄積窓を開始する
-    private mutating func startNewWindow(sample: AngleSample, now: TimeInterval, points: [CGPoint]) -> CalibrationProgress {
+    private mutating func startNewWindow(sample: AngleSample, referenceSource: ReferenceVectorSource?, now: TimeInterval, points: [CGPoint]) -> CalibrationProgress {
         accumulatedAngles = [sample.nearAngleDegrees]
         accumulatedDistances = [sample.nearDistance]
-        accumulatedFarAngles = sample.farAngleDegrees.map { [$0] } ?? []
-        accumulatedFarDistances = sample.farDistance.map { [$0] } ?? []
         accumulatedPoints = [points]
         isAccumulating = true
         accumulatedDuration = 0
         lastSampleTime = now
         dropoutActive = false
         windowSide = sample.nearSide
+        windowReferenceSource = referenceSource
         return .accumulating(elapsed: 0)
     }
 

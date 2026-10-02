@@ -72,7 +72,7 @@ final class OrientationRecalibrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .calibrating, "monitoring中の回転角変化で校正へ自動遷移")
         XCTAssertFalse(sut.snapshot.isLandscape, "capture 90°＝ポートレート（実機規約）")
         XCTAssertNil(sut.snapshot.referenceAngle, "旧基準角度を破棄")
-        XCTAssertEqual(sut.snapshot.referenceDistances, [:], "旧基準距離を破棄")
+        XCTAssertNil(sut.snapshot.referenceDistance, "旧基準距離を破棄")
         XCTAssertNil(sut.snapshot.referenceSide, "ロック側を破棄")
         XCTAssertEqual(sut.snapshot.slouchGate.accumulated, 0, "猫背ゲートを破棄")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired)
@@ -103,7 +103,7 @@ final class OrientationRecalibrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .monitoring, "再校正完了で監視に復帰")
         XCTAssertEqual(sut.snapshot.referenceAngle, 12.0)
         XCTAssertEqual(sut.snapshot.referenceSide, .left)
-        XCTAssertEqual(sut.snapshot.referenceDistances, [.left: 0.19])
+        XCTAssertEqual(sut.snapshot.referenceDistance, 0.19)
     }
 
     // MARK: - 対象外: calibrating中・idle・同一角
@@ -130,7 +130,7 @@ final class OrientationRecalibrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .idle, "idleの回転角変化は対象外")
         XCTAssertEqual(sut.snapshot.referenceAngle, 10.0, "旧基準を保持")
         XCTAssertEqual(sut.snapshot.referenceSide, .right)
-        XCTAssertEqual(sut.snapshot.referenceDistances, [.right: 0.18])
+        XCTAssertEqual(sut.snapshot.referenceDistance, 0.18)
     }
 
     /// 同一角の再通知では遷移しない（初期購読・重複発火の無視）。

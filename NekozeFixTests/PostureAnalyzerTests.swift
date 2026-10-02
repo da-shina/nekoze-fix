@@ -334,7 +334,7 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(verdict, .good)
     }
 
-    /// 両側検出時に遠側の角度・距離も返す
+    /// 両側検出時に farSideDetected が true になる
     func testBothSidesDetected_ReturnsFarSideData() {
         let frame = PoseFrame(
             timestamp: 0,
@@ -348,8 +348,7 @@ final class PostureAnalyzerTests: XCTestCase {
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10
         )
-        XCTAssertNotNil(sample?.farAngleDegrees, "両側検出時は遠側角度が非nil")
-        XCTAssertNotNil(sample?.farDistance, "両側検出時は遠側距離が非nil")
+        XCTAssertEqual(sample?.farSideDetected, true, "両側検出時は farSideDetected が true")
     }
 
     // MARK: - 両肩直交基準とフォールバック
@@ -384,8 +383,8 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 14.04, accuracy: 0.1)
         XCTAssertEqual(verdict, .slouchCandidate)
-        XCTAssertEqual(referenceVector.x, 0.0, accuracy: 1e-9)
-        XCTAssertEqual(referenceVector.y, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.x, 0.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
     }
 
     /// 片肩しか検出できない場合は従来の画像垂直 (0, 1) へ安全にフォールバックする
@@ -433,8 +432,8 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
-        XCTAssertEqual(referenceVector.x, 0.0, accuracy: 1e-9)
-        XCTAssertEqual(referenceVector.y, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.x, 0.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
     }
 
     /// nil重力は従来通り肩ライン直交に退行する（レガシー不変）。
@@ -462,8 +461,8 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
         // 解決ベクトルは肩ライン直交上向き法線
-        XCTAssertEqual(referenceVector.x, ux, accuracy: 1e-9)
-        XCTAssertEqual(referenceVector.y, uy, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.x, ux, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, uy, accuracy: 1e-9)
     }
 
     /// 明示nilは引数省略と同一結果を返す（不変条件: gravity以外の入力が同一なら従来と同一）。
@@ -495,7 +494,7 @@ final class PostureAnalyzerTests: XCTestCase {
 
         XCTAssertEqual(omitted.sample, explicitNil.sample)
         XCTAssertEqual(omitted.verdict, explicitNil.verdict)
-        XCTAssertEqual(omitted.referenceVector, explicitNil.referenceVector)
+        XCTAssertEqual(omitted.referenceVector.vector, explicitNil.referenceVector.vector)
     }
 
     /// 重力下でも距離ORは維持される: 角度UNDER・距離OVER → slouchCandidate。
@@ -521,7 +520,7 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearDistance ?? 0, 0.2, accuracy: 0.001)
         XCTAssertEqual(verdict, .slouchCandidate)
-        XCTAssertEqual(referenceVector.y, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
     }
 
     /// 重力下でもロック側欠測フレームは距離条件をスキップし角度のみで判定する。
@@ -546,7 +545,7 @@ final class PostureAnalyzerTests: XCTestCase {
 
         XCTAssertEqual(sample?.nearDistance ?? 0, 0.1, accuracy: 0.001)
         XCTAssertEqual(verdict, .good) // 角度0度、距離スキップ
-        XCTAssertEqual(referenceVector.y, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
     }
 
     /// 鈍角は鋭角化される（120度 → 60度、0〜90度範囲）。

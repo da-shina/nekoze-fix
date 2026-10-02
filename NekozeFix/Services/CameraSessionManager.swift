@@ -72,21 +72,27 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
     /// `sessionQueue` 上でのみ呼ぶ回転適用本体。実行時に対応可否を判定し、
     /// 非対応時は見送る（退行則）。preview 接続には触らない。
     private func applyCaptureRotationAngleLocked(_ degrees: CGFloat) {
-        let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
-            ?? self.videoOutput?.connection(with: .video)
-        guard let connection else { return }
-        guard connection.isVideoRotationAngleSupported(degrees) else { return }
-        connection.videoRotationAngle = degrees
+        withVideoConnection {
+            guard $0.isVideoRotationAngleSupported(degrees) else { return }
+            $0.videoRotationAngle = degrees
+        }
     }
 
     /// `sessionQueue` 上でのみ呼ぶミラー適用本体。前面のみ有効化する。
     private func applyMirrorSettingLocked(for position: AVCaptureDevice.Position) {
-        let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
-            ?? self.videoOutput?.connection(with: .video)
-        guard let connection else { return }
-        if connection.isVideoMirroringSupported {
-            connection.isVideoMirrored = (position == .front)
+        withVideoConnection {
+            if $0.isVideoMirroringSupported {
+                $0.isVideoMirrored = (position == .front)
+            }
         }
+    }
+
+    /// data-output 接続の取得を一本化する。テスト注入があればそれを使い、
+    /// なければ `videoOutput` の実接続を使う。不在時はなにもしない。
+    private func withVideoConnection(_ body: (any CaptureVideoRotationConnection) -> Void) {
+        guard let connection: CaptureVideoRotationConnection = self.rotationConnectionForTesting
+            ?? self.videoOutput?.connection(with: .video) else { return }
+        body(connection)
     }
 
     // MARK: - プライベートプロパティ
@@ -110,12 +116,7 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
                 self.authorization = .authorized
             }
             return .authorized
-        case .denied, .restricted:
-            await MainActor.run {
-                self.authorization = .denied
-            }
-            return .denied
-        @unknown default:
+        case .denied, .restricted, _:
             await MainActor.run {
                 self.authorization = .denied
             }
@@ -215,16 +216,8 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
             // preview 接続には触らない。デバイス姿勢の推測は行わない。
             // 対応可否は実行時判定し、非対応時は見送る（退行則）。
             // 前面ミラー設定は維持する。
-            let connection: CaptureVideoRotationConnection? = self.rotationConnectionForTesting
-                ?? output.connection(with: .video)
-            if let connection {
-                if connection.isVideoRotationAngleSupported(self.lastCaptureRotationAngle) {
-                    connection.videoRotationAngle = self.lastCaptureRotationAngle
-                }
-                if connection.isVideoMirroringSupported {
-                    connection.isVideoMirrored = (position == .front)
-                }
-            }
+            applyCaptureRotationAngleLocked(self.lastCaptureRotationAngle)
+            applyMirrorSettingLocked(for: position)
         } else {
             throw CameraError.sessionConfigurationFailed
         }

@@ -8,7 +8,6 @@ final class SettingsStore: ObservableObject {
     // MARK: - キー
 
     private enum Keys {
-        /// 旧・感度キー（廃止済み。初回起動時に閾値へ一度だけ変換して削除）
         static let legacySensitivity = "com.nekozefix.sensitivity"
         static let slouchThresholdDegrees = "com.nekozefix.slouchThresholdDegrees"
         static let slouchDistanceThresholdPercent = "com.nekozefix.slouchDistanceThresholdPercent"
@@ -46,7 +45,7 @@ final class SettingsStore: ObservableObject {
             self.slouchThresholdDegrees = saved
         } else if defaults.object(forKey: Keys.legacySensitivity) != nil {
             let legacy = defaults.double(forKey: Keys.legacySensitivity)
-            self.slouchThresholdDegrees = SettingsStore.clamp(20.0 - legacy * 15.0)
+            self.slouchThresholdDegrees = SettingsStore.clamp(20.0 - legacy * 15.0, to: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees)
         } else {
             self.slouchThresholdDegrees = SettingsStore.thresholdDefaultDegrees
         }
@@ -54,7 +53,7 @@ final class SettingsStore: ObservableObject {
 
         // 距離閾値の読込。新キーなので旧キー移行は不要、未設定ならデフォルト（角度と同様の扱い）
         if let saved = defaults.object(forKey: Keys.slouchDistanceThresholdPercent) as? Double {
-            self.slouchDistanceThresholdPercent = Self.clampDistance(saved)
+            self.slouchDistanceThresholdPercent = Self.clamp(saved, to: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent)
         } else {
             self.slouchDistanceThresholdPercent = SettingsStore.distanceThresholdDefaultPercent
         }
@@ -76,7 +75,7 @@ final class SettingsStore: ObservableObject {
     /// 範囲: 3.0〜20.0、デフォルト: 5.0
     @Published var slouchThresholdDegrees: Double {
         didSet {
-            let clamped = SettingsStore.clamp(slouchThresholdDegrees)
+            let clamped = SettingsStore.clamp(slouchThresholdDegrees, to: Self.thresholdMinDegrees...Self.thresholdMaxDegrees)
             if clamped != slouchThresholdDegrees {
                 slouchThresholdDegrees = clamped // didSet 再入で保存
                 return
@@ -89,7 +88,7 @@ final class SettingsStore: ObservableObject {
     /// 範囲: 5.0〜15.0（ステップ 0.5 は UI 側）、デフォルト: 8.0
     @Published var slouchDistanceThresholdPercent: Double {
         didSet {
-            let clamped = SettingsStore.clampDistance(slouchDistanceThresholdPercent)
+            let clamped = SettingsStore.clamp(slouchDistanceThresholdPercent, to: Self.distanceThresholdMinPercent...Self.distanceThresholdMaxPercent)
             if clamped != slouchDistanceThresholdPercent {
                 slouchDistanceThresholdPercent = clamped // didSet 再入で保存
                 return
@@ -112,11 +111,7 @@ final class SettingsStore: ObservableObject {
 
     // MARK: - プライベートメソッド
 
-    private static func clamp(_ value: Double) -> Double {
-        min(thresholdMaxDegrees, max(thresholdMinDegrees, value))
-    }
-
-    private static func clampDistance(_ value: Double) -> Double {
-        min(distanceThresholdMaxPercent, max(distanceThresholdMinPercent, value))
+    private static func clamp(_ value: Double, to range: ClosedRange<Double>) -> Double {
+        min(range.upperBound, max(range.lowerBound, value))
     }
 }

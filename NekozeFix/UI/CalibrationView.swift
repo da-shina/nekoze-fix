@@ -1,5 +1,4 @@
 import SwiftUI
-import Combine
 import AVFoundation
 
 /// UI レイヤー: 校正ガイド、集約タイマー、人検出メッセージ。
@@ -10,13 +9,6 @@ struct CalibrationView: View {
 
     @EnvironmentObject private var sessionManager: PostureSessionManager
     @EnvironmentObject private var settingsStore: SettingsStore
-
-    // MARK: - 状態
-
-    @State private var timerRemaining = CalibrationLogic.requiredStableDuration
-    @State private var isPersonDetected = false
-    @State private var progressMessage = ""
-    @State private var cancellables = Set<AnyCancellable>()
 
     // MARK: - 本文
 
@@ -41,7 +33,6 @@ struct CalibrationView: View {
             // 現在の姿勢のオーバーレイ
             PostureOverlayView(
                 mode: .current,
-                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
@@ -104,7 +95,6 @@ struct CalibrationView: View {
         }
         .navigationBarTitle("校正", displayMode: .inline)
         .onAppear {
-            setupObservers()
             if sessionManager.snapshot.phase == .calibrating {
                 Task {
                     sessionManager.startCalibration()
@@ -113,50 +103,42 @@ struct CalibrationView: View {
         }
     }
 
-    // MARK: - プライベートメソッド
+    // MARK: - 計算プロパティ
 
-    private func setupObservers() {
-        // snapshot 全体を監視して、人物検出と進捗を更新
-        sessionManager.$snapshot
-            .sink { [self] snapshot in
-                // 1. 人物検出状態の更新
-                let detected = snapshot.isPersonDetected
-                self.isPersonDetected = detected
-                let pts = snapshot.visualizationPoints
-                if !detected {
-                    self.progressMessage = "人物が検出されません"
-                } else if snapshot.isShoulderMissing {
-                    self.progressMessage = shoulderMissingGuidance(isLandscape: snapshot.isLandscape)
-                } else if pts.count >= 4 && pts[2] == .zero && pts[3] == .zero {
-                    self.progressMessage = "耳を認識できません。顔全体を画面に収めてください"
-                } else {
-                    self.progressMessage = ""
-                }
+    private var isPersonDetected: Bool {
+        sessionManager.snapshot.isPersonDetected
+    }
 
-                // 2. キャリブレーション進捗の更新
-                switch snapshot.calibrationProgress {
-                case .waitingForPerson:
-                    self.timerRemaining = CalibrationLogic.requiredStableDuration
-                case .accumulating(let elapsed):
-                    // 必要安定時間から経過時間を引いた残時間を表示
-                    self.timerRemaining = max(0, CalibrationLogic.requiredStableDuration - elapsed)
-                case .completed:
-                    self.timerRemaining = 0
-                }
-            }
-            .store(in: &cancellables)
+    private var progressMessage: String {
+        let snapshot = sessionManager.snapshot
+        let pts = snapshot.visualizationPoints
+        if !snapshot.isPersonDetected {
+            return "人物が検出されません"
+        } else if snapshot.isShoulderMissing {
+            return shoulderMissingGuidance(isLandscape: snapshot.isLandscape)
+        } else if pts.count >= 4 && pts[2] == .zero && pts[3] == .zero {
+            return "耳を認識できません。顔全体を画面に収めてください"
+        } else {
+            return ""
+        }
+    }
+
+    private var timerRemaining: TimeInterval {
+        switch sessionManager.snapshot.calibrationProgress {
+        case .waitingForPerson:
+            return CalibrationLogic.requiredStableDuration
+        case .accumulating(let elapsed):
+            return max(0, CalibrationLogic.requiredStableDuration - elapsed)
+        case .completed:
+            return 0
+        }
     }
 }
 
 // MARK: - プレビュー
 
-struct CalibrationView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            CalibrationView()
-                .environmentObject(PostureSessionManager())
-                .environmentObject(SettingsStore())
-                .previewDisplayName("校正 - 準備完了")
-        }
-    }
+#Preview("校正 - 準備完了") {
+    CalibrationView()
+        .environmentObject(PostureSessionManager())
+        .environmentObject(SettingsStore())
 }

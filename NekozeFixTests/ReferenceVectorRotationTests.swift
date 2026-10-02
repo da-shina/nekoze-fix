@@ -21,7 +21,7 @@ final class ReferenceVectorRotationTests: XCTestCase {
     private func reference(
         gravity: SIMD2<Double>?,
         captureAngleDegrees: Double?
-    ) -> ReferenceVector {
+    ) -> ResolvedReferenceVector {
         let (_, _, ref) = PostureAnalyzer().analyze(
             frame: uprightFrame(),
             referenceNearAngleDegrees: nil,
@@ -35,36 +35,36 @@ final class ReferenceVectorRotationTests: XCTestCase {
     func testPortraitAngle90_deviceUpStaysBufferUp() {
         // ポートレート（capture角90°）: デバイス上(0,1)はバッファ上(0,1)。
         let ref = reference(gravity: SIMD2<Double>(0, 1), captureAngleDegrees: 90)
-        XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
-        XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.x, 0, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.y, 1, accuracy: 1e-6)
     }
 
     func testLandscape0_deviceLeftUpBecomesBufferUp() {
         // ランドスケープ（capture角0°）: 画面上＝デバイス左(−1,0)はバッファ上(0,1)。
         let ref = reference(gravity: SIMD2<Double>(-1, 0), captureAngleDegrees: 0)
-        XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
-        XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.x, 0, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.y, 1, accuracy: 1e-6)
     }
 
     func testLandscape180_deviceRightUpBecomesBufferUp() {
         // ランドスケープ（capture角180°）: 画面上＝デバイス右(1,0)はバッファ上(0,1)。
         let ref = reference(gravity: SIMD2<Double>(1, 0), captureAngleDegrees: 180)
-        XCTAssertEqual(ref.x, 0, accuracy: 1e-6)
-        XCTAssertEqual(ref.y, 1, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.x, 0, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.y, 1, accuracy: 1e-6)
     }
 
     func testNilAngle_preservesLegacyPassthrough() {
         // 角度未確定時（nil）は無回転で受け渡す。
         let ref = reference(gravity: SIMD2<Double>(-1, 0), captureAngleDegrees: nil)
-        XCTAssertEqual(ref.x, -1, accuracy: 1e-6)
-        XCTAssertEqual(ref.y, 0, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.x, -1, accuracy: 1e-6)
+        XCTAssertEqual(ref.vector.y, 0, accuracy: 1e-6)
     }
 
     func testFallbackPaths_notRotatedByAngle() {
         // 重力なし（代替経路）はcapture角の影響を受けない。
         let angled = reference(gravity: nil, captureAngleDegrees: 0)
         let unangled = reference(gravity: nil, captureAngleDegrees: nil)
-        XCTAssertEqual(angled.x, unangled.x, accuracy: 1e-9)
-        XCTAssertEqual(angled.y, unangled.y, accuracy: 1e-9)
+        XCTAssertEqual(angled.vector.x, unangled.vector.x, accuracy: 1e-9)
+        XCTAssertEqual(angled.vector.y, unangled.vector.y, accuracy: 1e-9)
     }
 }

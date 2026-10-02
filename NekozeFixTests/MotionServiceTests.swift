@@ -10,6 +10,7 @@ import XCTest
 /// 物理回転させるため、重力のデバイス座標はバッファ座標と軸一致する。
 /// 天方向 K は常に `normalize(−gx, −gy)` で求まる（向き非依存）。
 /// 旧来の向き別変換表は誤り（右傾きの鏡像反転）として撤去済み。
+@MainActor
 final class MotionServiceTests: XCTestCase {
 
     private var service: MotionService!

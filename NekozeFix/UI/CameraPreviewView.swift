@@ -180,10 +180,7 @@ internal class CameraPreviewUIView: UIView {
 
 // MARK: - プレビュー
 
-struct CameraPreviewView_Previews: PreviewProvider {
-    static var previews: some View {
-        CameraPreviewView(session: AVCaptureSession())
-            .frame(width: 300, height: 400)
-            .previewDisplayName("カメラプレビュー")
-    }
+#Preview("カメラプレビュー") {
+    CameraPreviewView(session: AVCaptureSession())
+        .frame(width: 300, height: 400)
 }

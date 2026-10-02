@@ -104,35 +104,29 @@ final class DeviceRotationService: ObservableObject {
         observations = [previewObservation, captureObservation]
     }
 
-    private func publish(preview: CGFloat, capture: CGFloat) {
+    private func publish(_ update: @escaping (DeviceRotationService) -> Void) {
         if Thread.isMainThread {
-            previewRotationAngle = preview
-            captureRotationAngle = capture
+            update(self)
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.previewRotationAngle = preview
-                self?.captureRotationAngle = capture
+                guard let self else { return }
+                update(self)
             }
+        }
+    }
+
+    private func publish(preview: CGFloat, capture: CGFloat) {
+        publish {
+            $0.previewRotationAngle = preview
+            $0.captureRotationAngle = capture
         }
     }
 
     private func publishPreview(_ angle: CGFloat) {
-        if Thread.isMainThread {
-            previewRotationAngle = angle
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.previewRotationAngle = angle
-            }
-        }
+        publish { $0.previewRotationAngle = angle }
     }
 
     private func publishCapture(_ angle: CGFloat) {
-        if Thread.isMainThread {
-            captureRotationAngle = angle
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.captureRotationAngle = angle
-            }
-        }
+        publish { $0.captureRotationAngle = angle }
     }
 }

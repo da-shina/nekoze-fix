@@ -63,7 +63,6 @@ final class ReferenceVectorHandoffTests: XCTestCase {
     func testOverlayDefault_isVerticalDummy() {
         let overlay = PostureOverlayView(
             mode: .current,
-            referenceAngle: 0.0,
             currentPoints: [],
             nearSide: nil
         )
@@ -91,8 +90,8 @@ final class ReferenceVectorHandoffTests: XCTestCase {
             previousNearSide: nil,
             gravityInKeypointSpace: gravity
         )
-        XCTAssertEqual(sut.snapshot.referenceVector.dx, expected.x, accuracy: 1e-9)
-        XCTAssertEqual(sut.snapshot.referenceVector.dy, expected.y, accuracy: 1e-9)
+        XCTAssertEqual(sut.snapshot.referenceVector.dx, expected.vector.x, accuracy: 1e-9)
+        XCTAssertEqual(sut.snapshot.referenceVector.dy, expected.vector.y, accuracy: 1e-9)
     }
 
     /// 代替中（重力なし→肩直交）も判定と表示が同一ベクトルである（無区別表示の前提）。
@@ -113,8 +112,8 @@ final class ReferenceVectorHandoffTests: XCTestCase {
             gravityInKeypointSpace: nil
         )
         // 判定と表示の同一性（単一解決）
-        XCTAssertEqual(sut.snapshot.referenceVector.dx, expected.x, accuracy: 1e-9)
-        XCTAssertEqual(sut.snapshot.referenceVector.dy, expected.y, accuracy: 1e-9)
+        XCTAssertEqual(sut.snapshot.referenceVector.dx, expected.vector.x, accuracy: 1e-9)
+        XCTAssertEqual(sut.snapshot.referenceVector.dy, expected.vector.y, accuracy: 1e-9)
         // 代替解決であること（重力 (0,1) とは異なる肩直交値）
         XCTAssertNotEqual(sut.snapshot.referenceVector.dx, 0.0)
     }

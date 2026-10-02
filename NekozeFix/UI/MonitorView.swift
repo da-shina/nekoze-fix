@@ -17,7 +17,6 @@ struct MonitorView: View {
             if let refPoints = sessionManager.snapshot.referencePoints {
                 PostureOverlayView(
                     mode: .reference,
-                    referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
                     nearSide: sessionManager.snapshot.nearSide,
                     imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
@@ -29,7 +28,6 @@ struct MonitorView: View {
             // 現在の姿勢をカラーで表示
             PostureOverlayView(
                 mode: .current,
-                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
@@ -264,22 +262,16 @@ struct MonitorView: View {
 
 // MARK: - プレビュー
 
-struct MonitorView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            MonitorView()
-                .environmentObject(PostureSessionManager())
-                .environmentObject(SettingsStore())
-                .previewDisplayName("モニター - 良好")
+#Preview("モニター - 良好") {
+    MonitorView()
+        .environmentObject(PostureSessionManager())
+        .environmentObject(SettingsStore())
+}
 
-            MonitorView()
-                .environmentObject({
-                    var snapshot = SessionSnapshot()
-                    snapshot.displayedPosture = .slouch
-                    return PostureSessionManager(snapshot: snapshot)
-                }())
-                .environmentObject(SettingsStore())
-                .previewDisplayName("モニター - 猫背検出")
-        }
-    }
+#Preview("モニター - 猫背検出") {
+    var snapshot = SessionSnapshot()
+    snapshot.displayedPosture = .slouch
+    return MonitorView()
+        .environmentObject(PostureSessionManager(snapshot: snapshot))
+        .environmentObject(SettingsStore())
 }

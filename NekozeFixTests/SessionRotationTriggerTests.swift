@@ -176,7 +176,7 @@ final class SessionRotationTriggerTests: XCTestCase {
 
         XCTAssertEqual(sut.snapshot.phase, .calibrating, "capture 角変化で校正へ自動遷移")
         XCTAssertNil(sut.snapshot.referenceAngle, "旧基準角度を破棄")
-        XCTAssertEqual(sut.snapshot.referenceDistances, [:], "旧基準距離を破棄")
+        XCTAssertNil(sut.snapshot.referenceDistance, "旧基準距離を破棄")
         XCTAssertNil(sut.snapshot.referenceSide, "ロック側を破棄")
         XCTAssertEqual(sut.snapshot.slouchGate.accumulated, 0, "猫背ゲートを破棄")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired)
@@ -219,7 +219,7 @@ final class SessionRotationTriggerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .idle, "idle の角変化は対象外")
         XCTAssertEqual(sut.snapshot.referenceAngle, 10.0, "旧基準を保持")
         XCTAssertEqual(sut.snapshot.referenceSide, .right)
-        XCTAssertEqual(sut.snapshot.referenceDistances, [.right: 0.18])
+        XCTAssertEqual(sut.snapshot.referenceDistance, 0.18)
     }
 
     // MARK: - 回転起停（Motion 起停と完全同一箇所）

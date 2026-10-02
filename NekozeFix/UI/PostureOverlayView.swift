@@ -8,12 +8,8 @@ struct PostureOverlayView: View {
     }
 
     let mode: Mode
-    let referenceAngle: Double
     let currentPoints: [CGPoint]
     let nearSide: Side?
-    /// 前面カメラ等でプレビューがミラー表示されているか。
-    /// Vision 座標の x 反転と緑線方向の決定に使用。
-    var isMirrored: Bool = true
     /// キャプチャ画像のアスペクト比（AspectFit 補正用）
     var imageAspectRatio: CGFloat = 4.0 / 3.0
     /// 判定と同一の基準線ベクトル（バッファ座標系、y上向き。analyze 済みで
@@ -129,13 +125,9 @@ struct PostureOverlayView: View {
     }
 
     /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。
-    /// truncatingRemainder は被除数の符号を保持するため、負の剰余を補正する。
     private func wrappedDelta(_ angle: CGFloat) -> CGFloat {
-        let period = 2 * CGFloat.pi
-        var normalized = (angle + .pi).truncatingRemainder(dividingBy: period)
-        if normalized < 0 { normalized += period }
-        normalized -= .pi
-        return normalized == -.pi ? .pi : normalized
+        let r = angle.remainder(dividingBy: 2 * .pi)
+        return r == -.pi ? .pi : r
     }
 
     private func normalizePoint(_ point: CGPoint, in size: CGSize) -> CGPoint {

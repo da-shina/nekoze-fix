@@ -160,7 +160,7 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
         XCTAssertEqual(sut.snapshot.referenceAngle, 0.0)
         XCTAssertEqual(sut.snapshot.referenceSide, .right)
-        XCTAssertEqual(sut.snapshot.referenceDistances, [.right: 0.18], "遠側基準は構築しない")
+        XCTAssertEqual(sut.snapshot.referenceDistance, 0.18)
         XCTAssertTrue(sut.motionService.isRunning, "校正完了＝監視開始で Motion 開始")
 
         // 静止（基準比100%）→ good
