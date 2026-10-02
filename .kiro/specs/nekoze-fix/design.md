@@ -253,6 +253,11 @@ func analyze(
 - `CMMotionManager.deviceMotion` を 1/30 間隔（定数）で取得する。監視・校正中のみ動作させる。
 - 天方向 `K = normalize(−gx, −gy)` をそのまま有効ベクトルとして保持する。出力バッファはインターフェース向きに自動回転して配信され Vision には `.up` 固定で渡すため（`PostureSessionManager.captureOutput`）、キーポイント空間上向きは画面上向きと一致し、デバイス姿勢別の回転・鏡像は不要である（14.2 実機知見。旧デバイス姿勢別変換表は撤去）。
 - 無効（z 支配の平置き・未取得・権限拒否）は直前有効値を 0.5 秒ホールドし（単一タイマ、設計値・実装内に閉じる）、超過で nil を返す。回復時は即時復帰する。ユーザー通知はしない（黙過フォールバック）。
+- **基準ベクトル切替時の校正・ゲート整合性**: 重力↔肩ライン直交↔画像垂直のいずれかへ切り替わった瞬間（nil→非nil復帰含む）に、以下を実行する
+  1. 現在の校正値（referenceAngle/referenceDistance/referenceSide/referencePoints/calibrationReferenceSource）を破棄
+  2. 猫背ゲートをリセット
+  3. Session を calibrating フェーズへ遷移させ、再校正完了まで監視を停止
+  これにより基準ベクトルの定義域変化に伴う角度比較の不整合を防ぐ。向き変更時の自動再校正（grill Q3/Q5）と同一ポリシーで扱う。
 
 **Dependencies**
 - Inbound: Session — 起停と値参照（Criticality P0）
@@ -279,7 +284,7 @@ final class MotionService {
 
 - State model: 直前有効ベクトル＋最終有効時刻・動作有無のみ保持し、永続化しない。
 - Persistence & consistency: プロセス内メモリのみ。
-- Concurrency strategy: 更新はモーションキュー、読取りはメイン。最新値の上書きのみで競合なし。
+- Concurrency strategy: 全状態更新・参照を @MainActor に集約する。motionQueue コールバックからは `Task { @MainActor in self?.ingest(...) }` でメインへ安全に値を渡す。start()/stop() も @MainActor 実行で同期。最新値の上書きのみで競合なし。
 
 **Implementation Notes**
 - Integration: Session は start/stop のみ結線する（provider 配線なし）。向き・鏡の読取りは持たない。
@@ -328,6 +333,22 @@ final class MotionService {
 - Risks: snapshot 追加は UI 再描画のみに影響し、判定には影響しない。
 
 ### UI
+
+#### MonitorView / CalibrationView（改修）
+
+| Field | Detail |
+|-------|--------|
+| Intent | カメラ切り替えUIを監視中のみ非表示にする |
+| Requirements | 3.6 |
+
+**Responsibilities & Constraints**
+- MonitorView: `.monitoring` フェーズではカメラ位置ピッカーを非表示
+- CalibrationView: `.calibrating` フェーズではカメラ位置ピッカーを表示継続
+- `.idle` フェーズでも表示許可
+
+**Implementation Notes**
+- Phase 判定は `sessionManager.snapshot.phase` で行う
+- 既存のカメラ切替ロジック（`settingsStore.cameraPosition` 変更 → `restartCameraPipeline`）は無改修
 
 #### PostureOverlayView（改修）
 
