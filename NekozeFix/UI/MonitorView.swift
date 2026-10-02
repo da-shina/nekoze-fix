@@ -165,22 +165,24 @@ struct MonitorView: View {
                 .buttonStyle(.borderless)
             }
 
-            // カメラ切り替え設定
-            HStack {
-                Text("カメラ")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            // カメラ切り替え設定（監視中は非表示）
+            if sessionManager.snapshot.phase != .monitoring {
+                HStack {
+                    Text("カメラ")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
 
-                Spacer()
+                    Spacer()
 
-                Picker("カメラ位置", selection: $settingsStore.cameraPosition) {
-                    Text("前面").tag(CameraPosition.front)
-                    Text("背面").tag(CameraPosition.back)
+                    Picker("カメラ位置", selection: $settingsStore.cameraPosition) {
+                        Text("前面").tag(CameraPosition.front)
+                        Text("背面").tag(CameraPosition.back)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 150)
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
         }
     }
 
