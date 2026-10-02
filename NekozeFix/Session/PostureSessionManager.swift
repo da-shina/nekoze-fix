@@ -175,6 +175,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referenceSide = nil
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
+        snapshot.visualizationPoints = []
+        smoothedPoints = []
         startCalibration()
     }
 
@@ -428,6 +430,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func restartCameraPipeline() async {
         cameraManager.stop()
+        snapshot.visualizationPoints = []
+        smoothedPoints = []
         await startCameraPipeline()
     }
 
