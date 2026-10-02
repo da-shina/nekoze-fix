@@ -637,7 +637,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
             // 基準ベクトル解決元が校正時から変わったら再校正をトリガー（Comment 1 対策: 校正値の整合性確保）。
             // 向き変化時の自動再校正（grill Q3/Q5）と同様に、基準値とゲートを破棄して calibrating へ遷移。
-            let sourceChanged = snapshot.calibrationReferenceSource != nil && resolvedReference?.source != snapshot.calibrationReferenceSource
+            // resolvedReference が nil の場合（人物不在・ポーズ未取得）は解決元の変更とはみなさない（猶予期間を維持）。
+            let sourceChanged = snapshot.calibrationReferenceSource != nil
+                && resolvedReference?.source != nil
+                && resolvedReference?.source != snapshot.calibrationReferenceSource
             if sourceChanged {
                 self.setPhase(.calibrating)
                 self.calibrationLogic.start()
