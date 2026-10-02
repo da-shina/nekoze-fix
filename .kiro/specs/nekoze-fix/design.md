@@ -334,6 +334,22 @@ final class MotionService {
 
 ### UI
 
+#### MonitorView / CalibrationView（改修）
+
+| Field | Detail |
+|-------|--------|
+| Intent | カメラ切り替えUIを監視中のみ非表示にする |
+| Requirements | 3.6 |
+
+**Responsibilities & Constraints**
+- MonitorView: `.monitoring` フェーズではカメラ位置ピッカーを非表示
+- CalibrationView: `.calibrating` フェーズではカメラ位置ピッカーを表示継続
+- `.idle` フェーズでも表示許可
+
+**Implementation Notes**
+- Phase 判定は `sessionManager.snapshot.phase` で行う
+- 既存のカメラ切替ロジック（`settingsStore.cameraPosition` 変更 → `restartCameraPipeline`）は無改修
+
 #### PostureOverlayView（改修）
 
 | Field | Detail |
