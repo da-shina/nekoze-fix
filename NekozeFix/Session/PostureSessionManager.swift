@@ -634,13 +634,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 重力復帰（nil → 非nil）または基準ベクトル解決元の変化を検知したら再校正をトリガー。
             // - 重力復帰: MotionService.gravityDidRecover が true（タスクB案A）
             // - 解決元変化: 校正時の calibrationReferenceSource と現在の source が異なる（Comment 1 対策）
-            let gravityRecovered = self.motionService.gravityDidRecover
-            let sourceChanged = {
-                guard let calibrationSource = snapshot.calibrationReferenceSource,
-                      let currentSource = resolvedReference?.source else { return false }
-                return currentSource != calibrationSource
-            }()
-            if gravityRecovered || sourceChanged {
+            let sourceChanged = snapshot.calibrationReferenceSource != nil && resolvedReference?.source != snapshot.calibrationReferenceSource
+            if self.motionService.gravityDidRecover || sourceChanged {
                 self.setPhase(.calibrating)
                 self.calibrationLogic.start()
                 self.snapshot.calibrationProgress = .waitingForPerson
@@ -656,7 +651,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 3.0)
                 self.alertPlayer?.stop()
                 // 重力復帰フラグをリセット（次回復帰まで検知しない）
-                self.motionService.resetGravityDidRecover()
+                self.motionService.gravityDidRecover = false
             } else {
                 // 確定猫背ゲート: 3秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
                 let now = CACurrentMediaTime()

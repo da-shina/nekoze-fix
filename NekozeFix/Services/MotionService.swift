@@ -38,14 +38,8 @@ final class MotionService {
     /// Session 駆動のライフサイクル状態（start 済み・未 stop）。テストは @testable で読む。
     /// シミュレータ等の取得不可環境でも start/stop の対応は保持する（値は持続 nil）。
     private(set) var isRunning = false
-    /// 重力が無効（nil）から有効値へ復帰した瞬間を検出するフラグ。
-    /// `latestGravityInKeypointSpace` が nil → 非nil に遷移した瞬間に `true` になり、
-    /// `PostureSessionManager` が読み取り後に自動リセットする（リセット責任は Session 側）。
-    private(set) var gravityDidRecover = false
-
-    /// 重力復帰フラグをリセットする（PostureSessionManager から呼ぶ専用）。
-    /// 呼び出し後、次の重力復帰（nil → 非nil 遷移）まで検知しない。
-    func resetGravityDidRecover() { gravityDidRecover = false }
+    /// 重力復帰フラグ。重力が無効→有効に遷移した瞬間に true になり、Session が読み取り後に false に戻す。
+    var gravityDidRecover = false
 
     init() {}
 
