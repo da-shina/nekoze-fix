@@ -22,8 +22,6 @@ struct RootView: View {
                 MonitorView()
             case .idle:
                 PermissionView()
-            case .rotating:
-                MonitorView()
             }
         }
         .onAppear {
@@ -57,9 +55,7 @@ struct RootView: View {
 
 // MARK: - プレビュー
 
-struct RootView_Previews: PreviewProvider {
-    static var previews: some View {
-        RootView()
-            .environmentObject(PostureSessionManager())
-    }
+#Preview {
+    RootView()
+        .environmentObject(PostureSessionManager())
 }

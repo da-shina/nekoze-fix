@@ -17,10 +17,10 @@ struct MonitorView: View {
             if let refPoints = sessionManager.snapshot.referencePoints {
                 PostureOverlayView(
                     mode: .reference,
-                    referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                     currentPoints: refPoints,
                     nearSide: sessionManager.snapshot.nearSide,
-                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                    referenceVector: sessionManager.snapshot.referenceVector
                 )
                 .ignoresSafeArea()
             }
@@ -28,10 +28,10 @@ struct MonitorView: View {
             // 現在の姿勢をカラーで表示
             PostureOverlayView(
                 mode: .current,
-                referenceAngle: sessionManager.snapshot.referenceAngle ?? 0.0,
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio
+                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+                referenceVector: sessionManager.snapshot.referenceVector
             )
             .ignoresSafeArea()
 
@@ -207,8 +207,6 @@ struct MonitorView: View {
         switch sessionManager.snapshot.phase {
         case .monitoring:
             return "antenna.radiowaves.left.and.right"
-        case .rotating:
-            return "arrow.triangle.2.circlepath"
         default:
             return "stop.circle"
         }
@@ -222,8 +220,6 @@ struct MonitorView: View {
         switch sessionManager.snapshot.phase {
         case .monitoring:
             return "監視中"
-        case .rotating:
-            return "回転中..."
         default:
             return "停止中"
         }
@@ -266,22 +262,16 @@ struct MonitorView: View {
 
 // MARK: - プレビュー
 
-struct MonitorView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            MonitorView()
-                .environmentObject(PostureSessionManager())
-                .environmentObject(SettingsStore())
-                .previewDisplayName("モニター - 良好")
+#Preview("モニター - 良好") {
+    MonitorView()
+        .environmentObject(PostureSessionManager())
+        .environmentObject(SettingsStore())
+}
 
-            MonitorView()
-                .environmentObject({
-                    var snapshot = SessionSnapshot()
-                    snapshot.displayedPosture = .slouch
-                    return PostureSessionManager(snapshot: snapshot)
-                }())
-                .environmentObject(SettingsStore())
-                .previewDisplayName("モニター - 猫背検出")
-        }
-    }
+#Preview("モニター - 猫背検出") {
+    var snapshot = SessionSnapshot()
+    snapshot.displayedPosture = .slouch
+    return MonitorView()
+        .environmentObject(PostureSessionManager(snapshot: snapshot))
+        .environmentObject(SettingsStore())
 }

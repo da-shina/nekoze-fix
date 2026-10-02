@@ -7,13 +7,6 @@ import AVFoundation
 enum CameraPosition: String, Codable, Equatable {
     case front
     case back
-
-    var avPosition: AVCaptureDevice.Position {
-        switch self {
-        case .front: return .front
-        case .back: return .back
-        }
-    }
 }
 
 enum CameraAuthorization {
@@ -52,10 +45,6 @@ struct AngleSample: Equatable {
     var farSideDetected: Bool
     /// 近傍側の耳-肩距離（Vision 正規化座標系、単位の基準なし）。前出し検出の第2指標。
     var nearDistance: Double
-    /// 遠側の耳-肩角度（両側検出時のみ非nil）。両側距離基準対応。
-    var farAngleDegrees: Double? = nil
-    /// 遠側の耳-肩距離（両側検出時のみ非nil）。両側距離基準対応。
-    var farDistance: Double? = nil
 }
 
 enum PostureVerdict: Equatable {
@@ -70,7 +59,6 @@ enum SessionPhase: Equatable {
     case calibrating
     case idle
     case monitoring
-    case rotating
 }
 
 enum DisplayedPosture: Equatable {
@@ -82,15 +70,31 @@ enum DisplayedPosture: Equatable {
 enum CalibrationProgress: Equatable {
     case waitingForPerson
     case accumulating(elapsed: TimeInterval)
-    case completed(referenceNearAngleDegrees: Double, referenceDistance: Double, referenceSide: Side, referencePoints: [CGPoint], referenceFarAngleDegrees: Double? = nil, referenceFarDistance: Double? = nil)
+    case completed(referenceNearAngleDegrees: Double, referenceDistance: Double, referenceSide: Side, referencePoints: [CGPoint], referenceSource: ReferenceVectorSource)
+}
+
+/// 重力基準ベクトル（単位ベクトル相当の2次元ベクトル）。
+/// 判定・校正・表示で同一の基準線を共有するための型。SIMD2<Double> の別名。
+/// 不変条件は単位長（長さ 1±1e-9）。design.md "Data Models" 参照。
+typealias ReferenceVector = SIMD2<Double>
+
+/// 基準ベクトルの解決元（校正整合性のために追跡）。
+enum ReferenceVectorSource: Equatable {
+    case gravity          // MotionService からの重力
+    case shoulderLine     // 両肩ライン直交
+    case imageVertical    // 画像垂直 (0, 1) フォールバック
+}
+
+/// 基準ベクトルとその解決元をセットで扱う（Comment 1 対策: 校正値の整合性確保）。
+struct ResolvedReferenceVector: Equatable {
+    let vector: ReferenceVector
+    let source: ReferenceVectorSource
 }
 
 /// 距離指標の評価に必要データ（Session 層が校正完了時に構成し監視中保持・FQ1）。
 struct DistanceMetric: Equatable {
     var side: Side                // 校正時にロックした側
     var referenceDistance: Double // 校正時耳-肩距離の平均（正規化座標系）
-    /// 反対側の基準距離（両側校正時に設定。ロック側欠測時のフォールバック用）。
-    var fallbackReferenceDistance: Double? = nil
 }
 
 struct SessionSnapshot: Equatable {
@@ -101,13 +105,12 @@ struct SessionSnapshot: Equatable {
     /// 人物は映っているが肩のキーポイントが読めない状態（顔のみ検出）。
     /// 校正中の「肩が映っていません」案内に使用。
     var isShoulderMissing: Bool = false
-    var showGuideline: Bool = false
     var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil
-    /// 校正時耳-肩距離の平均（正規化座標系）。左右それぞれ保持。
-    var referenceDistances: [Side: Double] = [:]
+    /// 校正時耳-肩距離の平均（正規化座標系）。ロック側の基準距離。
+    var referenceDistance: Double? = nil
     /// 校正時にロックした側（FQ1）。監視中の距離評価はこの側の耳-肩ペアで行う。
     var referenceSide: Side? = nil
     var referencePoints: [CGPoint]? = nil
@@ -115,6 +118,13 @@ struct SessionSnapshot: Equatable {
     /// キャプチャ画像のアスペクト比（バッファ実寸から算出）。可視化のクロップ補正に使用。
     var videoAspectRatio: CGFloat = 4.0 / 3.0
     var nearSide: Side? = nil
+    /// 判定が返した基準線ベクトル（表示専用、非オプショナル）。
+    /// Vision座標系（y上向き）の方向ベクトルをそのまま保持する（単一解決）。
+    /// 初期値・プレビューはダミー垂直 (0,1)。判定には影響しない。
+    var referenceVector: CGVector = CGVector(dx: 0, dy: 1)
+    /// 校正時に使用された基準ベクトルの解決元（Comment 1 対策: 校正値の整合性確保）。
+    /// 監視中に解決元が変わった場合、再校正をトリガーする。
+    var calibrationReferenceSource: ReferenceVectorSource? = nil
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
 }

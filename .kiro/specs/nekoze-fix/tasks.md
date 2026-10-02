@@ -3,7 +3,7 @@
 ## 1. Foundation: project setup and test infrastructure
 
 - [x] 1.1 Xcode project setup
-  - Create `NekozeFix.xcodeproj` with iOS 16+ deployment target
+  - Create `NekozeFix.xcodeproj` with iOS 17.0 deployment target
   - Configure SwiftUI lifecycle with `NekozeFixApp.swift` entry point
   - Set up folder structure: Types, Domain, Services, Session, UI, Resources, Tests
   - Observable completion: project builds with no errors
@@ -308,9 +308,86 @@
   - _Depends: 10.2_
   - _Requirements: 8.3, 8.4, 9.1_
 
+## 11. Foundation: 重力基準の型と権限文言
+
+- [x] 11.1 (P) Types: 重力基準ベクトルの型追加と距離型の簡素化
+  - ReferenceVector（単位ベクトル相当の2次元ベクトル）を型として追加する
+  - 距離指標の型から反対側フォールバック用の予備基準距離を削除し、呼び出し側を機械的に追従させる（挙動変更なし。8.1の前例に倣う）
+  - Observable completion: プロジェクトがビルド成功し、全既存テストが変更なく成功する
+  - _Boundary: Types + 呼び出し側の機械的配線_
+  - _Requirements: 4.1_
+
+- [x] 11.2 (P) 権限文言: モーション利用目的の追加
+  - モーション利用目的文言を日英二文で追加する（カメラ文言の方式に倣う）
+  - Observable completion: ビルド時に文言が検証され、権限拒否時は代替パスで監視が継続できる
+  - _Boundary: Config_
+  - _Requirements: 4.1_
+
+## 12. Core: 重力取得と角度判定
+
+- [x] 12.1 (P) MotionService 新設: 重力の取得・変換・単一ホールド
+  - 1/30間隔で傾きを取得し、K=normalize(−gx,−gy)の向き非依存で変換する（出力バッファ自動回転＋Vision .up固定のため、デバイス姿勢別回転・鏡像なし。旧向き別変換表は14.2実機知見で撤去）
+  - 無効時（平置きz支配・未取得・権限拒否）は直前有効値を0.5秒保持し、超過で未取得扱いにする。回復時は即時復帰、通知なし
+  - 監視・校正中のみ動作させる
+  - Observable completion: 向き非依存の変換テスト（傾き鏡像回帰含む）・単一ホールド・平置き無効の単体テストが成功する
+  - _Boundary: MotionService_
+  - _Requirements: 4.1, 7.1, 9.1_
+
+- [x] 12.2 (P) PostureAnalyzer 改修: 重力注入・三段解決・距離スキップ
+  - 重力を値として受け取り、重力→肩ライン直交→画像垂直の順に解決する
+  - 解決済み基準線との鋭角（0〜90度）で判定し、近側選択・ヒステリシス・距離ORの現行則を維持する
+  - ロック側欠測フレームは距離条件をスキップし角度のみで判定する
+  - 傾斜肩テストの期待値を重力基準に更新する
+  - Observable completion: 注入テスト・解決テスト・OR維持の単体テストが成功する
+  - _Boundary: PostureAnalyzer_
+  - _Requirements: 2.7, 4.1, 4.3, 4.5, 4.6_
+
+## 13. Integration: Session 結線・表示・自動再校正
+
+- [x] 13.1 Session: Motion所有・注入・遠側基準削除
+  - 監視・校正開始で傾き取得を開始し、停止・背景移行で停止する（暗転中は継続）
+  - フレーム毎に重力を判定へ渡す
+  - 遠側基準距離の構築を削除する
+  - Observable completion: 重力を差し替えた結合テストで校正→基準保存→猫背3秒確定→改善停止が成功する。開始/停止・暗転継続・背景停止の状態テストが成功する
+  - _Boundary: PostureSessionManager_
+  - _Depends: 12.1, 12.2_
+  - _Requirements: 2.7, 3.1, 4.1, 4.2, 4.3, 6.2, 8.1, 8.2_
+
+- [x] 13.2 Session+UI統合: 基準線ベクトルの表示受渡し（atomic）
+  - snapshotに基準線ベクトル（非オプショナル、表示専用）を追加し、判定が返したベクトルをそのまま受渡しする（単一解決）
+  - 肩点起点に通常の見た目で描画する（代替時も区別なし）。プレビューはダミー垂直ベクトル
+  - 点列と同一の表示補正係数をベクトルに適用する
+  - スナップショット追加と描画入力を同一タスクで完結させ、中間ビルド破損を出さない
+  - Observable completion: 代替中も判定と表示が同一ベクトルである結合テストが成功し、プレビューで基準線が表示される
+  - _Boundary: PostureSessionManager, PostureOverlayView_
+  - _Requirements: 4.8_
+
+- [x] 13.3 Session: 向き変化時の自動再校正遷移
+  - monitoring中の向き変化で旧基準（角度・距離・ロック側）とゲートを破棄して校正へ自動遷移する
+  - 再校正完了まで監視を停止する。calibrating中・idleの向き変化は対象外
+  - Observable completion: 向き変化の結合テストで破棄→校正遷移→完了まで停止が成功する
+  - _Boundary: PostureSessionManager_
+  - _Requirements: 2.3, 2.4, 7.1_
+
+## 14. Validation: 回帰と実機検収
+
+- [x] 14.1 全テストスイート回帰確認
+  - シミュレータで全テストを実行し、角度指標の既存ふるまいが変わらないことを確認する
+  - Observable completion: TEST SUCCEEDED（距離・暗転・E2Eの既存テスト含む）
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 8.1, 8.2_
+
+- [ ] 14.2 実機検収: 重力・向き・代替・電池
+  - 縦置き校正→前屈アラート、斜め設置の安定性、代替時の見た目不変を目視確認する
+  - 向き変化後に自動再校正へ遷移し、完了まで監視が停止することを確認する
+  - 1時間電池15%以内を維持確認する
+  - Observable completion: 確認記録が残り、向き毎の直立約0度の不変条件が成立する
+  - _Requirements: 2.7, 4.1, 4.8, 7.1, 9.1_
+
 ## Implementation Notes
 
 - 8.8 実機検収（2026-09-13、iPad 9th）: 意図的前出し110%で発音確認。自然前出しの 1s-median 最大も110%で、8%閾値（108%超発火）では両者が分離しない。ユーザー判断により「作業中の前出し110%は矯正対象」とみなし 8% 据え置きで PASS。FQ2 の暫定値は確定値として有効。
 - 8.5 で `PostureSessionManager.processDetection(_:)` / `applyCalibrationCompletion(...)` を internal 抽出。カメラ不要の合成フレーム統合テスト（DistanceMetricIntegrationTests）がこのシームを使う。
 - 9.3 実機確認（2026-09-14、iPhone 13 mini）: idle 画面で画面オフ非発生（8.3）、暗転→タップ復帰後も点灯維持（8.4）、ホーム遷移後 OS 標準スリープ復帰、NFR 9.1 再実測すべて問題なし。→ 同日夜の 10.1 改訂（監視中限定）で idle 点灯確認は無効。
 - 10.3 実機確認（2026-09-14、iPhone 13 mini、645ec96）: 監視開始で点灯維持／監視停止で自動スリープ／校正中・idle で自動スリープ／監視中暗転→タップ復帰後も点灯、4動作すべて OK。
+- 11.1 (2026-09-29): ReferenceVector は `SIMD2<Double>` の typealias として追加。DistanceMetric の反対側フォールバック予備距離を削除（読取側の fallback 枝のみ）。Session 側の `referenceFar*` 構築は 13.1 の所有物として残置（一時的に write-only）。旧フォールバック検証テストは要件 4.1 と矛盾するため `.good` 期待へ更新が必須だった。
+- 14.2 実機検収の知見 (2026-09-29): 縦持ち右傾きで緑線が右傾き（鏡像反転）になる不具合を検出。黄線＝キーポイントは正しく左傾きで、緑のみ逆だったことが決定打となり、パイプラインは非鏡像・向き補正済みと確定。MotionService の向き別変換表を撤去し `K=normalize(−gx,−gy)` の向き非依存に一本化（design.md 変換則を改訂）。MotionService は向きを持たなくなった（Session 側の向き購読・出力接続の向き同期とは別系統）。

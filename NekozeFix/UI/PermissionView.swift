@@ -119,19 +119,14 @@ struct PermissionView: View {
 
 // MARK: - プレビュー
 
-struct PermissionView_Previews: PreviewProvider {
-    static var previews: some View {
-        Group {
-            PermissionView()
-                .environmentObject(PostureSessionManager())
+#Preview("許可プロンプト") {
+    PermissionView()
+        .environmentObject(PostureSessionManager())
+}
 
-            PermissionView()
-                .environmentObject({
-                    var snapshot = SessionSnapshot()
-                    snapshot.phase = .permissionDenied
-                    return PostureSessionManager(snapshot: snapshot)
-                }())
-                .previewDisplayName("拒否済み")
-        }
-    }
+#Preview("拒否済み") {
+    var snapshot = SessionSnapshot()
+    snapshot.phase = .permissionDenied
+    return PermissionView()
+        .environmentObject(PostureSessionManager(snapshot: snapshot))
 }

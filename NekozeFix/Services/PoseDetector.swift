@@ -63,26 +63,15 @@ final class PoseDetector: @unchecked Sendable {
 
         // パス1: 顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
         var faceBounds: CGRect?
-        let faceSemaphore = DispatchSemaphore(value: 0)
         let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
-            defer { faceSemaphore.signal() }
             faceBounds = (request.results as? [VNFaceObservation])
                 .flatMap { Self.closestToCenter($0, box: \.boundingBox) }?
                 .boundingBox
         }
-        do {
-            try handler.perform([faceRequest])
-        } catch {
-            print("Vision Handler Error (face): \(error)")
-            return .absent
-        }
-        faceSemaphore.wait()
 
         // Body Pose をフルフレームで実行する
         var poseResult: Detection?
-        let poseSemaphore = DispatchSemaphore(value: 0)
         let poseRequest = VNDetectHumanBodyPoseRequest { request, error in
-            defer { poseSemaphore.signal() }
             if let error = error {
                 print("Vision Error: \(error)")
                 return
@@ -97,11 +86,12 @@ final class PoseDetector: @unchecked Sendable {
             }
             poseResult = .pose(frame)
         }
+
         do {
-            try handler.perform([poseRequest])
-            poseSemaphore.wait()
+            try handler.perform([faceRequest, poseRequest])
         } catch {
-            print("Vision Handler Error (pose): \(error)")
+            print("Vision Handler Error: \(error)")
+            return .absent
         }
 
         // Body Pose でキーポイントが取れなくても、顔が映っていれば人物あり

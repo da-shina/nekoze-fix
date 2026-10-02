@@ -26,7 +26,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
@@ -45,7 +45,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, _, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .right)
@@ -64,7 +64,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
@@ -84,7 +84,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
@@ -103,7 +103,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, verdict) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertNil(sample)
@@ -121,7 +121,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, _, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
@@ -139,7 +139,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, _) = postureAnalyzer.analyze(
+        let (sample, _, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -161,7 +161,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
 
         // 手順
-        let (sample, _) = postureAnalyzer.analyze(
+        let (sample, _, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -186,7 +186,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
         let metric = DistanceMetric(side: .right, referenceDistance: 0.18) // 閾値 0.18*1.08=0.1944 < 0.2
 
-        let (sample, verdict) = postureAnalyzer.analyze(
+        let (sample, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -210,7 +210,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
         let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
 
-        let (_, verdict) = postureAnalyzer.analyze(
+        let (_, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -232,7 +232,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
         let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
 
-        let (_, verdict) = postureAnalyzer.analyze(
+        let (_, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -254,7 +254,7 @@ final class PostureAnalyzerTests: XCTestCase {
         )
         let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
 
-        let (sample, verdict) = postureAnalyzer.analyze(
+        let (sample, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -279,7 +279,7 @@ final class PostureAnalyzerTests: XCTestCase {
         // 2進数で厳密に一致する値: 0.2 * 1.25 = 0.25（pct 25 は境界検証用の仮値、UI 範囲外）
         let metric = DistanceMetric(side: .right, referenceDistance: 0.2)
 
-        let (_, verdict) = postureAnalyzer.analyze(
+        let (_, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
@@ -300,7 +300,7 @@ final class PostureAnalyzerTests: XCTestCase {
             rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
         )
 
-        let (sample, verdict) = postureAnalyzer.analyze(
+        let (sample, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10
@@ -312,8 +312,8 @@ final class PostureAnalyzerTests: XCTestCase {
 
     // MARK: - 両側距離基準（フォールバック）
 
-    /// ロック側欠測時: 反対側の fallbackReferenceDistance で距離評価を継続
-    func testDistanceFallback_WhenLockSideMissing_UsesOtherSide() {
+    /// ロック側欠測時: 反対側代用なし・距離スキップ（要件4.1・grill Q1）。右距離がOVER相当でも角度のみで判定
+    func testDistanceLockSideMissing_DoesNotUseOtherSide_SkipsDistance() {
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: nil,  // ロック側（左）欠測
@@ -321,41 +321,20 @@ final class PostureAnalyzerTests: XCTestCase {
             leftShoulder: nil,
             rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
         )
-        // metric.side = .left だが左キーポイント nil → 右側でフォールバック
-        let metric = DistanceMetric(side: .left, referenceDistance: 0.18, fallbackReferenceDistance: 0.22)
-        let (_, verdict) = postureAnalyzer.analyze(
+        // metric.side = .left だが左キーポイント nil → 反対側（右）は評価対象外
+        let metric = DistanceMetric(side: .left, referenceDistance: 0.18)
+        let (_, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10,
             distanceMetric: metric,
             slouchDistanceThresholdPercent: 8.0
         )
-        // 右距離 0.25 >= 0.22 * 1.08 = 0.2376 → slouchCandidate
-        XCTAssertEqual(verdict, .slouchCandidate)
-    }
-
-    /// ロック側欠測 + フォールバック基準なし → 距離評価スキップ（角度のみ）
-    func testDistanceFallback_NoFallbackReference_SkipsDistance() {
-        let frame = PoseFrame(
-            timestamp: 0,
-            leftEar: nil,
-            rightEar: Keypoint(x: 0.7, y: 0.35, confidence: 0.9),
-            leftShoulder: nil,
-            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
-        )
-        let metric = DistanceMetric(side: .left, referenceDistance: 0.18) // fallback nil
-        let (_, verdict) = postureAnalyzer.analyze(
-            frame: frame,
-            referenceNearAngleDegrees: 0,
-            slouchDeltaThresholdDegrees: 10,
-            distanceMetric: metric,
-            slouchDistanceThresholdPercent: 8.0
-        )
-        // ロック側 nil + フォールバックなし → 距離スキップ。角度 0 < 10 → good
+        // 右距離 0.25 は反対側のため無視 → 距離スキップ。角度 0 < 10 → good
         XCTAssertEqual(verdict, .good)
     }
 
-    /// 両側検出時に遠側の角度・距離も返す
+    /// 両側検出時に farSideDetected が true になる
     func testBothSidesDetected_ReturnsFarSideData() {
         let frame = PoseFrame(
             timestamp: 0,
@@ -364,19 +343,19 @@ final class PostureAnalyzerTests: XCTestCase {
             leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
             rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
         )
-        let (sample, _) = postureAnalyzer.analyze(
+        let (sample, _, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10
         )
-        XCTAssertNotNil(sample?.farAngleDegrees, "両側検出時は遠側角度が非nil")
-        XCTAssertNotNil(sample?.farDistance, "両側検出時は遠側距離が非nil")
+        XCTAssertEqual(sample?.farSideDetected, true, "両側検出時は farSideDetected が true")
     }
 
     // MARK: - 両肩直交基準とフォールバック
 
-    /// 両肩が傾いている場合でも、耳〜肩が肩ラインに直角であれば角度0度（良好）と判定される
-    func testAngleCalculation_TiltedShoulders_CalculatesAngleRelativeToShoulderPerpendicular() {
+    /// 両肩が傾いている場合、重力 (0, 1) 基準では肩垂線上の耳は約14度と判定される
+    /// （要件4.1・2.7: 主基準は天方向に一本化。旧・肩ライン直交基準の期待値0度から更新）
+    func testAngleCalculation_TiltedShoulders_UsesGravityReference() {
         // 左肩 (0.2, 0.5), 右肩 (0.6, 0.6) -> 肩ベクトル (0.4, 0.1)
         // 垂線単位ベクトル: (-0.1, 0.4) / sqrt(0.17) ≈ (-0.2425356, 0.9701425)
         // 左肩から垂線方向に距離 0.2 伸ばした位置に左耳を配置
@@ -393,16 +372,19 @@ final class PostureAnalyzerTests: XCTestCase {
             rightShoulder: Keypoint(x: 0.6, y: 0.6, confidence: 0.9)
         )
 
-        let (sample, verdict) = postureAnalyzer.analyze(
+        let (sample, verdict, referenceVector) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
-            slouchDeltaThresholdDegrees: 10
+            slouchDeltaThresholdDegrees: 10,
+            gravityInKeypointSpace: SIMD2<Double>(0, 1)
         )
 
-        // 画像垂直 (0, 1) との角度は約 14 度だが、両肩垂線との角度は 0 度
+        // 重力 (0, 1) と肩垂線のなす角は約 14.04 度（acos(0.9701425)）
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
-        XCTAssertEqual(verdict, .good)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 14.04, accuracy: 0.1)
+        XCTAssertEqual(verdict, .slouchCandidate)
+        XCTAssertEqual(referenceVector.vector.x, 0.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
     }
 
     /// 片肩しか検出できない場合は従来の画像垂直 (0, 1) へ安全にフォールバックする
@@ -416,7 +398,7 @@ final class PostureAnalyzerTests: XCTestCase {
             rightShoulder: nil
         )
 
-        let (sample, verdict) = postureAnalyzer.analyze(
+        let (sample, verdict, _) = postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: 0,
             slouchDeltaThresholdDegrees: 10
@@ -425,5 +407,167 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
         XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
         XCTAssertEqual(verdict, .good)
+    }
+
+    // MARK: - 重力注入・三段解決（12.2: 要件2.7・4.1）
+
+    /// 重力優先: 肩が傾いていても、画像垂直真上の耳は重力 (0, 1) 基準で0度。
+    func testGravityInjection_PrioritizedOverShoulderLine() {
+        // 傾斜肩だが左耳は左肩の画像垂直真上
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.2, y: 0.7, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.2, y: 0.5, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.6, y: 0.6, confidence: 0.9)
+        )
+
+        let (sample, verdict, referenceVector) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            gravityInKeypointSpace: SIMD2<Double>(0, 1)
+        )
+
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
+        XCTAssertEqual(verdict, .good)
+        XCTAssertEqual(referenceVector.vector.x, 0.0, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
+    }
+
+    /// nil重力は従来通り肩ライン直交に退行する（レガシー不変）。
+    func testNilGravity_PreservesLegacyShoulderPerpendicular() {
+        // 傾斜肩＋肩垂線上の耳。nil重力では旧基準で0度
+        let ux = -0.1 / sqrt(0.17)
+        let uy = 0.4 / sqrt(0.17)
+
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.2 + 0.2 * ux, y: 0.5 + 0.2 * uy, confidence: 0.9),
+            rightEar: Keypoint(x: 0.8, y: 0.8, confidence: 0.0), // 無効
+            leftShoulder: Keypoint(x: 0.2, y: 0.5, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.6, y: 0.6, confidence: 0.9)
+        )
+
+        let (sample, verdict, referenceVector) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            gravityInKeypointSpace: nil
+        )
+
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 0.0, accuracy: 0.1)
+        XCTAssertEqual(verdict, .good)
+        // 解決ベクトルは肩ライン直交上向き法線
+        XCTAssertEqual(referenceVector.vector.x, ux, accuracy: 1e-9)
+        XCTAssertEqual(referenceVector.vector.y, uy, accuracy: 1e-9)
+    }
+
+    /// 明示nilは引数省略と同一結果を返す（不変条件: gravity以外の入力が同一なら従来と同一）。
+    func testNilGravity_ExplicitNilEqualsOmitted() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.35, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.42, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
+
+        let omitted = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0
+        )
+        let explicitNil = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0,
+            gravityInKeypointSpace: nil
+        )
+
+        XCTAssertEqual(omitted.sample, explicitNil.sample)
+        XCTAssertEqual(omitted.verdict, explicitNil.verdict)
+        XCTAssertEqual(omitted.referenceVector.vector, explicitNil.referenceVector.vector)
+    }
+
+    /// 重力下でも距離ORは維持される: 角度UNDER・距離OVER → slouchCandidate。
+    func testDistanceOR_WithGravity_Preserved() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),    // 近側（左）: 角度0度・距離0.1
+            rightEar: Keypoint(x: 0.7, y: 0.4, confidence: 0.9),   // ロック側（右）: 距離0.2
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18) // 閾値 0.1944 < 0.2
+
+        let (sample, verdict, referenceVector) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0,
+            gravityInKeypointSpace: SIMD2<Double>(0, 1)
+        )
+
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearDistance ?? 0, 0.2, accuracy: 0.001)
+        XCTAssertEqual(verdict, .slouchCandidate)
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
+    }
+
+    /// 重力下でもロック側欠測フレームは距離条件をスキップし角度のみで判定する。
+    func testLockSideMissing_WithGravity_SkipsDistance() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),        // 角度0度 → good
+            rightEar: Keypoint(x: 0.7, y: 0.3, confidence: 0.1),        // ロック側無効（距離0.3 なら OVER 相当）
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+        let metric = DistanceMetric(side: .right, referenceDistance: 0.18)
+
+        let (sample, verdict, referenceVector) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            distanceMetric: metric,
+            slouchDistanceThresholdPercent: 8.0,
+            gravityInKeypointSpace: SIMD2<Double>(0, 1)
+        )
+
+        XCTAssertEqual(sample?.nearDistance ?? 0, 0.1, accuracy: 0.001)
+        XCTAssertEqual(verdict, .good) // 角度0度、距離スキップ
+        XCTAssertEqual(referenceVector.vector.y, 1.0, accuracy: 1e-9)
+    }
+
+    /// 鈍角は鋭角化される（120度 → 60度、0〜90度範囲）。
+    func testAcuteAngle_ObtuseClampedTo90() {
+        // 肩 (0.5, 0.6)、耳 (0.5 + 0.0866, 0.55): cos = -0.5 → 120度 → 鋭角60度
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.5866, y: 0.55, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.5, y: 0.6, confidence: 0.9),
+            rightShoulder: nil
+        )
+
+        let (sample, verdict, _) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            gravityInKeypointSpace: SIMD2<Double>(0, 1)
+        )
+
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 60.0, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(sample?.nearAngleDegrees ?? 0, 90.0)
+        XCTAssertEqual(verdict, .slouchCandidate)
     }
 }

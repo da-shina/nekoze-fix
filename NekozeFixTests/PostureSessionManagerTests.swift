@@ -62,7 +62,7 @@ final class PostureSessionManagerTests: XCTestCase {
 
     func testProcessDetection_absent_showsPersonMissing() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         sut.processDetection(.absent)
         XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
@@ -70,7 +70,7 @@ final class PostureSessionManagerTests: XCTestCase {
 
     func testProcessDetection_withPose_updatesVisualizationPoints() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         let frame = PoseFrame(
             timestamp: 0,
@@ -122,9 +122,13 @@ final class PostureSessionManagerTests: XCTestCase {
 
     // MARK: - フェーズ遷移（setPhase 不変条件の検証）
 
-    func testSetPhase_rotating_disablesIdleTimer() {
-        // rotating は直接セット不可だが、監視停止後の退避で .idle へ戻ることで
-        // isIdleTimerDisabled == false を確認できる
+    // 回転中状態値は除去済み（ios17-baseline 3.5）。回転過渡の停止は
+    // 自動再校正経路に一本化され、wake lock 不変条件
+    // `isIdleTimerDisabled == (phase == .monitoring)` で強制される。
+    // 本テストは監視停止後の退避で .idle へ戻り OFF になることを確認する。
+    func testRotationTransient_unifiedAutoRecalibrationPath_restoresIdleTimerDisabled() {
+        // 自動再校正への一本化により旧経由の停止は存在しないが、
+        // 監視停止後の退避で .idle へ戻ることで isIdleTimerDisabled == false を確認できる
         sut.startMonitoring()
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled)
         sut.stopMonitoring()
@@ -145,7 +149,7 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 背面移行: 監視中なら idle に退避し、監視フラグ（復帰判定用）は維持する
     func testDidEnterBackground_duringMonitoring_movesToIdleKeepingFlag() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         XCTAssertTrue(sut.settingsStore.isMonitoringEnabled, "校正完了で監視遷移時はフラグ true")
 
@@ -157,7 +161,7 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 復帰: 監視フラグ true かつ校正済みなら監視を再開
     func testWillEnterForeground_resumesMonitoringWhenCalibrated() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         sut.handleDidEnterBackground()
         XCTAssertEqual(sut.snapshot.phase, .idle)
@@ -169,7 +173,7 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 復帰: ユーザーが明示停止（フラグ false）した場合は停止状態を維持（要求 8.2）
     func testWillEnterForeground_keepsIdleAfterExplicitStop() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         sut.stopMonitoring()
         XCTAssertFalse(sut.settingsStore.isMonitoringEnabled)
@@ -190,7 +194,7 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 復帰: 暗転中だった場合は監視再開の有無に関わらず暗転解除する（design.md Q24 改訂）
     func testWillEnterForeground_whileDimmed_clearsDim() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         sut.enterDimMode()
         XCTAssertTrue(sut.snapshot.isDimmed)
@@ -245,7 +249,7 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 監視中の退避で OFF、復帰して再開すれば ON（8.3）
     func testBackgroundDuringMonitoring_disablesAndForegroundResumeReenables() {
         sut.applyCalibrationCompletion(
-            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: []
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
         XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "校正完了＝監視開始で ON")
         sut.handleDidEnterBackground()
@@ -260,5 +264,64 @@ final class PostureSessionManagerTests: XCTestCase {
         UIApplication.shared.isIdleTimerDisabled = false
         sut.handleWillEnterForeground() // 未校正・フラグ false → 監視再開しない
         XCTAssertFalse(UIApplication.shared.isIdleTimerDisabled)
+    }
+
+    // MARK: - Motion所有・起停（要件 2.7/3.1/6.2/8.1/8.2、タスク13.1）
+
+    /// 監視開始で傾き取得を開始する（要求 3.1）
+    func testStartMonitoring_startsMotionService() {
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.startMonitoring()
+        XCTAssertTrue(sut.motionService.isRunning, "監視開始で Motion 開始")
+    }
+
+    /// 監視停止で傾き取得を停止し、保持重力を破棄する（要求 3.1）
+    func testStopMonitoring_stopsMotionServiceAndClearsGravity() {
+        sut.startMonitoring()
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.stopMonitoring()
+        XCTAssertFalse(sut.motionService.isRunning, "監視停止で Motion 停止")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "停止で保持値を破棄")
+    }
+
+    /// 校正開始で傾き取得を開始する（要求 2.7: 校正は天方向基準で登録）
+    func testStartCalibration_startsMotionService() {
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.startCalibration()
+        XCTAssertTrue(sut.motionService.isRunning, "校正開始で Motion 開始")
+    }
+
+    /// 暗転中も傾き取得は継続する（要求 6.2: enter/exit ともに起停しない）
+    func testDimMode_keepsMotionServiceRunning() {
+        sut.startMonitoring()
+        XCTAssertTrue(sut.motionService.isRunning)
+        sut.enterDimMode()
+        XCTAssertTrue(sut.motionService.isRunning, "暗転中も Motion 継続")
+        sut.exitDimMode()
+        XCTAssertTrue(sut.motionService.isRunning, "暗転解除後も Motion 継続")
+    }
+
+    /// 背景移行で傾き取得を停止する（要求 8.1）
+    func testDidEnterBackground_stopsMotionService() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        XCTAssertTrue(sut.motionService.isRunning, "校正完了＝監視開始で Motion 開始")
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(sut.motionService.isRunning, "背景移行で Motion 停止")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "背景移行で保持値を破棄")
+    }
+
+    /// 復帰して監視再開すれば傾き取得も再開する（要求 8.2）
+    func testWillEnterForeground_resumesMotionService() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.handleDidEnterBackground()
+        XCTAssertFalse(sut.motionService.isRunning)
+        sut.handleWillEnterForeground()
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertTrue(sut.motionService.isRunning, "監視再開で Motion 再開")
     }
 }
