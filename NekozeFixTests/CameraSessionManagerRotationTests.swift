@@ -10,7 +10,7 @@ import AVFoundation
 /// 【TestDouble 方針】実転送結線は task 4.1。本ファイルでは分離検証のみ行う：
 /// - 角度値は `FakeDeviceRotationService`（DeviceRotationTestDouble.swift）から注入する
 ///  （`FakeDeviceRotationServiceProtocol` の capture 角を駆動源にする）。
-/// - 接続は本ファイルの `FakeCaptureConnection`（`CaptureVideoRotationConnection`
+/// - 接続は本ファイルの `FakeCaptureConnection`（`VideoRotationConnection`
 ///   適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
 /// - preview 接続には触らない（`CameraPreviewView` が所有）。本マネージャは
 ///   data-output 接続（＝注入 Fake）のみを操作する。
@@ -20,10 +20,10 @@ import AVFoundation
 final class CameraSessionManagerRotationTests: XCTestCase {
     // MARK: - Fake
 
-    /// `CaptureVideoRotationConnection` 適合の TestDouble。
+    /// `VideoRotationConnection` 適合の TestDouble。
     /// `supportedAngles` に含まれる角度のみ適用可能（実機の
     /// `isVideoRotationAngleSupported(_:)` に対応。可否判定の分離再現）。
-    final class FakeCaptureConnection: CaptureVideoRotationConnection {
+    final class FakeCaptureConnection: VideoRotationConnection {
         var supportedAngles: Set<CGFloat>
         var videoRotationAngle: CGFloat
         var isVideoMirroringSupported: Bool = true

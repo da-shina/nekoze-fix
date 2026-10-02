@@ -30,8 +30,8 @@ final class SessionRotationTriggerTests: XCTestCase {
 
     // MARK: - Fake
 
-    /// `CaptureVideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class FakeSessionCaptureConnection: CaptureVideoRotationConnection {
+    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
+    final class FakeSessionCaptureConnection: VideoRotationConnection {
         var videoRotationAngle: CGFloat
         var isVideoMirroringSupported: Bool = false
         var isVideoMirrored: Bool = false

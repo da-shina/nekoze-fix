@@ -14,8 +14,7 @@ import Combine
 /// KVO 配送はメイン、最新値の上書きのみ。
 ///
 /// 【TestDouble 方針】角度値は `FakeDeviceRotationService` から注入し、接続は
-/// 本ファイルの Fake（`CaptureVideoRotationConnection`／`PreviewVideoRotationConnection`
-/// 適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
+/// 本ファイルの Fake（`VideoRotationConnection` 適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
 /// デバイスを要する箇所は audio フォールバック＋graceful-skip（1.2／2.1／3.2 と同一パターン）。
 /// 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
 extension FakeDeviceRotationService: SessionRotationAngleSource {
@@ -43,8 +42,8 @@ final class RotationWiringOrderTests: XCTestCase {
 
     // MARK: - Fake
 
-    /// `CaptureVideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakeCaptureConnection: CaptureVideoRotationConnection {
+    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
+    final class WiringFakeCaptureConnection: VideoRotationConnection {
         var videoRotationAngle: CGFloat
         var isVideoMirroringSupported: Bool = false
         var isVideoMirrored: Bool = false
@@ -56,9 +55,11 @@ final class RotationWiringOrderTests: XCTestCase {
         func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
     }
 
-    /// `PreviewVideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakePreviewConnection: PreviewVideoRotationConnection {
+    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
+    final class WiringFakePreviewConnection: VideoRotationConnection {
         var videoRotationAngle: CGFloat
+        var isVideoMirroringSupported: Bool = false
+        var isVideoMirrored: Bool = false
 
         init(initialAngle: CGFloat = 0.0) {
             self.videoRotationAngle = initialAngle

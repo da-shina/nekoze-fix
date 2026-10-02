@@ -162,9 +162,6 @@ struct CalibrationLogic {
     private static func median(of values: [Double]) -> Double {
         let sorted = values.sorted()
         let mid = sorted.count / 2
-        if sorted.count % 2 == 1 {
-            return sorted[mid]
-        }
-        return (sorted[mid - 1] + sorted[mid]) / 2.0
+        return sorted.count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
     }
 }

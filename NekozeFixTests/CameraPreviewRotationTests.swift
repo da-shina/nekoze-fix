@@ -9,7 +9,7 @@ import Combine
 /// 【TestDouble 方針】実結線（同一 Service インスタンスの受け渡し・Session 所有層の
 /// 注入・層出現通知の結線）は task 4.1。本ファイルでは分離検証のみ行う：
 /// - 角度値は `FakeDeviceRotationService`（DeviceRotationTestDouble.swift）から注入する。
-/// - 接続は本ファイルの `FakePreviewConnection`（`PreviewVideoRotationConnection`
+/// - 接続は本ファイルの `FakePreviewConnection`（`VideoRotationConnection`
 ///   適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
 /// - data-output 接続には触らない（`CameraSessionManager` が所有）。
 /// - 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
@@ -27,12 +27,14 @@ extension FakeDeviceRotationService: PreviewRotationAngleSource {
 final class CameraPreviewRotationTests: XCTestCase {
     // MARK: - Fake
 
-    /// `PreviewVideoRotationConnection` 適合の TestDouble。
+    /// `VideoRotationConnection` 適合の TestDouble。
     /// `supportedAngles` に含まれる角度のみ適用可能（実機の
     /// `isVideoRotationAngleSupported(_:)` に対応。可否判定の分離再現）。
-    final class FakePreviewConnection: PreviewVideoRotationConnection {
+    final class FakePreviewConnection: VideoRotationConnection {
         var supportedAngles: Set<CGFloat>
         var videoRotationAngle: CGFloat
+        var isVideoMirroringSupported: Bool = false
+        var isVideoMirrored: Bool = false
 
         init(supportedAngles: Set<CGFloat> = [0, 90, 180, 270], initialAngle: CGFloat = 0.0) {
             self.supportedAngles = supportedAngles

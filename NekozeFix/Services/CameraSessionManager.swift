@@ -1,19 +1,6 @@
 import AVFoundation
 import UIKit
 
-/// data-output 接続の回転適用に使う接続シーム（テスト容易性）。
-/// 本番は `AVCaptureConnection` が適合する。テストは Fake を注入する。
-/// simulator には video デバイスが存在しないため、単体テストは
-/// `rotationConnectionForTesting` へ Fake を注入して分離検証する（実転送結線は task 4.1）。
-protocol CaptureVideoRotationConnection: AnyObject {
-    func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool
-    var videoRotationAngle: CGFloat { get set }
-    var isVideoMirroringSupported: Bool { get }
-    var isVideoMirrored: Bool { get set }
-}
-
-extension AVCaptureConnection: CaptureVideoRotationConnection {}
-
 /// フロントカメラのセッション管理とパーミッション。
 ///
 /// `.high` プリセット (720p)、シリアルキャプチャキュー、
@@ -31,7 +18,7 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     /// テスト注入用接続シーム。nil 時は `videoOutput` の実接続を使う。
     /// `@testable` 経由でテストが Fake を注入する。
-    var rotationConnectionForTesting: CaptureVideoRotationConnection?
+    var rotationConnectionForTesting: VideoRotationConnection?
 
     /// カメラ確定デバイスの通知先（4.1 実結線）。
     /// Session が設定し、coordinator 再生成（同一所有層）に使う。
@@ -89,8 +76,8 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
 
     /// data-output 接続の取得を一本化する。テスト注入があればそれを使い、
     /// なければ `videoOutput` の実接続を使う。不在時はなにもしない。
-    private func withVideoConnection(_ body: (any CaptureVideoRotationConnection) -> Void) {
-        guard let connection: CaptureVideoRotationConnection = self.rotationConnectionForTesting
+    private func withVideoConnection(_ body: (any VideoRotationConnection) -> Void) {
+        guard let connection: VideoRotationConnection = self.rotationConnectionForTesting
             ?? self.videoOutput?.connection(with: .video) else { return }
         body(connection)
     }

@@ -2,7 +2,18 @@ import Foundation
 import AVFoundation
 
 // 型層: 共通の値オブジェクトと列挙型。
-// 完全な仕様は design.md "Types" セクション参照。
+// 完全な仕様は design.md "Types" セクション参照.
+
+/// Capture/Preview 接続の回転・ミラー適用に使う共通シーム（テスト容易性）。
+/// 本番は `AVCaptureConnection` が適合する。テストは Fake を注入する。
+protocol VideoRotationConnection: AnyObject {
+    func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool
+    var videoRotationAngle: CGFloat { get set }
+    var isVideoMirroringSupported: Bool { get }
+    var isVideoMirrored: Bool { get set }
+}
+
+extension AVCaptureConnection: VideoRotationConnection {}
 
 enum CameraPosition: String, Codable, Equatable {
     case front

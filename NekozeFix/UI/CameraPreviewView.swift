@@ -15,18 +15,6 @@ import Combine
 /// （通知先の結線は 4.1。本ファイルではフック点のみ定義し、
 /// `PostureSessionManager` の改修は行わない）。
 
-/// preview 接続への回転適用に使う接続シーム（テスト容易性）。
-/// 本番は `AVCaptureConnection` が適合する。テストは Fake を注入する。
-/// simulator には video デバイスが存在しないため、単体テストは
-/// `previewConnectionForTesting` へ Fake を注入して分離検証する（実結線は task 4.1）。
-/// 対応可否を実行時判定し、非対応時は適用を見送る（退行則。クラッシュさせない）。
-protocol PreviewVideoRotationConnection: AnyObject {
-    func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool
-    var videoRotationAngle: CGFloat { get set }
-}
-
-extension AVCaptureConnection: PreviewVideoRotationConnection {}
-
 /// preview 角の配信源シーム。`DeviceRotationService` が適合し、
 /// テストでは `FakeDeviceRotationService` が適合する（test target の extension）。
 /// 同一インスタンスの受け渡し結線は task 4.1。本タスクでは TestDouble で代用する。
@@ -59,7 +47,7 @@ struct CameraPreviewView: UIViewRepresentable {
 
     /// テスト注入用接続シーム。nil 時はプレビュー層の実接続を使う。
     /// `@testable` 経由でテストが Fake を注入する。
-    var previewConnectionForTesting: (any PreviewVideoRotationConnection)?
+    var previewConnectionForTesting: (any VideoRotationConnection)?
 
     // MARK: - UIViewRepresentable
 
@@ -91,7 +79,7 @@ internal class CameraPreviewUIView: UIView {
     private let previewLayer: AVCaptureVideoPreviewLayer
 
     /// テスト注入用接続シーム。nil 時はプレビュー層の実接続を使う。
-    var previewConnectionForTesting: (any PreviewVideoRotationConnection)?
+    var previewConnectionForTesting: (any VideoRotationConnection)?
 
     /// 層出現時のペイロードなし通知フック（結線は task 4.1）。
     var onPreviewLayerAppeared: (() -> Void)?
@@ -108,7 +96,7 @@ internal class CameraPreviewUIView: UIView {
         session: AVCaptureSession,
         previewLayer: AVCaptureVideoPreviewLayer? = nil,
         rotationSource: (any PreviewRotationAngleSource)? = nil,
-        previewConnectionForTesting: (any PreviewVideoRotationConnection)? = nil,
+        previewConnectionForTesting: (any VideoRotationConnection)? = nil,
         onPreviewLayerAppeared: (() -> Void)? = nil
     ) {
         if let previewLayer {
@@ -154,7 +142,7 @@ internal class CameraPreviewUIView: UIView {
     /// preview 接続へ回転角（度）を適用する（表示専用の適用のみ）。
     /// 対応可否を実行時判定し、非対応時・接続不在時は見送る（退行則）。
     internal func applyPreviewRotationAngle(_ degrees: CGFloat) {
-        let connection: (any PreviewVideoRotationConnection)? =
+        let connection: (any VideoRotationConnection)? =
             previewConnectionForTesting ?? previewLayer.connection
         guard let connection else { return }
         guard connection.isVideoRotationAngleSupported(degrees) else { return }
