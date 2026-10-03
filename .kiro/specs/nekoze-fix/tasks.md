@@ -191,6 +191,7 @@
   - Observable completion: measured battery consumption meets NFR 9.1/9.2
   - _Requirements: 9.1, 9.2_
   - _Depends: 6.1_
+
 ## 8. 前出し距離指標 第2段: 本採用（角度 OR 距離、FQ1〜FQ8）
 
 注: 8.1〜8.3 は `PostureTypes.swift` を共有するため逐次実行（`(P)` なし）。
@@ -278,7 +279,7 @@
   - _Depends: 9.1_
   - _Requirements: 8.3, 8.4_
 
-- [x] 9.3 実機確認（手動）: アクティブ中の画面オフ非発生と NFR 再実測
+- [x] 9.3 実機確認（手動・コード変更なし）
   - 実機で: 監視未開始のidle画面で自動スリープ待ち→画面オフしないことを確認 → 暗転→タップ復帰後も点灯維持（8.4）→ ホーム画面遷移後は OS 設定どおりスリープ（8.3 復元）
   - design.md Performance 改訂に伴い NFR 9.1（1時間 15% 以下）を点灯常時前提で再実測（旧実測は失効。research.md Risks 参照）
   - Observable completion: 3動作の確認記録と再実測値が 15% 以内（超過なら閾値見直しを別途判断）
@@ -382,6 +383,60 @@
   - 1時間電池15%以内を維持確認する
   - Observable completion: 確認記録が残り、向き毎の直立約0度の不変条件が成立する
   - _Requirements: 2.7, 4.1, 4.8, 7.1, 9.1_
+
+## 15. Core: 閾値ガイド表示（要件 4.5）
+
+- [ ] 15.1 (P) PostureOverlayView: 角度閾値ガイド弧の描画実装
+  - 既存の `referenceArc` 幾何を再利用し、基準角度 ± 現在角度閾値の位置に破線緑弧（半径 80pt、同中心・同半径）を描画する
+  - AspectFit補正係数を点列と同一に適用する
+  - ガイド状態（表示/非表示、閾値角度）を `PostureOverlayView` の追加引数で受け取る（Session はフラグを持たない）
+  - Observable completion: 角度スライダー値に応じた上下限ガイド弧がオーバーレイに表示される
+  - _Boundary: PostureOverlayView_
+  - _Requirements: 4.5_
+  - _Depends: 13.2_
+
+- [ ] 15.2 (P) PostureOverlayView: 距離閾値ガイド線の描画実装
+  - 近側耳→肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る
+  - 肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を破線黄色で描画する
+  - AspectFit補正係数を点列と同一に適用する
+  - ガイド状態（表示/非表示、基準距離、閾値距離、耳肩ベクトル）を `PostureOverlayView` の追加引数で受け取る
+  - Observable completion: 距離スライダー値に応じた上下限ガイド線がオーバーレイに表示される
+  - _Boundary: PostureOverlayView_
+  - _Requirements: 4.5_
+  - _Depends: 13.2_
+
+- [ ] 15.3 MonitorView: スライダー操作状態の検出とガイドパラメータ受け渡し
+  - 角度閾値・距離閾値の各スライダーに `.onDragGesture` 相当の操作検出を追加し、ドラッグ中のみガイド表示フラグと閾値値を `PostureOverlayView` へ渡す
+  - スライダー種別切替時（角度⇔距離）は前ガイド即消去・新ガイド即表示
+  - Observable completion: スライダーをドラッグ中にのみガイドが表示され、離すと消える。種別切替で即座に切り替わる
+  - _Boundary: MonitorView_
+  - _Requirements: 4.5_
+  - _Depends: 15.1, 15.2_
+
+- [ ] 15.4 単体テスト: 閾値ガイドの幾何計算検証
+  - 角度ガイド: `greenAngle ± deltaThreshold` が正しく弧の開始/終了角になること
+  - 距離ガイド: 耳肩ベクトル正規化→垂直ベクトル→肩点からの距離位置計算が正しいこと
+  - AspectFit補正が点列・基準線・ガイドで一致すること
+  - Observable completion: PostureOverlayViewTests の幾何計算テストがすべてパスする
+  - _Boundary: PostureOverlayView_
+  - _Requirements: 4.5_
+  - _Depends: 15.1, 15.2_
+
+- [ ] 15.5 統合テスト: 閾値スライダー操作中のガイド表示/非表示・切替挙動
+  - 角度スライダー・距離スライダーそれぞれのドラッグ中に対応ガイドが表示されること
+  - ドラッグ終了でガイドが消えること
+  - 角度→距離スライダーへの切替で即座にガイドが切り替わること
+  - Observable completion: UI統合テストで全シナリオがパスする
+  - _Boundary: MonitorView, PostureOverlayView_
+  - _Requirements: 4.5_
+  - _Depends: 15.3, 15.4_
+
+- [ ] 15.6 実機目視確認: 縦・横・代替時のガイド表示
+  - 縦置き/横置き/代替基準（肩ライン直交・画像垂直）時のガイド弧・線の見た目確認
+  - 両スライダー操作時の視覚フィードバック確認
+  - Observable completion: 実機確認記録が残る
+  - _Requirements: 4.5_
+  - _Depends: 15.5_
 
 ## Implementation Notes
 
