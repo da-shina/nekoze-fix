@@ -387,20 +387,22 @@
 ## 15. Core: 閾値ガイド表示（要件 4.5）
 
 - [x] 15.1 (P) PostureOverlayView: 角度閾値ガイド弧の描画実装
-  - 既存の `referenceArc` 幾何を再利用し、基準角度 ± 現在角度閾値の位置に破線緑弧（半径 80pt、同中心・同半径）を描画する
+  - 既存の `referenceArc` 幾何を再利用し、**グレーのキャリブレーション基準線（基準角度）に対して** 破線緑弧（半径 80pt、同中心・同半径）を描画する
   - AspectFit補正係数を点列と同一に適用する
   - ガイド状態（表示/非表示、閾値角度）を `PostureOverlayView` の追加引数で受け取る（Session はフラグを持たない）
-  - Observable completion: 角度スライダー値に応じた上下限ガイド弧がオーバーレイに表示される
+  - ガイドアンカー用にキャリブレーション基準点 `referencePointsForGuide` を追加引数で受け取る
+  - Observable completion: 角度スライダー値に応じた上下限ガイド弧がキャリブレーション基準線に対して表示される
   - _Boundary: PostureOverlayView_
   - _Requirements: 4.5_
   - _Depends: 13.2_
 
 - [x] 15.2 (P) PostureOverlayView: 距離閾値ガイド線の描画実装
-  - 近側耳→肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る
-  - 肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を破線黄色で描画する
+  - **グレーのキャリブレーション基準耳肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る**
+  - **キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を破線黄色で描画する**
   - AspectFit補正係数を点列と同一に適用する
   - ガイド状態（表示/非表示、基準距離、閾値距離、耳肩ベクトル）を `PostureOverlayView` の追加引数で受け取る
-  - Observable completion: 距離スライダー値に応じた上下限ガイド線がオーバーレイに表示される
+  - ガイドアンカー用にキャリブレーション基準点 `referencePointsForGuide` を追加引数で受け取る
+  - Observable completion: 距離スライダー値に応じた上下限ガイド線がキャリブレーション基準線に対して表示される
   - _Boundary: PostureOverlayView_
   - _Requirements: 4.5_
   - _Depends: 13.2_

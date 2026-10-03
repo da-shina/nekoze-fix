@@ -35,6 +35,12 @@ struct PostureOverlayView: View {
     /// 近側耳→肩ベクトル（Vision正規化座標系、正規化済み）。ガイド線の方向決定に使用
     var earShoulderVector: CGVector = .zero
 
+    // MARK: - ガイドアンカー用（キャリブレーション基準点）
+    
+    /// キャリブレーションで確定した基準点（グレー基準線のアンカー用）。
+    /// referencePoints[5] = 近側肩、referencePoints[4] = 近側耳
+    var referencePointsForGuide: [CGPoint] = []
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -103,8 +109,44 @@ struct PostureOverlayView: View {
         }
     }
 
+    /// ガイド用の基準点（キャリブレーション基準点）を取得する。
+    /// referencePointsForGuide があればそれを使い、なければ currentPoints をフォールバックとする。
+    private var guideAnchorPoints: [CGPoint] {
+        if referencePointsForGuide.count >= 6 {
+            return referencePointsForGuide
+        }
+        return currentPoints
+    }
+
+    /// キャリブレーション時の耳肩ベクトル（正規化済み、画面座標系）を取得する。
+    /// これがガイド弧の中心方向（ゼロ偏差基準）になる。
+    private func calibrationEarShoulderVector(in size: CGSize) -> (unitX: CGFloat, unitY: CGFloat, angle: CGFloat) {
+        let anchorPoints = guideAnchorPoints
+        let shoulderPoint = normalizePoint(anchorPoints[5], in: size)
+        let earPoint = normalizePoint(anchorPoints[4], in: size)
+        
+        let dx = earPoint.x - shoulderPoint.x
+        let dy = earPoint.y - shoulderPoint.y
+        let len = hypot(dx, dy)
+        
+        if len > 0 {
+            let ux = dx / len
+            let uy = dy / len
+            let angle = atan2(uy, ux)
+            return (ux, uy, angle)
+        }
+        // フォールバック: referenceVector 方向
+        let (sx, sy) = aspectFitScales(for: size)
+        let rawDX = referenceVector.dx * sx * size.width
+        let rawDY = -referenceVector.dy * sy * size.height
+        let rawLen = hypot(rawDX, rawDY)
+        let ux = rawLen > 0 ? rawDX / rawLen : 0.0
+        let uy = rawLen > 0 ? rawDY / rawLen : -1.0
+        return (ux, uy, atan2(uy, ux))
+    }
+
     /// 基準ベクトルを画面座標系の単位ベクトルと基準角度に変換する共通処理。
-    /// referenceArc と angleThresholdGuideArc で共有。
+    /// referenceArc で使用（判定基準線＝referenceVector方向）。
     private func resolveReferenceVector(in size: CGSize) -> (startPoint: CGPoint, greenAngle: CGFloat, unitX: CGFloat, unitY: CGFloat) {
         let startPoint = normalizePoint(currentPoints[5], in: size)
         let (sx, sy) = aspectFitScales(for: size)
@@ -161,23 +203,25 @@ struct PostureOverlayView: View {
     }
 
     /// 角度閾値ガイド弧（破線緑、半径 80pt、基準弧と同中心・同半径）。
-    /// 基準角度 ± 角度閾値の位置に上下限ガイドを描画する。
+    /// **キャリブレーション時の耳肩ライン（ゼロ偏差基準）に対して** ± 角度閾値の位置に上下限ガイドを描画する。
     @ViewBuilder
     private func angleThresholdGuideArc(in size: CGSize, isReference: Bool) -> some View {
-        let (startPoint, greenAngle, _, _) = resolveReferenceVector(in: size)
+        let anchorPoints = guideAnchorPoints
+        let startPoint = normalizePoint(anchorPoints[5], in: size)
+        let (_, _, centerAngle) = calibrationEarShoulderVector(in: size)
         let guideColor: Color = isReference ? Color.gray : Color.green
         let guideWidth: CGFloat = isReference ? 2.0 : 4.0
         
         let thresholdRadians = angleThresholdDegrees * .pi / 180.0
-        let upperAngle = greenAngle + thresholdRadians
-        let lowerAngle = greenAngle - thresholdRadians
+        let upperAngle = centerAngle + thresholdRadians
+        let lowerAngle = centerAngle - thresholdRadians
 
         Group {
             Path { arc in
                 arc.addArc(
                     center: startPoint,
                     radius: 80,
-                    startAngle: .radians(greenAngle),
+                    startAngle: .radians(centerAngle),
                     endAngle: .radians(upperAngle),
                     clockwise: false
                 )
@@ -190,7 +234,7 @@ struct PostureOverlayView: View {
                     center: startPoint,
                     radius: 80,
                     startAngle: .radians(lowerAngle),
-                    endAngle: .radians(greenAngle),
+                    endAngle: .radians(centerAngle),
                     clockwise: false
                 )
             }
@@ -200,11 +244,11 @@ struct PostureOverlayView: View {
     }
 
     /// 距離閾値ガイド線（破線黄色、耳肩ベクトルに垂直）。
-    /// 肩点から耳肩ベクトル方向に baselineDistance ± distanceThresholdPixels 進んだ点を通る
-    /// 耳肩ベクトルに垂直な線分（長さ 80pt 程度）を描画する。
+    /// **グレーのキャリブレーション基準耳肩ベクトル `v` に垂直な破線黄色線**。
+    /// キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を描画する。
     @ViewBuilder
     private func distanceThresholdGuideLines(in size: CGSize) -> some View {
-        let startPoint = normalizePoint(currentPoints[5], in: size)
+        let startPoint = normalizePoint(guideAnchorPoints[5], in: size)
         let guideWidth: CGFloat = 2.0
         let lineLength: CGFloat = 80
 
