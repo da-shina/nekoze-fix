@@ -138,6 +138,11 @@ struct SessionSnapshot: Equatable {
     var calibrationReferenceSource: ReferenceVectorSource? = nil
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
+    
+    // MARK: - 閾値ガイド表示用（スライダー操作中のみ使用）
+    
+    /// 近側耳→肩ベクトル（Vision正規化座標系、正規化済み）。ガイド線の方向決定に使用。
+    var earShoulderVector: CGVector = .zero
 }
 
 /// 肩キーポイント欠測時のガイダンス文言（ADR 0014）。

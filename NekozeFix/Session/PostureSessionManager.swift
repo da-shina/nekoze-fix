@@ -669,6 +669,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                     // 改善時は即停止（design.md Q20）
                     self.alertPlayer?.stop()
                 }
+                
+                // 閾値ガイド表示用パラメータを更新（スライダー操作中のみ表示されるが、
+                // パラメータは常に最新の可視化ポイントから計算しておく）
+                self.updateGuideParameters()
             }
         }
     }
@@ -693,6 +697,43 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
         snapshot.calibrationReferenceSource = referenceSource
+        updateGuideParameters()
+    }
+
+    /// 閾値ガイド表示用パラメータを更新する（スライダー操作中のみ使用）。
+    /// referenceDistance（正規化座標系）から近側耳→肩ベクトル（正規化済み）を抽出する。
+    /// 画面ピクセルへの変換はビュー層（GeometryReader）で行う。
+    private func updateGuideParameters() {
+        guard let nearSide = snapshot.nearSide,
+              snapshot.visualizationPoints.count >= 6 else {
+            snapshot.earShoulderVector = .zero
+            return
+        }
+
+        let points = snapshot.visualizationPoints
+        let earIndex = nearSide == .left ? 2 : 3
+        let shoulderIndex = nearSide == .left ? 0 : 1
+        
+        guard earIndex < points.count, shoulderIndex < points.count,
+              points[earIndex] != .zero, points[shoulderIndex] != .zero else {
+            snapshot.earShoulderVector = .zero
+            return
+        }
+
+        let earPoint = points[earIndex]
+        let shoulderPoint = points[shoulderIndex]
+        
+        // 正規化座標系での耳→肩ベクトル
+        let vecX = shoulderPoint.x - earPoint.x
+        let vecY = shoulderPoint.y - earPoint.y
+        let vecLen = hypot(vecX, vecY)
+        
+        // Vision正規化座標系の単位ベクトル（ガイド線の方向用）
+        if vecLen > 0 {
+            snapshot.earShoulderVector = CGVector(dx: vecX / vecLen, dy: vecY / vecLen)
+        } else {
+            snapshot.earShoulderVector = .zero
+        }
     }
 
     /// セッションのフェーズの唯一の書き込み経路。

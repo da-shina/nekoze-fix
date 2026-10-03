@@ -19,6 +19,22 @@ struct PostureOverlayView: View {
     /// プレビューはダミー垂直 (0,1)。
     var referenceVector: CGVector = CGVector(dx: 0, dy: 1)
 
+    // MARK: - 閾値ガイド表示パラメータ（スライダー操作中のみ）
+    
+    /// 角度閾値ガイドを表示するか
+    var showAngleGuide: Bool = false
+    /// 角度閾値（度）。基準角度 ± この値の位置に破線緑弧を描画
+    var angleThresholdDegrees: Double = 0
+    
+    /// 距離閾値ガイドを表示するか
+    var showDistanceGuide: Bool = false
+    /// 基準距離（正規化座標系 0-1）。校正時の平均耳肩距離
+    var referenceDistance: Double = 0
+    /// 距離閾値（%）。基準距離のこの%以上で猫背判定
+    var slouchDistanceThresholdPercent: Double = 0
+    /// 近側耳→肩ベクトル（Vision正規化座標系、正規化済み）。ガイド線の方向決定に使用
+    var earShoulderVector: CGVector = .zero
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -72,9 +88,38 @@ struct PostureOverlayView: View {
                 // 基準となる直線（両モードで表示、近側肩点起点）
                 if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     referenceArc(in: geometry.size, isReference: isRef)
+                    
+                    // 角度閾値ガイド弧（破線緑、半径 80pt、同中心・同半径）
+                    if showAngleGuide {
+                        angleThresholdGuideArc(in: geometry.size, isReference: isRef)
+                    }
+                    
+                    // 距離閾値ガイド線（破線黄色、耳肩ベクトルに垂直）
+                    if showDistanceGuide {
+                        distanceThresholdGuideLines(in: geometry.size)
+                    }
                 }
             }
         }
+    }
+
+    /// 基準ベクトルを画面座標系の単位ベクトルと基準角度に変換する共通処理。
+    /// referenceArc と angleThresholdGuideArc で共有。
+    private func resolveReferenceVector(in size: CGSize) -> (startPoint: CGPoint, greenAngle: CGFloat, unitX: CGFloat, unitY: CGFloat) {
+        let startPoint = normalizePoint(currentPoints[5], in: size)
+        let (sx, sy) = aspectFitScales(for: size)
+        let rawDX = referenceVector.dx * sx * size.width
+        let rawDY = -referenceVector.dy * sy * size.height
+        let rawLen = hypot(rawDX, rawDY)
+        let unitX: CGFloat = rawLen > 0 ? rawDX / rawLen : 0.0
+        let unitY: CGFloat = rawLen > 0 ? rawDY / rawLen : -1.0
+
+        let end = CGPoint(
+            x: startPoint.x + unitX * 200,
+            y: startPoint.y + unitY * 200
+        )
+        let greenAngle = atan2(end.y - startPoint.y, end.x - startPoint.x)
+        return (startPoint, greenAngle, unitX, unitY)
     }
 
     /// 基準線（緑またはグレー）と、黄（現在）〜緑／グレー（基準）のなす角を示す弧。
@@ -82,17 +127,9 @@ struct PostureOverlayView: View {
     /// 点列と同一の AspectFit 補正係数で画面座標系へ変換する。代替時も見た目は不変。
     @ViewBuilder
     private func referenceArc(in size: CGSize, isReference: Bool) -> some View {
-        let startPoint = normalizePoint(currentPoints[5], in: size)
+        let (startPoint, greenAngle, _, _) = resolveReferenceVector(in: size)
         let length: CGFloat = 200
-
-        // 点列と同一の補正係数（sx, sy）をベクトルに適用する。
-        // Vision座標系（y上向き）→画面座標系（y下向き）のため y 符号を反転する。
-        let (sx, sy) = aspectFitScales(for: size)
-        let rawDX = referenceVector.dx * sx * size.width
-        let rawDY = -referenceVector.dy * sy * size.height
-        let rawLen = hypot(rawDX, rawDY)
-        let unitX: CGFloat = rawLen > 0 ? rawDX / rawLen : 0.0
-        let unitY: CGFloat = rawLen > 0 ? rawDY / rawLen : -1.0
+        let (_, _, unitX, unitY) = resolveReferenceVector(in: size)
 
         let end = CGPoint(
             x: startPoint.x + unitX * length,
@@ -108,7 +145,6 @@ struct PostureOverlayView: View {
 
         let pE = normalizePoint(currentPoints[4], in: size)
         let yellowAngle = atan2(pE.y - startPoint.y, pE.x - startPoint.x)
-        let greenAngle = atan2(end.y - startPoint.y, end.x - startPoint.x)
         let delta = wrappedDelta(yellowAngle - greenAngle)
         let arcColor: Color = isReference ? Color.gray : Color.green
         let arcWidth: CGFloat = isReference ? 2.0 : 4.0
@@ -122,6 +158,103 @@ struct PostureOverlayView: View {
             )
         }
         .stroke(arcColor, lineWidth: arcWidth)
+    }
+
+    /// 角度閾値ガイド弧（破線緑、半径 80pt、基準弧と同中心・同半径）。
+    /// 基準角度 ± 角度閾値の位置に上下限ガイドを描画する。
+    @ViewBuilder
+    private func angleThresholdGuideArc(in size: CGSize, isReference: Bool) -> some View {
+        let (startPoint, greenAngle, _, _) = resolveReferenceVector(in: size)
+        let guideColor: Color = isReference ? Color.gray : Color.green
+        let guideWidth: CGFloat = isReference ? 2.0 : 4.0
+        
+        let thresholdRadians = angleThresholdDegrees * .pi / 180.0
+        let upperAngle = greenAngle + thresholdRadians
+        let lowerAngle = greenAngle - thresholdRadians
+
+        Group {
+            Path { arc in
+                arc.addArc(
+                    center: startPoint,
+                    radius: 80,
+                    startAngle: .radians(greenAngle),
+                    endAngle: .radians(upperAngle),
+                    clockwise: false
+                )
+            }
+            .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
+            .foregroundColor(guideColor)
+
+            Path { arc in
+                arc.addArc(
+                    center: startPoint,
+                    radius: 80,
+                    startAngle: .radians(lowerAngle),
+                    endAngle: .radians(greenAngle),
+                    clockwise: false
+                )
+            }
+            .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
+            .foregroundColor(guideColor)
+        }
+    }
+
+    /// 距離閾値ガイド線（破線黄色、耳肩ベクトルに垂直）。
+    /// 肩点から耳肩ベクトル方向に baselineDistance ± distanceThresholdPixels 進んだ点を通る
+    /// 耳肩ベクトルに垂直な線分（長さ 80pt 程度）を描画する。
+    @ViewBuilder
+    private func distanceThresholdGuideLines(in size: CGSize) -> some View {
+        let startPoint = normalizePoint(currentPoints[5], in: size)
+        let guideWidth: CGFloat = 2.0
+        let lineLength: CGFloat = 80
+
+        if earShoulderVector.dx != 0 || earShoulderVector.dy != 0 {
+            let (sx, sy) = aspectFitScales(for: size)
+            let vecX = earShoulderVector.dx * sx * size.width
+            let vecY = -earShoulderVector.dy * sy * size.height
+            let vecLen = hypot(vecX, vecY)
+            
+            if vecLen > 0 {
+                let unitX = vecX / vecLen
+                let unitY = vecY / vecLen
+                
+                let perpX = -unitY
+                let perpY = unitX
+
+                // referenceDistance (正規化 0-1) を AspectFit 補正で画面ピクセルに変換
+                let screenShortSide = min(size.width, size.height)
+                let baselineDistance = referenceDistance * screenShortSide * sx
+                let distanceThresholdPixels = baselineDistance * slouchDistanceThresholdPercent / 100.0
+
+                let upperDist = baselineDistance + distanceThresholdPixels
+                let lowerDist = baselineDistance - distanceThresholdPixels
+                
+                let upperCenter = CGPoint(
+                    x: startPoint.x + unitX * upperDist,
+                    y: startPoint.y + unitY * upperDist
+                )
+                let lowerCenter = CGPoint(
+                    x: startPoint.x + unitX * lowerDist,
+                    y: startPoint.y + unitY * lowerDist
+                )
+
+                Group {
+                    Path { line in
+                        line.move(to: CGPoint(x: upperCenter.x - perpX * lineLength / 2, y: upperCenter.y - perpY * lineLength / 2))
+                        line.addLine(to: CGPoint(x: upperCenter.x + perpX * lineLength / 2, y: upperCenter.y + perpY * lineLength / 2))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
+                    .foregroundColor(.yellow)
+
+                    Path { line in
+                        line.move(to: CGPoint(x: lowerCenter.x - perpX * lineLength / 2, y: lowerCenter.y - perpY * lineLength / 2))
+                        line.addLine(to: CGPoint(x: lowerCenter.x + perpX * lineLength / 2, y: lowerCenter.y + perpY * lineLength / 2))
+                    }
+                    .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
+                    .foregroundColor(.yellow)
+                }
+            }
+        }
     }
 
     /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。

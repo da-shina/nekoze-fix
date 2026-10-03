@@ -9,6 +9,22 @@ struct MonitorView: View {
     @EnvironmentObject private var sessionManager: PostureSessionManager
     @EnvironmentObject private var settingsStore: SettingsStore
 
+    // MARK: - スライダー操作状態（閾値ガイド表示用）
+    
+    @State private var isDraggingAngleSlider: Bool = false
+    @State private var isDraggingDistanceSlider: Bool = false
+
+    // MARK: - ガイド表示パラメータ（両オーバーレイ共通）
+    
+    private var guideParams: (showAngleGuide: Bool, angleThresholdDegrees: Double, showDistanceGuide: Bool, referenceDistance: Double, slouchDistanceThresholdPercent: Double, earShoulderVector: CGVector) {
+        (isDraggingAngleSlider,
+         settingsStore.slouchThresholdDegrees,
+         isDraggingDistanceSlider,
+         sessionManager.snapshot.referenceDistance ?? 0,
+         settingsStore.slouchDistanceThresholdPercent,
+         sessionManager.snapshot.earShoulderVector)
+    }
+
     // MARK: - 本文
 
     var body: some View {
@@ -20,7 +36,13 @@ struct MonitorView: View {
                     currentPoints: refPoints,
                     nearSide: sessionManager.snapshot.nearSide,
                     imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                    referenceVector: sessionManager.snapshot.referenceVector
+                    referenceVector: sessionManager.snapshot.referenceVector,
+                    showAngleGuide: guideParams.showAngleGuide,
+                    angleThresholdDegrees: guideParams.angleThresholdDegrees,
+                    showDistanceGuide: guideParams.showDistanceGuide,
+                    referenceDistance: guideParams.referenceDistance,
+                    slouchDistanceThresholdPercent: guideParams.slouchDistanceThresholdPercent,
+                    earShoulderVector: guideParams.earShoulderVector
                 )
                 .ignoresSafeArea()
             }
@@ -31,7 +53,13 @@ struct MonitorView: View {
                 currentPoints: sessionManager.snapshot.visualizationPoints,
                 nearSide: sessionManager.snapshot.nearSide,
                 imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                referenceVector: sessionManager.snapshot.referenceVector
+                referenceVector: sessionManager.snapshot.referenceVector,
+                showAngleGuide: guideParams.showAngleGuide,
+                angleThresholdDegrees: guideParams.angleThresholdDegrees,
+                showDistanceGuide: guideParams.showDistanceGuide,
+                referenceDistance: guideParams.referenceDistance,
+                slouchDistanceThresholdPercent: guideParams.slouchDistanceThresholdPercent,
+                earShoulderVector: guideParams.earShoulderVector
             )
             .ignoresSafeArea()
 
@@ -113,6 +141,11 @@ struct MonitorView: View {
                     in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
                     step: 0.5
                 )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isDraggingAngleSlider = true }
+                        .onEnded { _ in isDraggingAngleSlider = false }
+                )
             }
 
             // 距離閾値スライダー（前出し検出の第2指標・FQ3/FQ4）
@@ -133,6 +166,11 @@ struct MonitorView: View {
                     value: $settingsStore.slouchDistanceThresholdPercent,
                     in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
                     step: 0.5
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isDraggingDistanceSlider = true }
+                        .onEnded { _ in isDraggingDistanceSlider = false }
                 )
             }
         }
