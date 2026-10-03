@@ -141,7 +141,7 @@ struct MonitorView: View {
                     in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
                     step: 0.5
                 )
-                .gesture(
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { _ in isDraggingAngleSlider = true }
                         .onEnded { _ in isDraggingAngleSlider = false }
@@ -167,7 +167,7 @@ struct MonitorView: View {
                     in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
                     step: 0.5
                 )
-                .gesture(
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { _ in isDraggingDistanceSlider = true }
                         .onEnded { _ in isDraggingDistanceSlider = false }
