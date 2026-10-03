@@ -43,18 +43,14 @@ struct MonitorView: View {
     private func onAngleValueChange(_ newValue: Double) {
         angleDragTimer?.invalidate()
         angleDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            DispatchQueue.main.async {
-                self.isDraggingAngleSlider = false
-            }
+            self.isDraggingAngleSlider = false
         }
     }
 
     private func onDistanceValueChange(_ newValue: Double) {
         distanceDragTimer?.invalidate()
         distanceDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            DispatchQueue.main.async {
-                self.isDraggingDistanceSlider = false
-            }
+            self.isDraggingDistanceSlider = false
         }
     }
 

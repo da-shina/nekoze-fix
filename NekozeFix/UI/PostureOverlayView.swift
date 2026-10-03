@@ -116,7 +116,7 @@ struct PostureOverlayView: View {
 
     /// キャリブレーション時の耳肩ベクトル（正規化済み、画面座標系）を取得する。
     /// これがガイド弧の中心方向（ゼロ偏差基準）になる。
-    private func calibrationEarShoulderVector(in size: CGSize) -> (unitX: CGFloat, unitY: CGFloat, angle: CGFloat) {
+    private func calibrationEarShoulderVector(in size: CGSize) -> (unitX: CGFloat, unitY: CGFloat, angle: CGFloat, distance: CGFloat) {
         let anchorPoints = guideAnchorPoints
         let shoulderPoint = normalizePoint(anchorPoints[5], in: size)
         let earPoint = normalizePoint(anchorPoints[4], in: size)
@@ -129,7 +129,7 @@ struct PostureOverlayView: View {
             let ux = dx / len
             let uy = dy / len
             let angle = atan2(uy, ux)
-            return (ux, uy, angle)
+            return (ux, uy, angle, len)
         }
         // フォールバック: referenceVector 方向
         let (sx, sy) = aspectFitScales(for: size)
@@ -138,7 +138,7 @@ struct PostureOverlayView: View {
         let rawLen = hypot(rawDX, rawDY)
         let ux = rawLen > 0 ? rawDX / rawLen : 0.0
         let uy = rawLen > 0 ? rawDY / rawLen : -1.0
-        return (ux, uy, atan2(uy, ux))
+        return (ux, uy, atan2(uy, ux), 200)
     }
 
     /// 基準ベクトルを画面座標系の単位ベクトルと基準角度に変換する共通処理。
@@ -206,12 +206,7 @@ struct PostureOverlayView: View {
     private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
         let anchorPoints = guideAnchorPoints
         let startPoint = normalizePoint(anchorPoints[5], in: size)
-        let (_, _, centerAngle) = calibrationEarShoulderVector(in: size)
-        
-        // キャリブレーション基準の実際のピクセル距離を計算（簡易式ではなく実測値を使用）
-        let earPoint = normalizePoint(anchorPoints[4], in: size)
-        let shoulderPoint = normalizePoint(anchorPoints[5], in: size)
-        let baselineDistance = hypot(earPoint.x - shoulderPoint.x, earPoint.y - shoulderPoint.y)
+        let (_, _, centerAngle, baselineDistance) = calibrationEarShoulderVector(in: size)
         
         // すべてグレーで統一
         let guideColor: Color = Color.gray
