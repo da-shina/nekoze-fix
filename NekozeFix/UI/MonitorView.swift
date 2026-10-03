@@ -10,49 +10,9 @@ struct MonitorView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
 
     // MARK: - スライダー操作状態（閾値ガイド表示用）
-    
+
     @State private var isDraggingAngleSlider: Bool = false
     @State private var isDraggingDistanceSlider: Bool = false
-
-    // MARK: - スライダー値変更検知用のカスタムバインディング
-    
-    private var angleThresholdBinding: Binding<Double> {
-        Binding(
-            get: { settingsStore.slouchThresholdDegrees },
-            set: { newValue in
-                if !isDraggingAngleSlider { isDraggingAngleSlider = true }
-                settingsStore.slouchThresholdDegrees = newValue
-            }
-        )
-    }
-    
-    private var distanceThresholdBinding: Binding<Double> {
-        Binding(
-            get: { settingsStore.slouchDistanceThresholdPercent },
-            set: { newValue in
-                if !isDraggingDistanceSlider { isDraggingDistanceSlider = true }
-                settingsStore.slouchDistanceThresholdPercent = newValue
-            }
-        )
-    }
-    
-    // ドラッグ終了検知用（値変更が一定時間止まったら終了とみなす）
-    @State private var angleDragTimer: Timer?
-    @State private var distanceDragTimer: Timer?
-    
-    private func onAngleValueChange(_ newValue: Double) {
-        angleDragTimer?.invalidate()
-        angleDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            isDraggingAngleSlider = false
-        }
-    }
-    
-    private func onDistanceValueChange(_ newValue: Double) {
-        distanceDragTimer?.invalidate()
-        distanceDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            isDraggingDistanceSlider = false
-        }
-    }
 
     // MARK: - ガイド表示パラメータ（両オーバーレイ共通）
     
@@ -181,7 +141,7 @@ struct MonitorView: View {
                 }
 
                 Slider(
-                    value: angleThresholdBinding,
+                    value: $settingsStore.slouchThresholdDegrees,
                     in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
                     step: 0.5
                 )
@@ -190,9 +150,6 @@ struct MonitorView: View {
                         .onChanged { _ in isDraggingAngleSlider = true }
                         .onEnded { _ in isDraggingAngleSlider = false }
                 )
-                .onChange(of: settingsStore.slouchThresholdDegrees) { _, newValue in
-                    onAngleValueChange(newValue)
-                }
             }
 
             // 距離閾値スライダー（前出し検出の第2指標・FQ3/FQ4）
@@ -210,7 +167,7 @@ struct MonitorView: View {
                 }
 
                 Slider(
-                    value: distanceThresholdBinding,
+                    value: $settingsStore.slouchDistanceThresholdPercent,
                     in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
                     step: 0.5
                 )
@@ -219,9 +176,6 @@ struct MonitorView: View {
                         .onChanged { _ in isDraggingDistanceSlider = true }
                         .onEnded { _ in isDraggingDistanceSlider = false }
                 )
-                .onChange(of: settingsStore.slouchDistanceThresholdPercent) { _, newValue in
-                    onDistanceValueChange(newValue)
-                }
             }
         }
         .padding(.horizontal)
