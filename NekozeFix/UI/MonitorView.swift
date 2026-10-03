@@ -185,6 +185,11 @@ struct MonitorView: View {
                     in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
                     step: 0.5
                 )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isDraggingAngleSlider = true }
+                        .onEnded { _ in isDraggingAngleSlider = false }
+                )
                 .onChange(of: settingsStore.slouchThresholdDegrees) { _, newValue in
                     onAngleValueChange(newValue)
                 }
@@ -208,6 +213,11 @@ struct MonitorView: View {
                     value: distanceThresholdBinding,
                     in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
                     step: 0.5
+                )
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in isDraggingDistanceSlider = true }
+                        .onEnded { _ in isDraggingDistanceSlider = false }
                 )
                 .onChange(of: settingsStore.slouchDistanceThresholdPercent) { _, newValue in
                     onDistanceValueChange(newValue)

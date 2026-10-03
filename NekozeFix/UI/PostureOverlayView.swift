@@ -94,8 +94,9 @@ struct PostureOverlayView: View {
                 // 基準となる直線（両モードで表示、近側肩点起点）
                 if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     referenceArc(in: geometry.size, isReference: isRef)
-                    
+
                     // 閾値ガイド（角度・距離の統合表示）
+                    // スライダー操作中のみ表示（操作終了後は非表示）
                     if showAngleGuide || showDistanceGuide {
                         thresholdGuide(in: geometry.size, isReference: isRef)
                     }
