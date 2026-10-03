@@ -95,14 +95,9 @@ struct PostureOverlayView: View {
                 if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     referenceArc(in: geometry.size, isReference: isRef)
                     
-                    // 角度閾値ガイド弧（破線緑、半径 80pt、同中心・同半径）
-                    if showAngleGuide {
-                        angleThresholdGuideArc(in: geometry.size, isReference: isRef)
-                    }
-                    
-                    // 距離閾値ガイド線（破線黄色、耳肩ベクトルに垂直）
-                    if showDistanceGuide {
-                        distanceThresholdGuideLines(in: geometry.size)
+                    // 閾値ガイド（角度・距離の統合表示）
+                    if showAngleGuide || showDistanceGuide {
+                        thresholdGuide(in: geometry.size, isReference: isRef)
                     }
                 }
             }
@@ -200,105 +195,144 @@ struct PostureOverlayView: View {
             )
         }
         .stroke(arcColor, lineWidth: arcWidth)
-    }
+}
 
-    /// 角度閾値ガイド弧（破線緑、半径 80pt、基準弧と同中心・同半径）。
-    /// **キャリブレーション時の耳肩ライン（ゼロ偏差基準）に対して** ± 角度閾値の位置に上下限ガイドを描画する。
+/// 閾値ガイド（角度・距離の統合表示）。
+    /// - キャリブレーション基準耳肩ラインから ±angleThreshold の2本の破線（グレー）
+    /// - 各線上に ±distanceThreshold の位置にドット（グレー）
+    /// - 上限同士（+distance の2点）、下限同士（-distance の2点）を、近接肩（キャリブレーション肩点）を中心とした扇形の破線弧で連結
     @ViewBuilder
-    private func angleThresholdGuideArc(in size: CGSize, isReference: Bool) -> some View {
+    private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
         let anchorPoints = guideAnchorPoints
         let startPoint = normalizePoint(anchorPoints[5], in: size)
         let (_, _, centerAngle) = calibrationEarShoulderVector(in: size)
-        let guideColor: Color = isReference ? Color.gray : Color.green
-        let guideWidth: CGFloat = isReference ? 2.0 : 4.0
         
-        let thresholdRadians = angleThresholdDegrees * .pi / 180.0
-        let upperAngle = centerAngle + thresholdRadians
-        let lowerAngle = centerAngle - thresholdRadians
-
+        // すべてグレーで統一
+        let guideColor: Color = Color.gray
+        let lineWidth: CGFloat = 2.0
+        let dotRadius: CGFloat = 6.0
+        
+        let angleThresholdRadians = angleThresholdDegrees * .pi / 180.0
+        let upperAngle = centerAngle + angleThresholdRadians
+        let lowerAngle = centerAngle - angleThresholdRadians
+        
+        let screenShortSide = min(size.width, size.height)
+        let (sx, _) = aspectFitScales(for: size)
+        let baselineDistance = referenceDistance * screenShortSide * sx
+        let distanceThresholdPixels = baselineDistance * slouchDistanceThresholdPercent / 100.0
+        
+        let upperDist = baselineDistance + distanceThresholdPixels
+        let lowerDist = baselineDistance - distanceThresholdPixels
+        
+        // 線の長さ（上限距離まで伸ばす）
+        let lineLength = upperDist + 20
+        
+        // 4つのドット位置を計算
+        // 上側の線（upperAngle）上の +distance, -distance
+        let upperUpper = CGPoint(
+            x: startPoint.x + cos(upperAngle) * upperDist,
+            y: startPoint.y + sin(upperAngle) * upperDist
+        )
+        let upperLower = CGPoint(
+            x: startPoint.x + cos(upperAngle) * lowerDist,
+            y: startPoint.y + sin(upperAngle) * lowerDist
+        )
+        // 下側の線（lowerAngle）上の +distance, -distance
+        let lowerUpper = CGPoint(
+            x: startPoint.x + cos(lowerAngle) * upperDist,
+            y: startPoint.y + sin(lowerAngle) * upperDist
+        )
+        let lowerLower = CGPoint(
+            x: startPoint.x + cos(lowerAngle) * lowerDist,
+            y: startPoint.y + sin(lowerAngle) * lowerDist
+        )
+        
+        // 2本の角度閾値線（グレー破線）
         Group {
-            Path { arc in
-                arc.addArc(
-                    center: startPoint,
-                    radius: 80,
-                    startAngle: .radians(centerAngle),
-                    endAngle: .radians(upperAngle),
-                    clockwise: false
-                )
+            // 上限角度の線
+            Path { line in
+                line.move(to: startPoint)
+                line.addLine(to: CGPoint(
+                    x: startPoint.x + cos(upperAngle) * lineLength,
+                    y: startPoint.y + sin(upperAngle) * lineLength
+                ))
             }
-            .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
-            .foregroundColor(guideColor)
-
-            Path { arc in
-                arc.addArc(
-                    center: startPoint,
-                    radius: 80,
-                    startAngle: .radians(lowerAngle),
-                    endAngle: .radians(centerAngle),
-                    clockwise: false
-                )
-            }
-            .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
-            .foregroundColor(guideColor)
-        }
-    }
-
-    /// 距離閾値ガイド線（破線黄色、耳肩ベクトルに垂直）。
-    /// **グレーのキャリブレーション基準耳肩ベクトル `v` に垂直な破線黄色線**。
-    /// キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を描画する。
-    @ViewBuilder
-    private func distanceThresholdGuideLines(in size: CGSize) -> some View {
-        let startPoint = normalizePoint(guideAnchorPoints[5], in: size)
-        let guideWidth: CGFloat = 2.0
-        let lineLength: CGFloat = 80
-
-        if earShoulderVector.dx != 0 || earShoulderVector.dy != 0 {
-            let (sx, sy) = aspectFitScales(for: size)
-            let vecX = earShoulderVector.dx * sx * size.width
-            let vecY = -earShoulderVector.dy * sy * size.height
-            let vecLen = hypot(vecX, vecY)
+            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
+            .foregroundColor(Color.gray)
             
-            if vecLen > 0 {
-                let unitX = vecX / vecLen
-                let unitY = vecY / vecLen
-                
-                let perpX = -unitY
-                let perpY = unitX
-
-                // referenceDistance (正規化 0-1) を AspectFit 補正で画面ピクセルに変換
-                let screenShortSide = min(size.width, size.height)
-                let baselineDistance = referenceDistance * screenShortSide * sx
-                let distanceThresholdPixels = baselineDistance * slouchDistanceThresholdPercent / 100.0
-
-                let upperDist = baselineDistance + distanceThresholdPixels
-                let lowerDist = baselineDistance - distanceThresholdPixels
-                
-                let upperCenter = CGPoint(
-                    x: startPoint.x + unitX * upperDist,
-                    y: startPoint.y + unitY * upperDist
-                )
-                let lowerCenter = CGPoint(
-                    x: startPoint.x + unitX * lowerDist,
-                    y: startPoint.y + unitY * lowerDist
-                )
-
-                Group {
-                    Path { line in
-                        line.move(to: CGPoint(x: upperCenter.x - perpX * lineLength / 2, y: upperCenter.y - perpY * lineLength / 2))
-                        line.addLine(to: CGPoint(x: upperCenter.x + perpX * lineLength / 2, y: upperCenter.y + perpY * lineLength / 2))
-                    }
-                    .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
-                    .foregroundColor(.yellow)
-
-                    Path { line in
-                        line.move(to: CGPoint(x: lowerCenter.x - perpX * lineLength / 2, y: lowerCenter.y - perpY * lineLength / 2))
-                        line.addLine(to: CGPoint(x: lowerCenter.x + perpX * lineLength / 2, y: lowerCenter.y + perpY * lineLength / 2))
-                    }
-                    .stroke(style: StrokeStyle(lineWidth: guideWidth, dash: [8, 4]))
-                    .foregroundColor(.yellow)
-                }
+            // 下限角度の線
+            Path { line in
+                line.move(to: startPoint)
+                line.addLine(to: CGPoint(
+                    x: startPoint.x + cos(lowerAngle) * lineLength,
+                    y: startPoint.y + sin(lowerAngle) * lineLength
+                ))
             }
+            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
+            .foregroundColor(Color.gray)
         }
+        
+        // 4つのドット（各線上の ±距離閾値位置） - グレー
+        
+        Group {
+            // 上限角度線上の +距離ドット
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(upperUpper)
+            
+            // 上限角度線上の -距離ドット
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(upperLower)
+            
+            // 下限角度線上の +距離ドット
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(lowerUpper)
+            
+            // 下限角度線上の -距離ドット
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(lowerLower)
+        }
+        
+        // 上限同士（+distance の2点）を近接肩（startPoint）を中心とした扇形の破線弧で連結
+        let upperArcRadius = upperDist
+        let upperArcStartAngle = atan2(lowerUpper.y - startPoint.y, lowerUpper.x - startPoint.x)
+        let upperArcEndAngle = atan2(upperUpper.y - startPoint.y, upperUpper.x - startPoint.x)
+        let upperDelta = wrappedDelta(upperArcEndAngle - upperArcStartAngle)
+        
+        Path { arc in
+            arc.addArc(
+                center: startPoint,
+                radius: upperDist,
+                startAngle: .radians(upperArcStartAngle),
+                endAngle: .radians(upperArcEndAngle),
+                clockwise: wrappedDelta(upperArcEndAngle - upperArcStartAngle) < 0
+            )
+        }
+        .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
+        .foregroundColor(Color.gray)
+        
+        // 下限同士（-distance の2点）を近接肩（startPoint）を中心とした扇形の破線弧で連結
+        let lowerArcStartAngle = atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)
+        let lowerArcEndAngle = atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x)
+        
+        Path { arc in
+            arc.addArc(
+                center: startPoint,
+                radius: lowerDist,
+                startAngle: .radians(atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)),
+                endAngle: .radians(atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x)),
+                clockwise: wrappedDelta(atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x) - atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)) < 0
+            )
+        }
+        .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
+        .foregroundColor(Color.gray)
     }
 
     /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。
