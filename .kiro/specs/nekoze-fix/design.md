@@ -9,7 +9,7 @@
 ### Goals
 
 - 4.1 の天方向基準・三段フォールバック鎖（重力→肩ライン直交→画像垂直）を実装する
-- 4.8 の基準線表示と校正の一貫性を実現する（代替中は無区別表示）
+- 4.9 の基準線表示と校正の一貫性を実現する（代替中は無区別表示）
 - 既存アーキテクチャ（Types → Domain → Services → Session → UI）と純粋性制約を維持する
 - 全受入基準に対するテスト可能性を確保する
 
@@ -157,7 +157,7 @@ Key Decisions: 保持時間 0.5 秒は personMissing／shoulderMissing の既存
 | 3.1 | 監視開始停止 | Session | 既存＋Motion 起停 | sequence |
 | 4.1 | 天方向鋭角・三段代替・OR | Analyzer, MotionService | 解決・注入 | state, sequence |
 | 4.5 | 閾値ガイド表示 | OverlayView, Session | ガイドパラメータ受渡し | sequence |
-| 4.8 | 基準線表示と校正一貫・無区別 | OverlayView, Session, Analyzer | ベクトル受渡し | sequence |
+| 4.9 | 基準線表示と校正一貫・無区別 | OverlayView, Session, Analyzer | ベクトル受渡し | sequence |
 | 6.2 | 暗転中継続 | Session | 既存＋Motion 継続 | — |
 | 8.1 | 背景移行で停止 | Session | 既存＋Motion 停止 | — |
 | 8.2 | 復帰時再開 | Session | 既存＋Motion 再開 | — |
@@ -171,8 +171,8 @@ Key Decisions: 保持時間 0.5 秒は personMissing／shoulderMissing の既存
 | PostureAnalyzer | Domain | 角度算出と OR 判定＋三段解決（`resolve` 同梱） | 2.7, 3.5, 4.1, 4.3, 4.5, 4.6 | Types (P0) | Service |
 | MotionService | Services | 重力取得・変換・単一ホールド | 4.1, 3.1, 9.1 | CoreMotion (P0 外) | Service, State |
 | DeviceRotationService | Services | 回転角取得・配信・再生成 | 2.1, 2.2, 2.3, 2.4 | RotationCoordinator (P0 外) | Service, State |
-| PostureSessionManager | Session | 所有・注入・表示受渡し・回転購読 | 2.7, 3.1, 4.8, 8.1, 8.2 | Motion (P0), Analyzer (P0), Overlay (P0), Rotation (P0) | State |
-| PostureOverlayView | UI | 基準線描画（無区別）＋閾値ガイド表示 | 4.8, 4.5 | Session snapshot (P0) | State |
+| PostureSessionManager | Session | 所有・注入・表示受渡し・回転購読 | 2.7, 3.1, 4.9, 8.1, 8.2 | Motion (P0), Analyzer (P0), Overlay (P0), Rotation (P0) | State |
+| PostureOverlayView | UI | 基準線描画（無区別）＋閾値ガイド表示 | 4.9, 4.5 | Session snapshot (P0) | State |
 
 ### Domain
 
@@ -337,12 +337,12 @@ final class MotionService {
 | Field | Detail |
 |-------|--------|
 | Intent | Motion 所有・重力注入・解決ベクトルの表示受渡し・回転角購読を追加する |
-| Requirements | 2.7, 3.1, 4.8, 8.1, 8.2 |
+| Requirements | 2.7, 3.1, 4.9, 8.1, 8.2 |
 
 **Responsibilities & Constraints**
 - 既存の状態機械・ゲート・通知・暗転・スリープ則は変えない。
-- 向き変化時（monitoring中のみ）は自動再校正遷移を行う（grill Q3/Q5決定）: `referenceAngle/referenceDistances/referenceSide` と猫背ゲートを破棄し `calibrating` へ遷移、再校正完了まで監視を停止する（grill Q6決定）。トリガは `DeviceRotationService` の `captureRotationAngle` 変更通知（`handleRotationAngleChange(preview:capture:)`）で検知する。calibrating中・idle・同一角の再通知は対象外。
-- `isLandscape` 導出は `captureRotationAngle` を用い、`ios17-baseline` スペックの対応表（90°±45°・270°±45°→portrait、0°±45°・180°±45°→landscape）で判定する。ヒステリシスなし。
+- 向き変化時（monitoring中のみ）は自動再校正遷移を行う（grill Q3/Q5決定）: `referenceAngle/referenceDistance/referenceSide` と猫背ゲートを破棄し `calibrating` へ遷移、再校正完了まで監視を停止する（grill Q6決定）。トリガは `DeviceRotationService` の `captureRotationAngle` 変更通知（`handleRotationAngleChange(preview:capture:)`）で検知する。calibrating中・idle・同一角の再通知は対象外。
+- `isLandscape` 導出は `captureRotationAngle` を用い、正規化角度区間 [45°, 135°) と [225°, 315°) を portrait、それ以外を landscape とする。ヒステリシスなし。
 - 重力ベクトルのバッファ座標系変換には `captureRotationAngle` を用い `(θ-90°)` 回転を適用する（デバイス座標系→バッファ座標系）。背面カメラ・ランドスケープ時はさらに 180° 補正する。
 - カメラ確定時・プレビュー層出現時に `DeviceRotationService.recreate` を指示する（`ios17-baseline` スペック task 4.1 の順序保証に従う）。
 - Motion 起停と完全同一箇所で回転サービスの起停を駆動する（暗転中継続・背景移行停止を含む）。
@@ -390,7 +390,7 @@ final class MotionService {
 | Field | Detail |
 |-------|--------|
 | Intent | 判定と同一の基準線を通常の見た目で描画する。閾値スライダー操作中は上限・下限ガイドを重ね描画する。 |
-| Requirements | 4.8, 4.5 |
+| Requirements | 4.9, 4.5 |
 
 **Responsibilities & Constraints**
 - `referenceVector: CGVector`（非オプショナル）を肩点起点に描画し、色・太さを変えない（無区別原則）。プレビューはダミー垂直ベクトルを渡す。

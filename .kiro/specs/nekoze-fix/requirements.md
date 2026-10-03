@@ -112,7 +112,7 @@ iPhone/iPadをデスクに置くだけで、リアルタイムに猫背を検知
 4.5 閾値調整スライダー操作中、PostureOverlayView に上限・下限閾値の範囲を示す補助線を表示する。
 
 - While 角度閾値スライダーを操作している, the NekozeFix shall PostureOverlayView に基準角度±現在の角度閾値の範囲を示す補助弧（上限・下限）を表示する
-- While 距離閾値スライダーを操作している, the NekozeFix shall PostureOverlayView に基準距離±現在の距離閾値の範囲を示す補助線（上限・下限）を表示する
+- While 距離閾値スライダーを操作している, the NekozeFix shall PostureOverlayView に基準距離 × (1 ± 現在の距離閾値 / 100) の範囲を示す補助線（上限・下限）を表示する
 - When スライダー操作が終了する, the NekozeFix shall 補助線・補助弧を非表示にする
 
 4.6 信頼度の低いキーポイントは判定に使用しない。
