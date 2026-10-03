@@ -208,6 +208,11 @@ struct PostureOverlayView: View {
         let startPoint = normalizePoint(anchorPoints[5], in: size)
         let (_, _, centerAngle) = calibrationEarShoulderVector(in: size)
         
+        // キャリブレーション基準の実際のピクセル距離を計算（簡易式ではなく実測値を使用）
+        let earPoint = normalizePoint(anchorPoints[4], in: size)
+        let shoulderPoint = normalizePoint(anchorPoints[5], in: size)
+        let baselineDistance = hypot(earPoint.x - shoulderPoint.x, earPoint.y - shoulderPoint.y)
+        
         // すべてグレーで統一
         let guideColor: Color = Color.gray
         let lineWidth: CGFloat = 2.0
@@ -217,9 +222,6 @@ struct PostureOverlayView: View {
         let upperAngle = centerAngle + angleThresholdRadians
         let lowerAngle = centerAngle - angleThresholdRadians
         
-        let screenShortSide = min(size.width, size.height)
-        let (sx, _) = aspectFitScales(for: size)
-        let baselineDistance = referenceDistance * screenShortSide * sx
         let distanceThresholdPixels = baselineDistance * slouchDistanceThresholdPercent / 100.0
         
         let upperDist = baselineDistance + distanceThresholdPixels
