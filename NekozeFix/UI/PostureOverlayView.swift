@@ -247,11 +247,23 @@ struct PostureOverlayView: View {
         let (_, _, centerAngle, measuredLen) = calibrationEarShoulderVector(in: size)
         let (sx, sy) = aspectFitScales(for: size)
 
-        // 基準距離は referenceDistance（正規化）を耳肩ベクトル向きの画面換算でピクセル化する。
+        // 基準距離は referenceDistance（正規化）を校正アンカー向きの画面換算でピクセル化する。
+        // アンカー（校正時点列）は monitoring 中固定のため baseline も固定される。
+        // ライブ earShoulderVector は毎フレーム向きが変わり baseline が可変になるため換算には使わない
+        // （認識ポイント・角度への副作用ではなくガイド表示の安定性の問題）。
         // x/y スケールが異なるため hypot で向き依存に換算する。未校正時は計測長にフォールバック。
+        // アンカー欠損時のみライブベクトルをフォールバックに使う（表示のみ、判定には影響しない）。
+        let stableUnit: CGVector = {
+            guard anchorPoints.count >= 6 else { return earShoulderVector }
+            let dx = anchorPoints[5].x - anchorPoints[4].x
+            let dy = anchorPoints[5].y - anchorPoints[4].y
+            let len = hypot(dx, dy)
+            guard len > 0 else { return earShoulderVector }
+            return CGVector(dx: dx / len, dy: dy / len)
+        }()
         let convertedBaseline = Self.baselineDistancePixels(
             referenceDistance: referenceDistance,
-            earShoulderVector: earShoulderVector,
+            earShoulderVector: stableUnit,
             sx: sx, sy: sy, size: size
         )
         let baselineDistance: CGFloat = (referenceDistance > 0 && convertedBaseline > 0) ? convertedBaseline : measuredLen
