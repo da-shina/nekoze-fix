@@ -397,12 +397,11 @@
   - _Depends: 13.2_
 
 - [x] 15.2 (P) PostureOverlayView: 距離閾値ガイド線の描画実装
-  - **グレーのキャリブレーション基準耳肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る**
-  - **キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を破線黄色で描画する**
+  - **キャリブレーション基準肩点 `pS` を起点とする基準耳肩ベクトル `v` 方向の延長線上に、上限距離 `baselineDist × (1 + threshold/100)` の位置を示すグレーの単一ドットを描画する（耳より上部）。猫背判定は上限超過のみのため下限は表示しない**
   - AspectFit補正係数を点列と同一に適用する
   - ガイド状態（表示/非表示、基準距離、閾値距離、耳肩ベクトル）を `PostureOverlayView` の追加引数で受け取る
   - ガイドアンカー用にキャリブレーション基準点 `referencePointsForGuide` を追加引数で受け取る
-  - Observable completion: 距離スライダー値に応じた上下限ガイド線がキャリブレーション基準線に対して表示される
+  - Observable completion: 距離スライダー値に応じた上限ガイドドットがキャリブレーション基準線の延長線上に表示される
   - _Boundary: PostureOverlayView_
   - _Requirements: 4.5_
   - _Depends: 13.2_
@@ -417,7 +416,7 @@
 
 - [x] 15.4 単体テスト: 閾値ガイドの幾何計算検証
   - 角度ガイド: `greenAngle ± deltaThreshold` が正しく弧の開始/終了角になること
-  - 距離ガイド: 耳肩ベクトル正規化→垂直ベクトル→肩点からの距離位置計算が正しいこと
+  - 距離ガイド: 上限距離 `baseline × (1 + threshold/100)` が判定境界と一致し、ドットが中心線延長上の上限位置（耳より上部）になること。下限は表示しないこと
   - AspectFit補正が点列・基準線・ガイドで一致すること
   - Observable completion: PostureOverlayViewTests の幾何計算テストがすべてパスする
   - _Boundary: PostureOverlayView_
