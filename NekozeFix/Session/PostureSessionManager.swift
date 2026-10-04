@@ -422,7 +422,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 自動回転して配信される（connection.videoRotationAngle は参考値にすぎない）。
         // したがって Vision には常に .up を渡す。
         //
-        // ポーズ検出はキャプチャキュー（sessionQueue）上で同期的に実行する。
+        // ポーズ検出は検出専用キュー（detectionQueue）上で同期的に実行する。
+        // 制御系 sessionQueue とは分離されており、人物ありの高負荷推論中も
+        // 回転角適用・カメラ再構成をブロックしない。
         // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
         // タップ応答の遅延・取りこぼしを引き起こす。
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
@@ -596,6 +598,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
             // 基準ベクトル解決元が校正時から変わったら再校正をトリガー（Comment 1 対策: 校正値の整合性確保）。
             // 向き変化時の自動再校正（grill Q3/Q5）と同様に、基準値とゲートを破棄して calibrating へ遷移。
+            // Motion は停止しない（回転トリガ経路と同一則）。停止すると再校正中の重力が恒常nilになり
+            // 代替基準でしか完了できず、完了時の Motion 再開で重力が戻ると即座に再発火する往復ループになる。
             // resolvedReference が nil の場合（人物不在・ポーズ未取得）は解決元の変更とはみなさない（猶予期間を維持）。
             let sourceChanged = snapshot.calibrationReferenceSource != nil
                 && resolvedReference?.source != nil
@@ -605,7 +609,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.calibrationLogic.start()
                 self.snapshot.calibrationProgress = .waitingForPerson
                 self.resetCalibrationState()
-                self.setMotionRotationRunning(false)
                 self.settingsStore.isMonitoringEnabled = false
                 self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 3.0)
                 self.alertPlayer?.stop()
