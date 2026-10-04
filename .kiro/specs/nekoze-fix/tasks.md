@@ -239,7 +239,7 @@
   - _Depends: 8.1, 8.2, 8.3, 8.4_
 
 - [x] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
-  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...30.0, step 0.5), label with current value like the angle control
+  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (1.0...30.0, step 0.5), label with current value like the angle control
   - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
   - _Boundary: MonitorView_
   - _Requirements: 4.4_
