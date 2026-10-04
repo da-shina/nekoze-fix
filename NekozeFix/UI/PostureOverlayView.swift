@@ -157,7 +157,7 @@ struct PostureOverlayView: View {
                 if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     referenceArc(in: geometry.size, isReference: isRef)
 
-                    // 閾値ガイド（角度・距離の分離表示）
+                    // 閾値ガイド（角度・距離の同時表示）
                     // スライダー操作中のみ表示（操作終了後は非表示）
                     if showAngleGuide || showDistanceGuide {
                         thresholdGuide(in: geometry.size, isReference: isRef)
@@ -260,10 +260,10 @@ struct PostureOverlayView: View {
         .stroke(arcColor, lineWidth: arcWidth)
 }
 
-/// 閾値ガイド（角度・距離の分離表示）。
-    /// - 角度操作中（showAngleGuide）: キャリブレーション基準耳肩ラインから ±angleThreshold の2本の破線（グレー）
-    /// - 距離操作中（showDistanceGuide）: 上限・下限の角度閾値レイ上の上限距離に2ドット（グレー、耳より上部）と、
-    ///   それらを結ぶ破線の弧（半径＝上限距離）を表示する。
+/// 閾値ガイド（角度・距離の同時表示）。
+    /// いずれかのスライダー操作中に以下をすべて表示する（外側の呼び出し元で可視性をゲート）。
+    /// - キャリブレーション基準耳肩ラインから ±angleThreshold の2本の破線（グレー）
+    /// - 上限・下限の角度閾値レイ上の上限距離に2ドット（グレー、耳より上部）と、それらを結ぶ破線の弧
     ///   猫背判定は上限超過（baseline × (1 + threshold/100) 以上）のみのため、下限距離のドット・弧は表示しない。
     @ViewBuilder
     private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
@@ -306,69 +306,65 @@ struct PostureOverlayView: View {
         // 線の長さ（上限距離まで伸ばす）
         let lineLength = upperDist + 20
 
-        // 角度ガイド: 2本の角度閾値線（グレー破線）のみ。距離ドットは載せない。
-        if showAngleGuide {
-            let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
+        // 角度閾値角（距離ガイドの2ドット位置にも使う）
+        let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
 
-            Group {
-                // 上限角度の線
-                Path { line in
-                    line.move(to: startPoint)
-                    line.addLine(to: CGPoint(
-                        x: startPoint.x + cos(upperAngle) * lineLength,
-                        y: startPoint.y + sin(upperAngle) * lineLength
-                    ))
-                }
-                .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
-                .foregroundColor(Color.gray)
-
-                // 下限角度の線
-                Path { line in
-                    line.move(to: startPoint)
-                    line.addLine(to: CGPoint(
-                        x: startPoint.x + cos(lowerAngle) * lineLength,
-                        y: startPoint.y + sin(lowerAngle) * lineLength
-                    ))
-                }
-                .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
-                .foregroundColor(Color.gray)
+        // 角度ガイド: 2本の角度閾値線（グレー破線）
+        Group {
+            // 上限角度の線
+            Path { line in
+                line.move(to: startPoint)
+                line.addLine(to: CGPoint(
+                    x: startPoint.x + cos(upperAngle) * lineLength,
+                    y: startPoint.y + sin(upperAngle) * lineLength
+                ))
             }
+            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
+            .foregroundColor(Color.gray)
+
+            // 下限角度の線
+            Path { line in
+                line.move(to: startPoint)
+                line.addLine(to: CGPoint(
+                    x: startPoint.x + cos(lowerAngle) * lineLength,
+                    y: startPoint.y + sin(lowerAngle) * lineLength
+                ))
+            }
+            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
+            .foregroundColor(Color.gray)
         }
 
         // 距離ガイド: 上下の角度閾値レイ上の上限2ドット（耳より上部）とそれらを結ぶ弧。下限距離は表示しない。
-        if showDistanceGuide {
-            let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
-            let (upperDot, lowerDot) = Self.distanceThresholdDots(
-                startPoint: startPoint,
-                upperAngle: upperAngle,
-                lowerAngle: lowerAngle,
-                upperDistance: upperDist
-            )
+        let (upperDot, lowerDot) = Self.distanceThresholdDots(
+            startPoint: startPoint,
+            upperAngle: upperAngle,
+            lowerAngle: lowerAngle,
+            upperDistance: upperDist
+        )
 
-            Group {
-                Circle()
-                    .fill(Color.gray)
-                    .frame(width: dotRadius * 2, height: dotRadius * 2)
-                    .position(upperDot)
+        Group {
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(upperDot)
 
-                Circle()
-                    .fill(Color.gray)
-                    .frame(width: dotRadius * 2, height: dotRadius * 2)
-                    .position(lowerDot)
-            }
-
-            Path { arc in
-                arc.addArc(
-                    center: startPoint,
-                    radius: upperDist,
-                    startAngle: .radians(lowerAngle),
-                    endAngle: .radians(upperAngle),
-                    clockwise: wrappedDelta(upperAngle - lowerAngle) < 0
-                )
-            }
-            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
-            .foregroundColor(Color.gray)
+            Circle()
+                .fill(Color.gray)
+                .frame(width: dotRadius * 2, height: dotRadius * 2)
+                .position(lowerDot)
         }
+
+        Path { arc in
+            arc.addArc(
+                center: startPoint,
+                radius: upperDist,
+                startAngle: .radians(lowerAngle),
+                endAngle: .radians(upperAngle),
+                clockwise: wrappedDelta(upperAngle - lowerAngle) < 0
+            )
+        }
+        .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
+        .foregroundColor(Color.gray)
     }
 
     /// 角度差を (-π, π] に正規化。符号が短距離回る方向を示す。
