@@ -13,7 +13,7 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            switch snapshot.phase {
+            switch sessionManager.snapshot.phase {
             case .awaitingPermission, .permissionDenied:
                 PermissionView()
             case .calibrating:
@@ -46,11 +46,6 @@ struct RootView: View {
         }
     }
 
-    // MARK: - 計算プロパティ
-
-    private var snapshot: SessionSnapshot {
-        sessionManager.snapshot
-    }
 }
 
 // MARK: - プレビュー

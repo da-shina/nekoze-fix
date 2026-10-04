@@ -55,7 +55,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// data-output 接続へ転送される（requirements 2.1, 2.2）。
     func testAttachedServiceAngleInjection_flowsToCaptureConnection() {
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
@@ -71,7 +71,7 @@ final class RotationWiringOrderTests: XCTestCase {
     func testAttachedServiceCaptureChange_triggersRecalibrationViaSubscription() {
         seedCalibratedMonitoring()
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         XCTAssertEqual(sut.snapshot.phase, .monitoring, "結線時の初期角（0°）では遷移しない")
 
         fake.inject(preview: 90.0, capture: 90.0)
@@ -91,7 +91,7 @@ final class RotationWiringOrderTests: XCTestCase {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
         }
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
@@ -120,7 +120,7 @@ final class RotationWiringOrderTests: XCTestCase {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
         }
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         sut.cameraManager.deviceFinalizedHandler?(device)
         await MainActor.run {}
         XCTAssertEqual(fake.recreateCallCount, 1, "前提：初回確定で1回再生成")
@@ -140,7 +140,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// （二重解決・隠れた共有所有を作らない。design.md Boundary Map）。
     func testRotationServiceForPreview_sharesSameInstanceWithSession() {
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
 
         XCTAssertTrue(sut.rotationService === fake, "View 注入用に同一インスタンスを返す")
     }

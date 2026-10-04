@@ -195,14 +195,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         return !isPortrait
     }
 
-    /// 回転サービスの結線（4.1 実結線）。購読の張り替えは didSet 経由で一本化する。
-    /// テストは Fake を渡して TestDouble 駆動する。
-    /// Session と View は本メソッドで結線した同一インスタンスを共有する
-    /// （View は `rotationService` を直接購読する。二重解決・隠れた共有所有を作らない）。
-    func attachRotationService(_ service: (any DeviceRotationServiceProtocol)?) {
-        rotationService = service
-    }
-
     /// カメラ確定デバイスの受口（4.1 実結線。`CameraSessionManager.deviceFinalizedHandler` の接続先）。
     /// 初回は本番 Service を生成して購読結線し、以後は所有層で recreate する。
     /// 生成直後の start は Motion 稼働 parity（稼働中のみ開始。暗転中継続・背景停止は既存則）。
@@ -218,7 +210,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         lastFinalizedCameraDevice = device
         if rotationService == nil {
             let service = DeviceRotationService(device: device, previewLayer: ensureOwnedPreviewLayer())
-            attachRotationService(service)
+            rotationService = service
             if motionService.isRunning {
                 service.start()
             }
@@ -278,7 +270,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 未確定時は見送る（直前有効角の維持）。
     func handlePreviewLayerAppeared() {
         guard let device = lastFinalizedCameraDevice else { return }
-        rotationService?.recreate(for: device, previewLayer: ensureOwnedPreviewLayer())
+        requestRotationRecreate(for: device)
     }
 
     /// 所有プレビュー層の遅延生成（初回再生成指示時）。以後同一インスタンスを使う。

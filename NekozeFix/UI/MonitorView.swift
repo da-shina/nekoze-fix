@@ -221,15 +221,34 @@ struct MonitorView: View {
             .opacity(0.8)
     }
 
+    // MARK: - 表示対応表(純粋関数。MonitorViewStyleTests が全分岐を固定)
+
+    /// フェーズ→(アイコン,文言)。色は statusColor が担当する。
+    static func statusContent(for phase: SessionPhase) -> (icon: String, text: String) {
+        switch phase {
+        case .monitoring:
+            return ("antenna.radiowaves.left.and.right", "監視中")
+        default:
+            return ("stop.circle", "停止中")
+        }
+    }
+
+    /// 姿勢→(アイコン,文言)。色は postureColor が担当する。
+    static func postureContent(for posture: DisplayedPosture) -> (icon: String, text: String) {
+        switch posture {
+        case .good:
+            return ("checkmark.circle.fill", "良好")
+        case .slouch:
+            return ("exclamationmark.triangle.fill", "猫背を検出")
+        case .personMissing:
+            return ("person.slash.fill", "人を検出できません")
+        }
+    }
+
     // MARK: - 計算プロパティ
 
     private var statusIcon: String {
-        switch sessionManager.snapshot.phase {
-        case .monitoring:
-            return "antenna.radiowaves.left.and.right"
-        default:
-            return "stop.circle"
-        }
+        Self.statusContent(for: sessionManager.snapshot.phase).icon
     }
 
     private var statusColor: Color {
@@ -237,23 +256,11 @@ struct MonitorView: View {
     }
 
     private var statusText: String {
-        switch sessionManager.snapshot.phase {
-        case .monitoring:
-            return "監視中"
-        default:
-            return "停止中"
-        }
+        Self.statusContent(for: sessionManager.snapshot.phase).text
     }
 
     private var postureIcon: String {
-        switch sessionManager.snapshot.displayedPosture {
-        case .good:
-            return "checkmark.circle.fill"
-        case .slouch:
-            return "exclamationmark.triangle.fill"
-        case .personMissing:
-            return "person.slash.fill"
-        }
+        Self.postureContent(for: sessionManager.snapshot.displayedPosture).icon
     }
 
     private var postureColor: Color {
@@ -268,14 +275,7 @@ struct MonitorView: View {
     }
 
     private var postureText: String {
-        switch sessionManager.snapshot.displayedPosture {
-        case .good:
-            return "良好"
-        case .slouch:
-            return "猫背を検出"
-        case .personMissing:
-            return "人を検出できません"
-        }
+        Self.postureContent(for: sessionManager.snapshot.displayedPosture).text
     }
 
 }

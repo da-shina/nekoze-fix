@@ -94,6 +94,46 @@ final class CameraPreviewRotationTests: XCTestCase {
         XCTAssertEqual(connection.videoRotationAngle, 0.0, "非対応接続では現行角を維持する")
     }
 
+    // MARK: - resubscribeIfNeeded の切替則（attach-after-appear 対応）
+
+    /// nil 源では既存購読を維持する（3.2 の既定動作）。
+    func testResubscribe_nilSource_keepsExistingSubscription() {
+        let rotationSource = FakeDeviceRotationService(previewAngle: 10.0, captureAngle: 10.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
+        let view = CameraPreviewUIView(
+            session: AVCaptureSession(),
+            rotationSource: rotationSource,
+            previewConnectionForTesting: connection
+        )
+
+        view.resubscribeIfNeeded(to: nil)
+        rotationSource.inject(preview: 30.0, capture: 30.0)
+
+        XCTAssertEqual(connection.videoRotationAngle, 30.0, "nil 再購読では既存購読が生き続ける")
+    }
+
+    /// 異なる源への張り替え後は旧源を無視し新源のみ適用する。
+    func testResubscribe_newSource_switchesSubscription() {
+        let first = FakeDeviceRotationService(previewAngle: 10.0, captureAngle: 10.0)
+        let second = FakeDeviceRotationService(previewAngle: 20.0, captureAngle: 20.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
+        let view = CameraPreviewUIView(
+            session: AVCaptureSession(),
+            rotationSource: first,
+            previewConnectionForTesting: connection
+        )
+        XCTAssertEqual(connection.videoRotationAngle, 10.0, "前提：初回購読で現行角を適用")
+
+        view.resubscribeIfNeeded(to: second)
+        XCTAssertEqual(connection.videoRotationAngle, 20.0, "張り替え直後に新源の現行角を適用")
+
+        first.inject(preview: 30.0, capture: 30.0)
+        XCTAssertEqual(connection.videoRotationAngle, 20.0, "旧源の注入は無視する")
+
+        second.inject(preview: 40.0, capture: 40.0)
+        XCTAssertEqual(connection.videoRotationAngle, 40.0, "新源の注入を適用する")
+    }
+
     // MARK: - Session 所有層の注入シーム（所有権は Session。View 側で生成しない）
 
     /// 注入層がある場合は View が層を生成せず注入層を使う。

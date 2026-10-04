@@ -21,7 +21,8 @@ final class AlertPlayer {
     /// - Parameter soundURL: アラートサウンドファイルのURL
     init(soundURL: URL) {
         self.soundURL = soundURL
-        configureAudioSession()
+        try? audioSession.setCategory(.playback, options: .duckOthers)
+        try? audioSession.setActive(true)
     }
 
     // MARK: - パブリックメソッド
@@ -52,10 +53,4 @@ final class AlertPlayer {
         player.play()
     }
 
-    // MARK: - プライベートメソッド
-
-    private func configureAudioSession() {
-        try? audioSession.setCategory(.playback, options: .duckOthers)
-        try? audioSession.setActive(true)
-    }
 }

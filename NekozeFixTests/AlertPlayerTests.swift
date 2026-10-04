@@ -49,4 +49,13 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertNoThrow(sut.stop())
         XCTAssertNoThrow(sut.stop())
     }
+
+    func testConfigureSessionFailure_keepsIsPlayingFalse() {
+        // 前提: 無効URLで構成失敗
+        // 検証: 半構築プレイヤーが再生中と誤認しない(不変条件)
+        XCTAssertThrowsError(try sut.configureSession())
+        XCTAssertFalse(sut.isPlaying, "構成失敗後は再生中であってはならない")
+        XCTAssertNoThrow(sut.startRepeating(), "失敗後の再生要求もクラッシュしない")
+        XCTAssertFalse(sut.isPlaying)
+    }
 }
