@@ -18,7 +18,7 @@ final class SettingsStore: ObservableObject {
     // MARK: - 定数
 
     /// 閾値の下限（度）
-    static let thresholdMinDegrees: Double = 3.0
+    static let thresholdMinDegrees: Double = 1.0
     /// 閾値の上限（度）
     static let thresholdMaxDegrees: Double = 20.0
     /// デフォルト閾値（度）。少々の前方頭出しも通知する厳しめ設定

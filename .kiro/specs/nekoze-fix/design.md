@@ -9,7 +9,7 @@
 ### Goals
 
 - 4.1 の天方向基準・三段フォールバック鎖（重力→肩ライン直交→画像垂直）を実装する
-- 4.8 の基準線表示と校正の一貫性を実現する（代替中は無区別表示）
+- 4.9 の基準線表示と校正の一貫性を実現する（代替中は無区別表示）
 - 既存アーキテクチャ（Types → Domain → Services → Session → UI）と純粋性制約を維持する
 - 全受入基準に対するテスト可能性を確保する
 
@@ -34,13 +34,13 @@
 ### Out of Boundary
 
 - カメラ・Vision・音声・暗転・スリープ抑止・ライフサイクルの既存振る舞い（変更しない）
-- 回転検出ロジックの改善（`DeviceOrientationMonitor` の 5 秒タイマ等は触らない）
+- 回転検出ロジックは `ios17-baseline` スペックの `DeviceRotationService` に一本化済み（本スペックでは参照のみ）
 - カスタム通知音・履歴・ヘルスケア連携等の Out 項目
 
 ### Allowed Dependencies
 
 - Apple frameworks のみ: SwiftUI, Combine, AVFoundation, Vision, CoreMotion, UIKit, AudioToolbox（サードパーティ追加なし）
-- 既存層の再利用: `TimedConditionGate`、`CalibrationLogic`（無改修で利用）。デバイス姿勢の購読と出力接続の向き同期は Session 側の別系統であり、`MotionService` は参照しない。`DeviceOrientationMonitor` の改修・`CameraSessionManager` の鏡像情報の読取りは行わない
+- 既存層の再利用: `TimedConditionGate`、`CalibrationLogic`（無改修で利用）。デバイス姿勢の購読と出力接続の向き同期は Session 側の別系統であり、`MotionService` は参照しない。`DeviceRotationService`（`ios17-baseline` スペック）から回転角を購読し、Session で角度変換・再生成指示を行う。`DeviceOrientationMonitor` は削除済み。`CameraSessionManager` の鏡像情報の読取りは行わない
 - 依存方向は Types → Domain → Services → Session → UI を厳守し、Domain は Services を参照しない（重力は値として注入）
 
 ### Revalidation Triggers
@@ -69,7 +69,7 @@ graph TB
     MotionService --> SessionManager
     CameraManager --> SessionManager
     PoseDetector --> SessionManager
-    OrientationMonitor --> SessionManager
+    DeviceRotationService --> SessionManager
     SessionManager --> PostureAnalyzer
     SessionManager --> OverlayView
     CalibrationLogic --> SessionManager
@@ -77,7 +77,7 @@ graph TB
 ```
 
 **Architecture Integration**:
-- Selected pattern: 既存レイヤードの維持＋値注入。重力は Services で取得し Domain へ値渡しする。
+- 既存レイヤードの維持＋値注入。重力は Services で取得し Domain へ値渡しする。回転角は `ios17-baseline` スペックの `DeviceRotationService` から取得し Session で購読する。
 - Domain boundaries: 解決（`resolve`）・判定（Analyzer）・取得（MotionService）を分離し、三段解決は Analyzer 内に一本化する。
 - Existing patterns preserved: 純粋 Domain、Session 集約、猶予パターン、無改修の校正・ゲート・通知。
 - New components rationale: MotionService（取得と単一ホールド）、ReferenceVector 型（判定と表示の同一性保証）。
@@ -88,6 +88,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | Services | CoreMotion CMMotionManager / iOS 17.0 | 重力取得 | プラットフォーム標準を採用、自作傾き推定は不採用 |
+| Services | AVFoundation RotationCoordinator / iOS 17.0 | 回転角取得 | `ios17-baseline` スペックの `DeviceRotationService` 経由で取得 |
 | Domain | Swift 構造体 純粋関数 | 解決・角度算出 | 新規依存なし |
 | UI | SwiftUI 既存 Overlay | 基準線描画 | 見た目変更なし |
 | Config | Info plist NSMotionUsageDescription | 権限文言 | カメラ文言の既存方式に倣う |
@@ -155,7 +156,8 @@ Key Decisions: 保持時間 0.5 秒は personMissing／shoulderMissing の既存
 | 2.7 | 天方向基準で登録 | Analyzer, Session | 重力注入・解決 | sequence |
 | 3.1 | 監視開始停止 | Session | 既存＋Motion 起停 | sequence |
 | 4.1 | 天方向鋭角・三段代替・OR | Analyzer, MotionService | 解決・注入 | state, sequence |
-| 4.8 | 基準線表示と校正一貫・無区別 | OverlayView, Session, Analyzer | ベクトル受渡し | sequence |
+| 4.5 | 閾値ガイド表示 | OverlayView, Session | ガイドパラメータ受渡し | sequence |
+| 4.9 | 基準線表示と校正一貫・無区別 | OverlayView, Session, Analyzer | ベクトル受渡し | sequence |
 | 6.2 | 暗転中継続 | Session | 既存＋Motion 継続 | — |
 | 8.1 | 背景移行で停止 | Session | 既存＋Motion 停止 | — |
 | 8.2 | 復帰時再開 | Session | 既存＋Motion 再開 | — |
@@ -168,8 +170,9 @@ Key Decisions: 保持時間 0.5 秒は personMissing／shoulderMissing の既存
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | PostureAnalyzer | Domain | 角度算出と OR 判定＋三段解決（`resolve` 同梱） | 2.7, 3.5, 4.1, 4.3, 4.5, 4.6 | Types (P0) | Service |
 | MotionService | Services | 重力取得・変換・単一ホールド | 4.1, 3.1, 9.1 | CoreMotion (P0 外) | Service, State |
-| PostureSessionManager | Session | 所有・注入・表示受渡し | 2.7, 3.1, 4.8, 8.1, 8.2 | Motion (P0), Analyzer (P0), Overlay (P0) | State |
-| PostureOverlayView | UI | 基準線描画（無区別） | 4.8 | Session snapshot (P0) | State |
+| DeviceRotationService | Services | 回転角取得・配信・再生成 | 2.1, 2.2, 2.3, 2.4 | RotationCoordinator (P0 外) | Service, State |
+| PostureSessionManager | Session | 所有・注入・表示受渡し・回転購読 | 2.7, 3.1, 4.9, 8.1, 8.2, 2.3, 2.4, 7.1 | Motion (P0), Analyzer (P0), Overlay (P0), Rotation (P0) | State |
+| PostureOverlayView | UI | 基準線描画（無区別）＋閾値ガイド表示 | 4.9, 4.5 | Session snapshot (P0) | State |
 
 ### Domain
 
@@ -242,6 +245,33 @@ func analyze(
 
 ### Services
 
+#### DeviceRotationService（ios17-baseline スペックで実装済み）
+
+`ios17-baseline` スペック（task 2.1）で実装済み。本スペックでは参照のみ。
+
+| Field | Detail |
+|-------|--------|
+| Intent | 回転角の取得・配信・再生成を単一所有する（`ios17-baseline` スペック所有） |
+| Requirements | 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1 |
+
+**Responsibilities & Constraints**（`ios17-baseline` 設計書より抜粋）
+- `AVCaptureDevice.RotationCoordinator` を所有し、preview 用・capture 用の回転角（度）を `@Published` で配信する
+- カメラ確定時・プレビュー層出現時に Session が `recreate` を呼ぶ
+- デバイス姿勢不明時はイベントを発火せず直前の有効角を保持する
+- UIDevice 通知の購読・自前換算表・フォールバック推定を持たない
+
+**Service Interface**
+```swift
+final class DeviceRotationService {
+  init(device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
+  @Published private(set) var previewRotationAngle: CGFloat // 度
+  @Published private(set) var captureRotationAngle: CGFloat // 度
+  func recreate(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
+  func start()
+  func stop()
+}
+```
+
 #### MotionService（新設）
 
 | Field | Detail |
@@ -306,17 +336,22 @@ final class MotionService {
 
 | Field | Detail |
 |-------|--------|
-| Intent | Motion 所有・重力注入・解決ベクトルの表示受渡しを追加する |
-| Requirements | 2.7, 3.1, 4.8, 8.1, 8.2 |
+| Intent | Motion 所有・重力注入・解決ベクトルの表示受渡し・回転角購読を追加する |
+| Requirements | 2.7, 3.1, 4.9, 8.1, 8.2, 2.3, 2.4, 7.1 |
 
 **Responsibilities & Constraints**
 - 既存の状態機械・ゲート・通知・暗転・スリープ則は変えない。
-- 向き変化時（monitoring中のみ）は自動再校正遷移を行う（grill Q3/Q5決定）: `referenceAngle/referenceDistances/referenceSide` と猫背ゲートを破棄し `calibrating` へ遷移、再校正完了まで監視を停止する（grill Q6決定）。トリガは既存 `DeviceOrientationMonitor.currentVideoOrientation` の購読のみで、モニタ自体は無改修。calibrating中の向き変化・idleは対象外。
+- 向き変化時（monitoring中のみ）は自動再校正遷移を行う（grill Q3/Q5決定）: `referenceAngle/referenceDistance/referenceSide` と猫背ゲートを破棄し `calibrating` へ遷移、再校正完了まで監視を停止する（grill Q6決定）。トリガは `DeviceRotationService` の `captureRotationAngle` 変更通知（`handleRotationAngleChange(preview:capture:)`）で検知する。calibrating中・idle・同一角の再通知は対象外。
+- `isLandscape` 導出は `captureRotationAngle` を用い、正規化角度区間 [45°, 135°) と [225°, 315°) を portrait、それ以外を landscape とする。ヒステリシスなし。
+- 重力ベクトルのバッファ座標系変換には `captureRotationAngle` を用い `(θ-90°)` 回転を適用する（デバイス座標系→バッファ座標系）。背面カメラ・ランドスケープ時はさらに 180° 補正する。
+- カメラ確定時・プレビュー層出現時に `DeviceRotationService.recreate` を指示する（`ios17-baseline` スペック task 4.1 の順序保証に従う）。
+- Motion 起停と完全同一箇所で回転サービスの起停を駆動する（暗転中継続・背景移行停止を含む）。
 - Overlay に渡すベクトルは `analyze` が返した `referenceVector` をそのまま受渡しする（単一解決、二重解決なし）。
 
 **Dependencies**
 - Inbound: UI intents — 既存（Criticality P0）
 - Outbound: MotionService — 起停と参照（Criticality P0）
+- Outbound: DeviceRotationService — 起停・再生成指示・角度購読（Criticality P0）
 - Outbound: OverlayView — 点列＋ベクトル（Criticality P0）
 
 **Contracts**: Service [ ] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -354,16 +389,23 @@ final class MotionService {
 
 | Field | Detail |
 |-------|--------|
-| Intent | 判定と同一の基準線を通常の見た目で描画する |
-| Requirements | 4.8 |
+| Intent | 判定と同一の基準線を通常の見た目で描画する。閾値スライダー操作中は上限・下限ガイドを重ね描画する。 |
+| Requirements | 4.9, 4.5 |
 
 **Responsibilities & Constraints**
 - `referenceVector: CGVector`（非オプショナル）を肩点起点に描画し、色・太さを変えない（無区別原則）。プレビューはダミー垂直ベクトルを渡す。
+- **閾値ガイド（操作中のみ）**:
+  - 角度閾値: **グレーのキャリブレーション基準線（基準角度）に対して** ± 現在閾値 の位置に **破線の緑弧**（半径 80pt、基準弧と同中心・同半径）。既存の「現在」弧（緑実線）と色統一。
+  - 距離閾値: **グレーのキャリブレーション基準線（基準距離・基準耳肩ベクトル）に対して** 垂直な **破線の黄色線**（上限・下限距離）。既存の耳肩結合線（黄色実線）と色統一。キャリブレーション基準肩点 `pS` から基準耳肩ベクトル `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を描く。
+  - いずれも **ドラッグ中（onDrag）のみ表示**。スライダー種別切替時は即座に前ガイド消去・新ガイド表示。
+  - 数値ラベルは出さない（スライダー横の数値表示で十分）。
 
 **Implementation Notes**
-- Integration: AspectFit 補正は点列と同一の係数をベクトルに適用する。
-- Validation: 実機目視（縦・横・代替時）を確認タスクにする。
-- Risks: 見た目変更なしのため回帰影響は小さい。
+- Integration: AspectFit 補正は点列と同一の係数をベクトル・ガイドに適用する。
+- 角度ガイド弧: `referenceArc` と同一の中心・半径・座標変換を使い、開始/終了角を `greenAngle ± deltaThreshold` にする。中心はキャリブレーション基準肩点（referencePointsForGuide[5]）。
+- 距離ガイド線: キャリブレーション基準耳肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る。キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を描く。
+- Validation: 実機目視（縦・横・代替時、両スライダー操作）を確認タスクにする。
+- Risks: 既存描画に加算のみで影響小さい。ガイド状態は `PostureOverlayView` へ追加引数で渡す（Session はスライダー操作フラグを保持しない）。
 
 ## Data Models
 
@@ -387,8 +429,8 @@ final class MotionService {
 
 ## Testing Strategy
 
-- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（向き非依存の K=normalize(−gx,−gy)・傾き鏡像回帰）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰
-- Integration Tests: Session 結合（TestDouble 重力で校正→基準保存→猫背→3 秒確定→改善停止）、代替中も同一ベクトルで判定表示が一致すること、背景・停止での Motion 停止
+- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（向き非依存の K=normalize(−gx,−gy)・傾き鏡像回帰）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰、**閾値ガイド弧/線の幾何計算（角度: greenAngle±delta、距離: 耳肩ベクトル垂直線の位置）**、DeviceRotationService 角度配信・再生成・不明時維持（`ios17-baseline` スペック task 2.2・5.1 で検証済み）
+- Integration Tests: Session 結合（TestDouble 重力で校正→基準保存→猫背→3 秒確定→改善停止）、代替中も同一ベクトルで判定表示が一致すること、背景・停止での Motion 停止、**閾値スライダー操作中のガイド表示/非表示・切替挙動**、回転角変更→自動再校正遷移の結合（TestDouble 角度注入で検証、`ios17-baseline` スペック task 4.2 で検証済み）
 - E2E/UI Tests: 実機で縦置き校正→前屈アラート、斜め設置での安定性、代替時の見た目不変の目視、回転前後の復帰
 - Performance/Load: フレーム処理 33ms 以内、Motion 1/30 時の 1 時間電池 15pct 以内（既存目標の維持確認）
 
@@ -406,6 +448,7 @@ final class MotionService {
 ## Open Questions / Risks
 
 - 変換則の取得式は向き非依存（K=normalize(−gx,−gy)）で確定済み。受渡し時は直近capture角の(θ−90°)回転を適用する（landscape修正）。旧向き別表の残滓がないか注意。向き遷移後のオフセット変化は自動再校正遷移で吸収する。
+- `DeviceRotationService` の KVO 通知遅延（実測約1秒）が自動再校正トリガの発火遅延に影響する可能性。`ios17-baseline` スペックで実機測定・吸収確認済み（回転→自動再校正発火 2秒以内）。
 - 校正 5 度閾値は角度分布変化でリセット頻発の可能性があり、実機で要否を判断する（設計値は変えない）。
 - シミュレータでは重力が恒常 nil となり代替パスのみ検証できる。実機レーンの確保が前提である。
 
@@ -420,3 +463,4 @@ final class MotionService {
 *改訂 2026-09-29（14.2 実機検収）: 向き別変換表を撤去し向き非依存の K=normalize(−gx,−gy) に一本化（縦持ち右傾きで緑線が鏡像反転する実機不具合対応。黄線＝キーポイントは正しく左傾き、緑のみ右傾きの観測が決定打）*
 *改訂 2026-10-02（landscape実機不具合）: Kの取得式は向き非依存のまま、Session受渡し時に直近capture角の−θ回転を適用（デバイス座標→バッファ座標の90°ずれ対応。代替経路は回転なし。ReferenceVectorRotationTestsで検証）*
 *改訂 2026-10-02（実機規約の是正）: coordinator角はセンサ基準でありポートレート90°・ランドスケープ0°/180°を取ることが9th実機の悪化報告で確定（WWDC23 10106と整合）。回転を(θ−90°)に、isLandscape対応表を90°±45°/270°±45°→portraitへ是正。従来表は合成テストの注入値のみで検証され実機値と逆転していた*
+*改訂 2026-10-03（ios17-baseline 統合）: DeviceOrientationMonitor 削除・DeviceRotationService 参照へ一本化、回転角購読を handleRotationAngleChange に変更、isLandscape 判定を capture角ベースに統一、重力ベクトル回転に captureRotationAngle 使用。ios17-baseline スペック task 5.2 完了済み*

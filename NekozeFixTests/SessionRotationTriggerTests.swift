@@ -116,8 +116,8 @@ final class SessionRotationTriggerTests: XCTestCase {
     // MARK: - isLandscape 対応表（task 3.4, requirements 2.1, 2.2）
 
     /// design.md PostureSessionManager の対応表を境界値で固定する。
-    /// 90°±45°・270°±45° → portrait、0°±45°・180°±45° → landscape（実機規約）。
-    /// 境界はランドスケープ側に含める（45°→true、135°→false、225°→true、315°→false）。
+    /// 正規化角 [45°,135°)・[225°,315°) → portrait、それ以外 → landscape。
+    /// 45°・225°はポートレート、135°・315°はランドスケープ。
     /// 境界ヒステリシスなし。
     func testIsLandscapeTable_boundaries() {
         let cases: [(capture: CGFloat, expected: Bool, label: String)] = [

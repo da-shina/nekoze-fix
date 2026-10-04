@@ -30,13 +30,13 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(sut.slouchThresholdDegrees, 20.0, accuracy: 0.001)
 
         sut.slouchThresholdDegrees = -10.0
-        XCTAssertEqual(sut.slouchThresholdDegrees, 3.0, accuracy: 0.001)
+        XCTAssertEqual(sut.slouchThresholdDegrees, 1.0, accuracy: 0.001)
     }
 
     func testThreshold_persistsAcrossInstances() {
-        sut.slouchThresholdDegrees = 12.0
+        sut.slouchThresholdDegrees = 8.0
         let reloaded = SettingsStore(defaults: suite)
-        XCTAssertEqual(reloaded.slouchThresholdDegrees, 12.0, accuracy: 0.001)
+        XCTAssertEqual(reloaded.slouchThresholdDegrees, 8.0, accuracy: 0.001)
     }
 
     // MARK: - 旧感度キーからの移行
@@ -49,7 +49,7 @@ final class SettingsStoreTests: XCTestCase {
     }
 
     func testMigration_convertsLegacySensitivityOnceAndDeletesKey() {
-        // 新キーなし・旧キーのみ → 旧マッピング 20 - s*15（0.5 → 12.5度）
+        // 新キーなし・旧キーのみ → 旧マッピング 20 - s*15（0.5 → 12.5度）→ 新範囲 1.0-20.0 内に収まる
         suite.set(0.5, forKey: "com.nekozefix.sensitivity")
         let store = SettingsStore(defaults: suite)
         XCTAssertEqual(store.slouchThresholdDegrees, 12.5, accuracy: 0.001)
