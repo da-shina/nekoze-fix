@@ -12,7 +12,6 @@ import AVFoundation
 ///
 /// simulator 制約：video デバイス不在時はデバイス要テストを graceful-skip する
 /// （1.2／2.1／3.2 と同一パターン）。
-extension FakeDeviceRotationService: SessionRotationService {}
 
 @MainActor
 final class SessionRotationTriggerTests: XCTestCase {
@@ -28,20 +27,7 @@ final class SessionRotationTriggerTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Fake
-
-    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class FakeSessionCaptureConnection: VideoRotationConnection {
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(initialAngle: CGFloat = -999.0) {
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
-    }
+    // MARK: - Fake 接続は共有 FakeCaptureConnection（DeviceRotationTestDouble.swift）を使用
 
     private func seedCalibratedMonitoring() {
         sut.applyCalibrationCompletion(
@@ -77,7 +63,7 @@ final class SessionRotationTriggerTests: XCTestCase {
 
     /// capture 角が data-output 接続へ転送される（requirements 2.1）。
     func testHandleRotationAngleChange_forwardsCaptureAngleToCameraManager() {
-        let connection = FakeSessionCaptureConnection()
+        let connection = FakeCaptureConnection(initialAngle: -999.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         sut.handleRotationAngleChange(preview: 270.0, capture: 90.0)
@@ -89,7 +75,7 @@ final class SessionRotationTriggerTests: XCTestCase {
 
     /// preview 角は転送しない（View が Service を直接購読するため）。
     func testHandleRotationAngleChange_doesNotForwardPreviewAngle() {
-        let connection = FakeSessionCaptureConnection()
+        let connection = FakeCaptureConnection(initialAngle: -999.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         sut.handleRotationAngleChange(preview: 270.0, capture: 0.0)

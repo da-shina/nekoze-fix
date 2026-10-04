@@ -9,50 +9,21 @@ import Combine
 /// 【TestDouble 方針】実結線（同一 Service インスタンスの受け渡し・Session 所有層の
 /// 注入・層出現通知の結線）は task 4.1。本ファイルでは分離検証のみ行う：
 /// - 角度値は `FakeDeviceRotationService`（DeviceRotationTestDouble.swift）から注入する。
-/// - 接続は本ファイルの `FakePreviewConnection`（`VideoRotationConnection`
-///   適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
+/// - 接続は共有 `FakeCaptureConnection`（DeviceRotationTestDouble.swift）へ注入する。
+///   simulator には video デバイスが存在しないため実接続は使わない。
 /// - data-output 接続には触らない（`CameraSessionManager` が所有）。
 /// - 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
 /// - View は配信値の適用のみ行い、角度の取得・判断を持たない（表示専用）。
 
-/// Fake の production seam 適合のコンパイル保証。
-/// 不適合があれば本 extension の行でコンパイルが失敗する。
-extension FakeDeviceRotationService: PreviewRotationAngleSource {
-    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
-        $previewRotationAngle.eraseToAnyPublisher()
-    }
-}
-
 @MainActor
 final class CameraPreviewRotationTests: XCTestCase {
-    // MARK: - Fake
-
-    /// `VideoRotationConnection` 適合の TestDouble。
-    /// `supportedAngles` に含まれる角度のみ適用可能（実機の
-    /// `isVideoRotationAngleSupported(_:)` に対応。可否判定の分離再現）。
-    final class FakePreviewConnection: VideoRotationConnection {
-        var supportedAngles: Set<CGFloat>
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(supportedAngles: Set<CGFloat> = [0, 90, 180, 270], initialAngle: CGFloat = 0.0) {
-            self.supportedAngles = supportedAngles
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool {
-            supportedAngles.contains(videoRotationAngle)
-        }
-    }
-
     // MARK: - TestDouble 角度の preview 接続への適用
 
     /// TestDouble の preview 角が preview 接続へ適用される。
     /// requirements.md 2.1（縦置き・横置きでの映像向き合わせ）。
     func testApplyPreviewRotationAngle_appliesFakeAngleToPreviewConnection() {
         let rotationSource = FakeDeviceRotationService(previewAngle: 90.0, captureAngle: 90.0)
-        let connection = FakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             previewConnectionForTesting: connection
@@ -67,7 +38,7 @@ final class CameraPreviewRotationTests: XCTestCase {
     /// requirements.md 2.2（回転追従）。同一サービス購読の分離代用である。
     func testPreviewRotationSubscription_appliesInjectedAnglesSequentially() {
         let rotationSource = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-        let connection = FakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         // rotationSource を購読する結線（同一インスタンス受け渡しは task 4.1）。
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
@@ -90,7 +61,7 @@ final class CameraPreviewRotationTests: XCTestCase {
     /// 非対応時は適用を見送り、現行回転角で継続する（クラッシュさせない）。
     /// design.md Error Handling「回転角の適用非対応 → 見送り」（3.1 と同一則）。
     func testApplyPreviewRotationAngle_skipsWhenUnsupported_fallbackRule() {
-        let connection = FakePreviewConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
+        let connection = FakeCaptureConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             previewConnectionForTesting: connection
@@ -111,7 +82,7 @@ final class CameraPreviewRotationTests: XCTestCase {
 
     /// 接続自体が回転非対応（空集合）の場合も例外なく見送る。
     func testApplyPreviewRotationAngle_skipsWhenConnectionUnsupported_noCrash() {
-        let connection = FakePreviewConnection(supportedAngles: [], initialAngle: 0.0)
+        let connection = FakeCaptureConnection(supportedAngles: [], initialAngle: 0.0)
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             previewConnectionForTesting: connection
@@ -133,7 +104,7 @@ final class CameraPreviewRotationTests: XCTestCase {
         let view = CameraPreviewUIView(
             session: session,
             previewLayer: injected,
-            previewConnectionForTesting: FakePreviewConnection()
+            previewConnectionForTesting: FakeCaptureConnection()
         )
 
         XCTAssertTrue(view.previewLayerForTesting === injected, "注入層がある場合は View が新規生成せず注入層を使う")
@@ -143,7 +114,7 @@ final class CameraPreviewRotationTests: XCTestCase {
     func testDefaultInitKeepsCurrentLayerSourceBehavior() {
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
-            previewConnectionForTesting: FakePreviewConnection()
+            previewConnectionForTesting: FakeCaptureConnection()
         )
 
         let sublayers = view.layer.sublayers ?? []
@@ -161,7 +132,7 @@ final class CameraPreviewRotationTests: XCTestCase {
     func testDidMoveToWindow_notifiesPayloadFreeHook() {
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
-            previewConnectionForTesting: FakePreviewConnection()
+            previewConnectionForTesting: FakeCaptureConnection()
         )
         var callCount = 0
         view.onPreviewLayerAppeared = { callCount += 1 }
@@ -183,7 +154,7 @@ final class CameraPreviewRotationTests: XCTestCase {
         XCTAssertNil(defaultView.rotationSource, "既定では購読なし（結線は4.1）")
 
         let layer = AVCaptureVideoPreviewLayer(session: session)
-        let fake: any PreviewRotationAngleSource = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
+        let fake: any DeviceRotationServiceProtocol = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
         let injected = CameraPreviewView(
             session: session,
             injectedPreviewLayer: layer,

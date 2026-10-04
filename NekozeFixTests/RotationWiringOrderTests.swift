@@ -14,17 +14,10 @@ import Combine
 /// KVO 配送はメイン、最新値の上書きのみ。
 ///
 /// 【TestDouble 方針】角度値は `FakeDeviceRotationService` から注入し、接続は
-/// 本ファイルの Fake（`VideoRotationConnection` 適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
+/// 共有 `FakeCaptureConnection`（DeviceRotationTestDouble.swift）へ注入する。
+/// simulator には video デバイスが存在しないため実接続は使わない。
 /// デバイスを要する箇所は audio フォールバック＋graceful-skip（1.2／2.1／3.2 と同一パターン）。
 /// 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
-extension FakeDeviceRotationService: SessionRotationAngleSource {
-    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
-        $previewRotationAngle
-            .combineLatest($captureRotationAngle)
-            .map { (preview: $0, capture: $1) }
-            .eraseToAnyPublisher()
-    }
-}
 
 @MainActor
 final class RotationWiringOrderTests: XCTestCase {
@@ -40,33 +33,7 @@ final class RotationWiringOrderTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Fake
-
-    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakeCaptureConnection: VideoRotationConnection {
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(initialAngle: CGFloat = 0.0) {
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
-    }
-
-    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakePreviewConnection: VideoRotationConnection {
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(initialAngle: CGFloat = 0.0) {
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
-    }
+    // MARK: - Fake 接続は共有 FakeCaptureConnection（DeviceRotationTestDouble.swift）を使用
 
     private func anyWiringDevice() -> AVCaptureDevice? {
         AVCaptureDevice.default(for: .video) ?? AVCaptureDevice.default(for: .audio)
@@ -89,7 +56,7 @@ final class RotationWiringOrderTests: XCTestCase {
     func testAttachedServiceAngleInjection_flowsToCaptureConnection() {
         let fake = FakeDeviceRotationService()
         sut.attachRotationService(fake)
-        let connection = WiringFakeCaptureConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         fake.inject(preview: 90.0, capture: 90.0)
@@ -125,7 +92,7 @@ final class RotationWiringOrderTests: XCTestCase {
         }
         let fake = FakeDeviceRotationService()
         sut.attachRotationService(fake)
-        let connection = WiringFakeCaptureConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         // 初回：カメラ構成時の確定通知（Session→recreate の順序）。
@@ -194,7 +161,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// （requirements 2.1, 2.2。updateUIView 経路の TestDouble 駆動）。
     func testPreviewViewResubscribe_afterAttach_appliesInjectedAngle() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-        let connection = WiringFakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         // View 出現時点では未結線（rotationSource なし）。
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
@@ -211,7 +178,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// 同一インスタンスへの再通知では購読し直さない（重複購読なし）。
     func testPreviewViewResubscribe_sameInstance_doesNotResubscribe() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-        let connection = WiringFakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             rotationSource: fake,

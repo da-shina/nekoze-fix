@@ -15,18 +15,7 @@ import Combine
 /// （通知先の結線は 4.1。本ファイルではフック点のみ定義し、
 /// `PostureSessionManager` の改修は行わない）。
 
-/// preview 角の配信源シーム。`DeviceRotationService` が適合し、
-/// テストでは `FakeDeviceRotationService` が適合する（test target の extension）。
-/// 同一インスタンスの受け渡し結線は task 4.1。本タスクでは TestDouble で代用する。
-protocol PreviewRotationAngleSource: AnyObject {
-    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> { get }
-}
-
-extension DeviceRotationService: PreviewRotationAngleSource {
-    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
-        $previewRotationAngle.eraseToAnyPublisher()
-    }
-}
+/// 回転角サービスのシームは `DeviceRotationServiceProtocol`（Types）に一本化。
 
 struct CameraPreviewView: UIViewRepresentable {
     // MARK: - プロパティ
@@ -39,7 +28,7 @@ struct CameraPreviewView: UIViewRepresentable {
 
     /// preview 角の配信源。同一 Service インスタンスの受け渡しは task 4.1。
     /// 本タスクでは TestDouble を注入して分離検証する。nil 時は購読しない。
-    var rotationSource: (any PreviewRotationAngleSource)?
+    var rotationSource: (any DeviceRotationServiceProtocol)?
 
     /// 層出現時（`didMoveToWindow` 相当）のペイロードなし通知フック。
     /// Session が所有層で `recreate` するための結線先（結線は task 4.1）。
@@ -87,7 +76,7 @@ internal class CameraPreviewUIView: UIView {
     private var cancellables = Set<AnyCancellable>()
 
     /// 現在購読中の配信源（attach-after-appear の変化検出用）。
-    private var subscribedSource: (any PreviewRotationAngleSource)?
+    private var subscribedSource: (any DeviceRotationServiceProtocol)?
 
     /// テスト用アクセサ：使用中のプレビュー層（注入層か自前層かの検証用）。
     internal var previewLayerForTesting: AVCaptureVideoPreviewLayer { previewLayer }
@@ -95,7 +84,7 @@ internal class CameraPreviewUIView: UIView {
     init(
         session: AVCaptureSession,
         previewLayer: AVCaptureVideoPreviewLayer? = nil,
-        rotationSource: (any PreviewRotationAngleSource)? = nil,
+        rotationSource: (any DeviceRotationServiceProtocol)? = nil,
         previewConnectionForTesting: (any VideoRotationConnection)? = nil,
         onPreviewLayerAppeared: (() -> Void)? = nil
     ) {
@@ -153,7 +142,7 @@ internal class CameraPreviewUIView: UIView {
     /// Service 結線が View 出現より後になる場合（attach-after-appear）に備え、
     /// 同一インスタンスには再購読せず、変化時のみ購読し直す。
     /// nil 時は何もしない（3.2 の既定動作を維持）。
-    func resubscribeIfNeeded(to source: (any PreviewRotationAngleSource)?) {
+    func resubscribeIfNeeded(to source: (any DeviceRotationServiceProtocol)?) {
         guard let source else { return }
         if let subscribedSource, subscribedSource === source { return }
         cancellables.removeAll()

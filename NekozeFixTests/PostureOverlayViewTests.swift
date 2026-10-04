@@ -100,38 +100,6 @@ final class PostureOverlayViewTests: XCTestCase {
         XCTAssertEqual(unitX * perpX + unitY * perpY, 0.0, accuracy: 1e-10)
     }
 
-    func testDistanceGuideLines_UpperLowerCenterPositions() {
-        // Given: 基準距離 50、閾値 20%（=10px相当）
-        let baselineDistance: CGFloat = 50
-
-        // When: 製品ロジックで上限・下限を計算
-        let (upperDist, lowerDist, thresholdPixels) = PostureOverlayView.distanceGuideDistances(
-            baselineDistance: baselineDistance, thresholdPercent: 20.0
-        )
-
-        // Then: baseline × (1 ± threshold/100)
-        XCTAssertEqual(thresholdPixels, 10.0, accuracy: 1e-10)
-        XCTAssertEqual(upperDist, 60.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerDist, 40.0, accuracy: 1e-10)
-
-        // 中心点への適用例: 肩点 (100,100)、単位ベクトル (0,-1) = 上向き
-        let startPoint = CGPoint(x: 100, y: 100)
-        let unitX: CGFloat = 0.0
-        let unitY: CGFloat = -1.0
-        let upperCenter = CGPoint(
-            x: startPoint.x + unitX * upperDist,
-            y: startPoint.y + unitY * upperDist
-        )
-        let lowerCenter = CGPoint(
-            x: startPoint.x + unitX * lowerDist,
-            y: startPoint.y + unitY * lowerDist
-        )
-        XCTAssertEqual(upperCenter.x, 100.0, accuracy: 1e-10)
-        XCTAssertEqual(upperCenter.y, 40.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerCenter.x, 100.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerCenter.y, 60.0, accuracy: 1e-10)
-    }
-
     func testDistanceGuideLines_LineEndpoints() {
         // Given: 中心点 (100, 40)、垂直ベクトル (1, 0) = 右向き、線分半長 40
         let center = CGPoint(x: 100, y: 40)

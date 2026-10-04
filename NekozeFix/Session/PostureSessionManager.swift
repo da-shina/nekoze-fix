@@ -4,39 +4,8 @@ import AVFoundation
 
 /// セッション層: 姿勢監視セッションの状態マシン。
 /// design.md "PostureSessionManager" セクション参照。
-
-/// 回転サービスの Session 側シーム。`DeviceRotationService` が適合し、
-/// テストでは `FakeDeviceRotationService` が適合する（test target の extension）。
-/// 起停は Motion 起停と完全同一箇所で駆動する。実結線は task 4.1。
-/// design.md PostureSessionManager（改修）：購読とトリガ・再生成指示は Session。
-protocol SessionRotationService: AnyObject {
-    /// 監視・校正開始時に呼ぶ（Motion 起停と同一則）。
-    func start()
-    /// 監視停止・背景移行時に呼ぶ（Motion 起停と同一則）。
-    func stop()
-    /// カメラ確定時・プレビュー層出現時に Session が呼ぶ再生成。
-    func recreate(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
-}
-
-extension DeviceRotationService: SessionRotationService {}
-
-/// 回転角購読シーム（4.1 実結線用）。Session が同一 Service インスタンスの
-/// 両角配信を購読するための受口。`DeviceRotationService` が適合し、
-/// テストでは `FakeDeviceRotationService` が適合する（RotationWiringOrderTests 内の extension）。
-/// `SessionRotationService`（起停・再生成の指示口）とは別口のままにし、
-/// 既存適合（SessionRotationTriggerTests 内）を壊さない。
-protocol SessionRotationAngleSource: AnyObject {
-    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> { get }
-}
-
-extension DeviceRotationService: SessionRotationAngleSource {
-    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
-        $previewRotationAngle
-            .combineLatest($captureRotationAngle)
-            .map { (preview: $0, capture: $1) }
-            .eraseToAnyPublisher()
-    }
-}
+/// 回転サービスのシームは `DeviceRotationServiceProtocol`（Types）に一本化。
+/// `DeviceRotationService` が適合し、テストでは `FakeDeviceRotationService` が適合する。
 
 @MainActor
 final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -60,7 +29,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// nil 時は指示を見送る（監視・校正フロー自体は継続）。
     /// 起停は Motion 起停と完全同一箇所で駆動する（暗転中継続・背景移行停止を含む）。
     /// 代入時は角度購読を張り替える（4.1 で結線済み）。
-    var rotationService: (any SessionRotationService)? {
+    var rotationService: (any DeviceRotationServiceProtocol)? {
         didSet { resetRotationSubscription() }
     }
     /// 結線中の角度購読（代入のたびに張り替える。nil 代入時は解除する）。
@@ -216,14 +185,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// テストは Fake を渡して TestDouble 駆動する。
     /// Session と View は本メソッドで結線した同一インスタンスを共有する
     /// （`rotationServiceForPreview` 経由。二重解決・隠れた共有所有を作らない）。
-    func attachRotationService(_ service: (any SessionRotationService)?) {
+    func attachRotationService(_ service: (any DeviceRotationServiceProtocol)?) {
         rotationService = service
     }
 
     /// View 注入用の同一 Service インスタンス（4.1 実結線）。
     /// 未結線時は nil（View は購読しない。3.2 の既定動作）。
-    var rotationServiceForPreview: (any PreviewRotationAngleSource)? {
-        rotationService as? any PreviewRotationAngleSource
+    var rotationServiceForPreview: (any DeviceRotationServiceProtocol)? {
+        rotationService
     }
 
     /// View 注入用の Session 所有プレビュー層（4.1 実結線）。
@@ -261,7 +230,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private func resetRotationSubscription() {
         rotationAnglesSubscription?.cancel()
         rotationAnglesSubscription = nil
-        guard let source = rotationService as? any SessionRotationAngleSource else { return }
+        guard let source = rotationService else { return }
         rotationAnglesSubscription = source.rotationAnglesPublisher
             .sink { [weak self] angles in
                 self?.deliverRotationAngles(preview: angles.preview, capture: angles.capture)

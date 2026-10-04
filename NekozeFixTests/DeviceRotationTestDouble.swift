@@ -1,10 +1,11 @@
 import AVFoundation
 import Combine
+@testable import NekozeFix
 
 /// Task 1.2: 回転角注入テスト基盤（TestDouble）。requirements.md 1.1, 5.1。
 ///
 /// design.md「DeviceRotationService Service Interface」の可観測形状を写す seam であり、
-/// task 2.1 の本実装は `DeviceRotationServiceProtocol` へ適合させること。
+/// 製品の `DeviceRotationServiceProtocol`（Types）へ適合する。
 /// 角度値の直接注入は既存の合成フレーム注入シームと同一パターンである
 /// （OrientationRecalibrationTests が旧トリガ／
 /// `processDetection(.pose(frame))` を直接呼んだ方式）。
@@ -40,23 +41,8 @@ import Combine
 /// 角度の単位は度である（design.md Service Interface）。
 
 /// DeviceRotationService のテスト用 seam。
+/// 製品の `DeviceRotationServiceProtocol`（Types）に適合する。
 /// init は配線（wiring）であって振る舞いではないため protocol 要件に含めない。
-/// task 2.1 の本実装（`NekozeFix/Services/DeviceRotationService.swift`）は
-/// 本 protocol へ適合し、`init(device:previewLayer: AVCaptureVideoPreviewLayer?)` を持つこと。
-protocol DeviceRotationServiceProtocol: AnyObject {
-    /// preview 用回転角（度）。KVO 由来の本番ではメイン配送される。
-    var previewRotationAngle: CGFloat { get }
-    /// capture 用回転角（度）。KVO 由来の本番ではメイン配送される。
-    var captureRotationAngle: CGFloat { get }
-    /// カメラ確定時・プレビュー層出現時に Session が呼ぶ再生成。
-    func recreate(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
-    /// 監視・校正開始時に呼ばれる（Motion 起停と同一則）。
-    func start()
-    /// 停止・背景移行時に呼ばれる（Motion 起停と同一則）。
-    func stop()
-}
-
-/// 角度値を直接注入できる TestDouble。注入は実際に配信シームを駆動する。
 final class FakeDeviceRotationService: DeviceRotationServiceProtocol, ObservableObject {
     @Published private(set) var previewRotationAngle: CGFloat
     @Published private(set) var captureRotationAngle: CGFloat
@@ -114,5 +100,40 @@ final class FakeDeviceRotationService: DeviceRotationServiceProtocol, Observable
     func stop() {
         stopCallCount += 1
         isStarted = false
+    }
+}
+
+extension FakeDeviceRotationService {
+    /// preview 角の配信。製品の同名配信口と同一形状。
+    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
+        $previewRotationAngle.eraseToAnyPublisher()
+    }
+
+    /// 両角の結合配信。製品の同名配信口と同一形状。
+    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
+        $previewRotationAngle
+            .combineLatest($captureRotationAngle)
+            .map { (preview: $0, capture: $1) }
+            .eraseToAnyPublisher()
+    }
+}
+
+/// `VideoRotationConnection` 適合の共有 TestDouble。
+/// 対応角集合（nil＝全角対応）・初期角・ミラー対応可否を設定可能。
+/// 回転適用テスト4ファイルで個別定義されていた Fake を統一したもの。
+final class FakeCaptureConnection: VideoRotationConnection {
+    var supportedAngles: Set<CGFloat>?
+    var videoRotationAngle: CGFloat
+    var isVideoMirroringSupported: Bool
+    var isVideoMirrored: Bool = false
+
+    init(supportedAngles: Set<CGFloat>? = nil, initialAngle: CGFloat = 0.0, mirroringSupported: Bool = true) {
+        self.supportedAngles = supportedAngles
+        self.videoRotationAngle = initialAngle
+        self.isVideoMirroringSupported = mirroringSupported
+    }
+
+    func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool {
+        supportedAngles?.contains(videoRotationAngle) ?? true
     }
 }

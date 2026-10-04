@@ -37,7 +37,6 @@ struct PostureAnalyzer {
         var nearSide: Side?
         var nearEar: Keypoint?
         var nearShoulder: Keypoint?
-        var farSideDetected = false
 
         if leftValid && rightValid {
             let lx = frame.leftShoulder!.x
@@ -60,17 +59,14 @@ struct PostureAnalyzer {
 
             nearEar = (nearSide == .left) ? frame.leftEar : frame.rightEar
             nearShoulder = (nearSide == .left) ? frame.leftShoulder : frame.rightShoulder
-            farSideDetected = true
         } else if leftValid {
             nearSide = .left
             nearEar = frame.leftEar
             nearShoulder = frame.leftShoulder
-            farSideDetected = false
         } else if rightValid {
             nearSide = .right
             nearEar = frame.rightEar
             nearShoulder = frame.rightShoulder
-            farSideDetected = false
         } else {
             return (nil, .insufficientKeypoints, Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees))
         }
@@ -120,7 +116,6 @@ struct PostureAnalyzer {
             AngleSample(
                 nearSide: nearSide!,
                 nearAngleDegrees: acuteAngle,
-                farSideDetected: farSideDetected,
                 nearDistance: reportedDistance
             ),
             verdict,

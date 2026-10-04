@@ -130,3 +130,20 @@ final class DeviceRotationService: ObservableObject {
         publish { $0.captureRotationAngle = angle }
     }
 }
+
+// MARK: - DeviceRotationServiceProtocol 適合（配信口）
+
+extension DeviceRotationService: DeviceRotationServiceProtocol {
+    /// preview 角の配信。View が同一インスタンスを購読する。
+    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
+        $previewRotationAngle.eraseToAnyPublisher()
+    }
+
+    /// 両角の結合配信。Session が同一インスタンスを購読する。
+    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
+        $previewRotationAngle
+            .combineLatest($captureRotationAngle)
+            .map { (preview: $0, capture: $1) }
+            .eraseToAnyPublisher()
+    }
+}
