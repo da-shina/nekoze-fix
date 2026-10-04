@@ -239,7 +239,7 @@
   - _Depends: 8.1, 8.2, 8.3, 8.4_
 
 - [x] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
-  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...15.0, step 0.5), label with current value like the angle control
+  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (1.0...30.0, step 0.5), label with current value like the angle control
   - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
   - _Boundary: MonitorView_
   - _Requirements: 4.4_
@@ -397,27 +397,26 @@
   - _Depends: 13.2_
 
 - [x] 15.2 (P) PostureOverlayView: 距離閾値ガイド線の描画実装
-  - **グレーのキャリブレーション基準耳肩ベクトル `v` を正規化し、垂直ベクトル `v⊥` を作る**
-  - **キャリブレーション基準肩点 `pS` から `v` 方向に `baselineDist ± thresholdDist` 進んだ点を通る `v⊥` 方向の線分（長さ 80pt 程度）を破線黄色で描画する**
+  - **上限・下限の角度閾値レイ上の上限距離 `baselineDist × (1 + threshold/100)` の位置を示すグレーの2ドット（耳より上部）と、それらを結ぶ破線の弧（半径＝上限距離）を描画する。猫背判定は上限超過のみのため下限距離は表示しない**
   - AspectFit補正係数を点列と同一に適用する
   - ガイド状態（表示/非表示、基準距離、閾値距離、耳肩ベクトル）を `PostureOverlayView` の追加引数で受け取る
   - ガイドアンカー用にキャリブレーション基準点 `referencePointsForGuide` を追加引数で受け取る
-  - Observable completion: 距離スライダー値に応じた上下限ガイド線がキャリブレーション基準線に対して表示される
+  - Observable completion: 距離スライダー値に応じた上限2ドット＋弧が角度閾値の2破線上に表示される
   - _Boundary: PostureOverlayView_
   - _Requirements: 4.5_
   - _Depends: 13.2_
 
 - [x] 15.3 MonitorView: スライダー操作状態の検出とガイドパラメータ受け渡し
   - 角度閾値・距離閾値の各スライダーに `.onDragGesture` 相当の操作検出を追加し、ドラッグ中のみガイド表示フラグと閾値値を `PostureOverlayView` へ渡す
-  - スライダー種別切替時（角度⇔距離）は前ガイド即消去・新ガイド即表示
-  - Observable completion: スライダーをドラッグ中にのみガイドが表示され、離すと消える。種別切替で即座に切り替わる
+  - いずれかのスライダー操作中は角度・距離の両ガイドを同時に表示する
+  - Observable completion: スライダーをドラッグ中にのみ両ガイドが表示され、離すと消える
   - _Boundary: MonitorView_
   - _Requirements: 4.5_
   - _Depends: 15.1, 15.2_
 
 - [x] 15.4 単体テスト: 閾値ガイドの幾何計算検証
   - 角度ガイド: `greenAngle ± deltaThreshold` が正しく弧の開始/終了角になること
-  - 距離ガイド: 耳肩ベクトル正規化→垂直ベクトル→肩点からの距離位置計算が正しいこと
+  - 距離ガイド: 上限距離 `baseline × (1 + threshold/100)` が判定境界と一致し、2ドットが角度2破線上の上限位置（耳より上部）になり、弧半径＝上限距離になること。下限距離は表示しないこと
   - AspectFit補正が点列・基準線・ガイドで一致すること
   - Observable completion: PostureOverlayViewTests の幾何計算テストがすべてパスする
   - _Boundary: PostureOverlayView_
@@ -425,9 +424,9 @@
   - _Depends: 15.1, 15.2_
 
 - [x] 15.5 統合テスト: 閾値スライダー操作中のガイド表示/非表示・切替挙動
-  - 角度スライダー・距離スライダーそれぞれのドラッグ中に対応ガイドが表示されること
+  - いずれかのスライダーのドラッグ中に角度・距離の両ガイド表示フラグが適切に立つこと
   - ドラッグ終了でガイドが消えること
-  - 角度→距離スライダーへの切替で即座にガイドが切り替わること
+  - 角度→距離スライダーへの切替で表示フラグが即座に切り替わること（描画は両ガイド同時表示）
   - Observable completion: UI統合テストで全シナリオがパスする
   - _Boundary: MonitorView, PostureOverlayView_
   - _Requirements: 4.5_

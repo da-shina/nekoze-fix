@@ -173,5 +173,61 @@ final class PostureOverlayViewTests: XCTestCase {
         XCTAssertEqual(sy3, 1.0 / (4.0/3.0), accuracy: 1e-10)
     }
 
+    // MARK: - 距離閾値ドット（上限のみ・中心線延長上）
+
+    func testUpperDistance_MatchesVerdictBoundary() {
+        // Given: 基準距離 50、閾値 20%（判定式 baseline × (1 + threshold/100) と同一）
+        // Then: 上限のみが判定境界と一致する
+        XCTAssertEqual(PostureOverlayView.upperDistance(baselineDistance: 50, thresholdPercent: 20.0), 60.0, accuracy: 1e-10)
+        XCTAssertEqual(PostureOverlayView.upperDistance(baselineDistance: 50, thresholdPercent: 0.0), 50.0, accuracy: 1e-10)
+        XCTAssertEqual(PostureOverlayView.upperDistance(baselineDistance: 50, thresholdPercent: 8.0), 54.0, accuracy: 1e-10)
+    }
+
+    func testDistanceThresholdDots_OnBothAngleRaysAtUpperDistance() {
+        // Given: 肩点 (100,100)、中心線は真上（-π/2）、角度閾値 10°、基準距離 50、距離閾値 20%
+        // 耳は肩から中心線方向に基準距離の位置 (100,50) にある想定
+        let startPoint = CGPoint(x: 100, y: 100)
+        let centerAngle: CGFloat = -.pi / 2
+        let (upperAngle, lowerAngle) = PostureOverlayView.angleGuideAngles(
+            centerAngle: centerAngle, thresholdDegrees: 10.0
+        )
+        let baseline: CGFloat = 50
+        let upper = PostureOverlayView.upperDistance(baselineDistance: baseline, thresholdPercent: 20.0)
+
+        // When: 製品ロジックで2ドット位置を計算
+        let (upperDot, lowerDot) = PostureOverlayView.distanceThresholdDots(
+            startPoint: startPoint, upperAngle: upperAngle, lowerAngle: lowerAngle, upperDistance: upper
+        )
+
+        // Then: 両ドットとも上下の角度閾値レイ上の上限距離にある（弧の両端）
+        XCTAssertEqual(atan2(upperDot.y - startPoint.y, upperDot.x - startPoint.x), upperAngle, accuracy: 1e-10)
+        XCTAssertEqual(atan2(lowerDot.y - startPoint.y, lowerDot.x - startPoint.x), lowerAngle, accuracy: 1e-10)
+        XCTAssertEqual(hypot(upperDot.x - startPoint.x, upperDot.y - startPoint.y), upper, accuracy: 1e-10)
+        XCTAssertEqual(hypot(lowerDot.x - startPoint.x, lowerDot.y - startPoint.y), upper, accuracy: 1e-10)
+        XCTAssertNotEqual(upperDot.x, lowerDot.x, "2ドットは異なる位置にある")
+
+        // Then: 両ドットとも耳より上部（肩からの距離が基準距離を超える）
+        let earPoint = CGPoint(x: startPoint.x + cos(centerAngle) * baseline,
+                               y: startPoint.y + sin(centerAngle) * baseline)
+        XCTAssertGreaterThan(earPoint.y, upperDot.y, "画面座標でドットは耳より上（y が小さい）")
+        XCTAssertGreaterThan(earPoint.y, lowerDot.y, "画面座標でドットは耳より上（y が小さい）")
+    }
+
+    func testDistanceThresholdPoint_DiagonalCenterRay() {
+        // Given: 斜め方向の中心線でも中心角レイ上に載ること
+        let startPoint = CGPoint(x: 100, y: 100)
+        let centerAngle: CGFloat = 0 // 右向き
+        let upper: CGFloat = 60
+
+        // When: 製品ロジックでドット位置を計算
+        let dot = PostureOverlayView.distanceThresholdPoint(
+            startPoint: startPoint, centerAngle: centerAngle, upperDistance: upper
+        )
+
+        // Then: (160, 100) で角度オフセット線（±閾値）上ではない
+        XCTAssertEqual(dot.x, 160.0, accuracy: 1e-10)
+        XCTAssertEqual(dot.y, 100.0, accuracy: 1e-10)
+    }
+
     // MARK: - ヘルパー（製品ロジックへの委譲確認用。重複実装はしない）
 }

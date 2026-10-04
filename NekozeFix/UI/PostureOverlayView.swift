@@ -72,7 +72,32 @@ struct PostureOverlayView: View {
         CGFloat(referenceDistance) * screenPerUnit(earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size)
     }
 
+    /// 距離ガイドの上限距離（猫背判定境界）を返す。要件 4.1: baseline × (1 + threshold/100) 以上で猫背。
+    /// 下限は判定に使用しないためガイドも表示しない。
+    static func upperDistance(baselineDistance: CGFloat, thresholdPercent: Double) -> CGFloat {
+        baselineDistance * (1 + CGFloat(thresholdPercent / 100.0))
+    }
+
+    /// 距離閾値ドットの位置を返す。肩起点から中心線（校正時耳肩方向）延長線上の上限距離の点。
+    /// 耳より上部（耳の外側）に配置される。
+    static func distanceThresholdPoint(startPoint: CGPoint, centerAngle: CGFloat, upperDistance: CGFloat) -> CGPoint {
+        CGPoint(
+            x: startPoint.x + cos(centerAngle) * upperDistance,
+            y: startPoint.y + sin(centerAngle) * upperDistance
+        )
+    }
+
+    /// 距離閾値の2ドット位置を返す。上限・下限の角度閾値レイ上の上限距離の点。
+    /// いずれも耳より上部（耳の外側）に配置される。下限距離の点は返さない。
+    static func distanceThresholdDots(startPoint: CGPoint, upperAngle: CGFloat, lowerAngle: CGFloat, upperDistance: CGFloat) -> (upper: CGPoint, lower: CGPoint) {
+        (
+            distanceThresholdPoint(startPoint: startPoint, centerAngle: upperAngle, upperDistance: upperDistance),
+            distanceThresholdPoint(startPoint: startPoint, centerAngle: lowerAngle, upperDistance: upperDistance)
+        )
+    }
+
     /// 距離ガイドの上限・下限距離と閾値ピクセルを返す。要件 4.5: baseline × (1 ± threshold/100)。
+    /// 下限は旧仕様の残滓であり、ガイド表示には使用しない（upperDistance を使用）。
     static func distanceGuideDistances(baselineDistance: CGFloat, thresholdPercent: Double) -> (upper: CGFloat, lower: CGFloat, thresholdPixels: CGFloat) {
         let thresholdPixels = baselineDistance * CGFloat(thresholdPercent / 100.0)
         return (baselineDistance + thresholdPixels, baselineDistance - thresholdPixels, thresholdPixels)
@@ -132,7 +157,7 @@ struct PostureOverlayView: View {
                 if currentPoints.count >= 6 && currentPoints[4] != .zero && currentPoints[5] != .zero {
                     referenceArc(in: geometry.size, isReference: isRef)
 
-                    // 閾値ガイド（角度・距離の統合表示）
+                    // 閾値ガイド（角度・距離の同時表示）
                     // スライダー操作中のみ表示（操作終了後は非表示）
                     if showAngleGuide || showDistanceGuide {
                         thresholdGuide(in: geometry.size, isReference: isRef)
@@ -235,10 +260,11 @@ struct PostureOverlayView: View {
         .stroke(arcColor, lineWidth: arcWidth)
 }
 
-/// 閾値ガイド（角度・距離の統合表示）。
+/// 閾値ガイド（角度・距離の同時表示）。
+    /// いずれかのスライダー操作中に以下をすべて表示する（外側の呼び出し元で可視性をゲート）。
     /// - キャリブレーション基準耳肩ラインから ±angleThreshold の2本の破線（グレー）
-    /// - 各線上に ±distanceThreshold の位置にドット（グレー）
-    /// - 上限同士（+distance の2点）、下限同士（-distance の2点）を、近接肩（キャリブレーション肩点）を中心とした扇形の破線弧で連結
+    /// - 上限・下限の角度閾値レイ上の上限距離に2ドット（グレー、耳より上部）と、それらを結ぶ破線の弧
+    ///   猫背判定は上限超過（baseline × (1 + threshold/100) 以上）のみのため、下限距離のドット・弧は表示しない。
     @ViewBuilder
     private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
         let anchorPoints = guideAnchorPoints
@@ -267,43 +293,23 @@ struct PostureOverlayView: View {
             sx: sx, sy: sy, size: size
         )
         let baselineDistance: CGFloat = (referenceDistance > 0 && convertedBaseline > 0) ? convertedBaseline : measuredLen
-        
+
         // すべてグレーで統一
-        let guideColor: Color = Color.gray
-        let lineWidth: CGFloat = 2.0
         let dotRadius: CGFloat = 6.0
-        
-        let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
-        
-        let (upperDist, lowerDist, _) = Self.distanceGuideDistances(
+
+        // 上限距離（判定境界）。角度ガイド線の長さにも使う。
+        let upperDist = Self.upperDistance(
             baselineDistance: baselineDistance,
             thresholdPercent: slouchDistanceThresholdPercent
         )
-        
+
         // 線の長さ（上限距離まで伸ばす）
         let lineLength = upperDist + 20
-        
-        // 4つのドット位置を計算
-        // 上側の線（upperAngle）上の +distance, -distance
-        let upperUpper = CGPoint(
-            x: startPoint.x + cos(upperAngle) * upperDist,
-            y: startPoint.y + sin(upperAngle) * upperDist
-        )
-        let upperLower = CGPoint(
-            x: startPoint.x + cos(upperAngle) * lowerDist,
-            y: startPoint.y + sin(upperAngle) * lowerDist
-        )
-        // 下側の線（lowerAngle）上の +distance, -distance
-        let lowerUpper = CGPoint(
-            x: startPoint.x + cos(lowerAngle) * upperDist,
-            y: startPoint.y + sin(lowerAngle) * upperDist
-        )
-        let lowerLower = CGPoint(
-            x: startPoint.x + cos(lowerAngle) * lowerDist,
-            y: startPoint.y + sin(lowerAngle) * lowerDist
-        )
-        
-        // 2本の角度閾値線（グレー破線）
+
+        // 角度閾値角（距離ガイドの2ドット位置にも使う）
+        let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
+
+        // 角度ガイド: 2本の角度閾値線（グレー破線）
         Group {
             // 上限角度の線
             Path { line in
@@ -315,7 +321,7 @@ struct PostureOverlayView: View {
             }
             .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
             .foregroundColor(Color.gray)
-            
+
             // 下限角度の線
             Path { line in
                 line.move(to: startPoint)
@@ -327,64 +333,34 @@ struct PostureOverlayView: View {
             .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [8, 4]))
             .foregroundColor(Color.gray)
         }
-        
-        // 4つのドット（各線上の ±距離閾値位置） - グレー
-        
+
+        // 距離ガイド: 上下の角度閾値レイ上の上限2ドット（耳より上部）とそれらを結ぶ弧。下限距離は表示しない。
+        let (upperDot, lowerDot) = Self.distanceThresholdDots(
+            startPoint: startPoint,
+            upperAngle: upperAngle,
+            lowerAngle: lowerAngle,
+            upperDistance: upperDist
+        )
+
         Group {
-            // 上限角度線上の +距離ドット
             Circle()
                 .fill(Color.gray)
                 .frame(width: dotRadius * 2, height: dotRadius * 2)
-                .position(upperUpper)
-            
-            // 上限角度線上の -距離ドット
+                .position(upperDot)
+
             Circle()
                 .fill(Color.gray)
                 .frame(width: dotRadius * 2, height: dotRadius * 2)
-                .position(upperLower)
-            
-            // 下限角度線上の +距離ドット
-            Circle()
-                .fill(Color.gray)
-                .frame(width: dotRadius * 2, height: dotRadius * 2)
-                .position(lowerUpper)
-            
-            // 下限角度線上の -距離ドット
-            Circle()
-                .fill(Color.gray)
-                .frame(width: dotRadius * 2, height: dotRadius * 2)
-                .position(lowerLower)
+                .position(lowerDot)
         }
-        
-        // 上限同士（+distance の2点）を近接肩（startPoint）を中心とした扇形の破線弧で連結
-        let upperArcRadius = upperDist
-        let upperArcStartAngle = atan2(lowerUpper.y - startPoint.y, lowerUpper.x - startPoint.x)
-        let upperArcEndAngle = atan2(upperUpper.y - startPoint.y, upperUpper.x - startPoint.x)
-        let upperDelta = wrappedDelta(upperArcEndAngle - upperArcStartAngle)
-        
+
         Path { arc in
             arc.addArc(
                 center: startPoint,
                 radius: upperDist,
-                startAngle: .radians(upperArcStartAngle),
-                endAngle: .radians(upperArcEndAngle),
-                clockwise: wrappedDelta(upperArcEndAngle - upperArcStartAngle) < 0
-            )
-        }
-        .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
-        .foregroundColor(Color.gray)
-        
-        // 下限同士（-distance の2点）を近接肩（startPoint）を中心とした扇形の破線弧で連結
-        let lowerArcStartAngle = atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)
-        let lowerArcEndAngle = atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x)
-        
-        Path { arc in
-            arc.addArc(
-                center: startPoint,
-                radius: lowerDist,
-                startAngle: .radians(atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)),
-                endAngle: .radians(atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x)),
-                clockwise: wrappedDelta(atan2(upperLower.y - startPoint.y, upperLower.x - startPoint.x) - atan2(lowerLower.y - startPoint.y, lowerLower.x - startPoint.x)) < 0
+                startAngle: .radians(lowerAngle),
+                endAngle: .radians(upperAngle),
+                clockwise: wrappedDelta(upperAngle - lowerAngle) < 0
             )
         }
         .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))

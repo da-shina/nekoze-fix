@@ -65,10 +65,10 @@ final class SettingsStoreTests: XCTestCase {
 
     func testDistanceThreshold_clampedToRange() {
         sut.slouchDistanceThresholdPercent = 50.0
-        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 15.0, accuracy: 0.001)
+        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 30.0, accuracy: 0.001)
 
         sut.slouchDistanceThresholdPercent = 0.0
-        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 5.0, accuracy: 0.001)
+        XCTAssertEqual(sut.slouchDistanceThresholdPercent, 1.0, accuracy: 0.001)
     }
 
     func testDistanceThreshold_persistsAcrossInstances() {
