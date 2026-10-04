@@ -171,7 +171,7 @@ Key Decisions: 保持時間 0.5 秒は personMissing／shoulderMissing の既存
 | PostureAnalyzer | Domain | 角度算出と OR 判定＋三段解決（`resolve` 同梱） | 2.7, 3.5, 4.1, 4.3, 4.5, 4.6 | Types (P0) | Service |
 | MotionService | Services | 重力取得・変換・単一ホールド | 4.1, 3.1, 9.1 | CoreMotion (P0 外) | Service, State |
 | DeviceRotationService | Services | 回転角取得・配信・再生成 | 2.1, 2.2, 2.3, 2.4 | RotationCoordinator (P0 外) | Service, State |
-| PostureSessionManager | Session | 所有・注入・表示受渡し・回転購読 | 2.7, 3.1, 4.9, 8.1, 8.2 | Motion (P0), Analyzer (P0), Overlay (P0), Rotation (P0) | State |
+| PostureSessionManager | Session | 所有・注入・表示受渡し・回転購読 | 2.7, 3.1, 4.9, 8.1, 8.2, 2.3, 2.4, 7.1 | Motion (P0), Analyzer (P0), Overlay (P0), Rotation (P0) | State |
 | PostureOverlayView | UI | 基準線描画（無区別）＋閾値ガイド表示 | 4.9, 4.5 | Session snapshot (P0) | State |
 
 ### Domain
@@ -337,7 +337,7 @@ final class MotionService {
 | Field | Detail |
 |-------|--------|
 | Intent | Motion 所有・重力注入・解決ベクトルの表示受渡し・回転角購読を追加する |
-| Requirements | 2.7, 3.1, 4.9, 8.1, 8.2 |
+| Requirements | 2.7, 3.1, 4.9, 8.1, 8.2, 2.3, 2.4, 7.1 |
 
 **Responsibilities & Constraints**
 - 既存の状態機械・ゲート・通知・暗転・スリープ則は変えない。

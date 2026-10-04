@@ -158,7 +158,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleRotationAngleChange(preview: CGFloat, capture: CGFloat) {
         cameraManager.updateCaptureRotationAngle(capture)
         // なで肩ガイダンスの向き分岐用（ADR 0014）。Session が唯一の書き込み点。
-        // design.md 対応表（90°±45°・270°±45°→portrait、0°±45°・180°±45°→landscape。実機規約）。
+        // design.md 対応表（正規化角 [45°,135°)/[225°,315°)→portrait、それ以外→landscape）。
         // capture 角は Vision バッファと一致し前面鏡の影響を受けない。ヒステリシスなし。
         snapshot.isLandscape = Self.isLandscapeCaptureAngle(capture)
 
@@ -173,6 +173,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referenceAngle = nil
         snapshot.referenceDistance = nil
         snapshot.referenceSide = nil
+        snapshot.earShoulderVector = .zero
+        snapshot.referencePoints = nil
+        snapshot.calibrationReferenceSource = nil
         snapshot.slouchGate.reset()
         lastGateTickTime = nil
         snapshot.visualizationPoints = []
@@ -197,11 +200,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// capture用回転角（度）からのランドスケープ判定（requirements 2.1, 2.2）。
     /// coordinator実機規約（センサ基準：ポートレート90°・ランドスケープ0°/180°）の対応表：
-    /// 90°±45°・270°±45° → ポートレート、0°±45°・180°±45° → ランドスケープ。
+    /// 正規化角 [45°,135°)・[225°,315°) → ポートレート、それ以外 → ランドスケープ。
     /// capture用回転角は Vision バッファと一致し、判定は軸方向のみを見るため
     /// 前面鏡の影響を受けない。境界ヒステリシスはなし（実測後の追加検討）。
-    /// 境界はランドスケープ側に含める（45°→landscape、135°→portrait、
-    /// 225°→landscape、315°→portrait）。
+    /// 45°・225°はポートレート、135°・315°はランドスケープ。
     private static func isLandscapeCaptureAngle(_ degrees: CGFloat) -> Bool {
         var normalized = degrees.truncatingRemainder(dividingBy: 360)
         if normalized < 0 { normalized += 360 }
@@ -648,6 +650,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.referenceAngle = nil
                 self.snapshot.referenceDistance = nil
                 self.snapshot.referenceSide = nil
+                self.snapshot.earShoulderVector = .zero
                 self.snapshot.referencePoints = nil
                 self.snapshot.calibrationReferenceSource = nil
                 self.motionService.stop()
@@ -701,18 +704,20 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }
 
     /// 閾値ガイド表示用パラメータを更新する（スライダー操作中のみ使用）。
-    /// referenceDistance（正規化座標系）から近側耳→肩ベクトル（正規化済み）を抽出する。
+    /// 方向ベクトルは校正ロック側 (referenceSide) の耳・肩ペアから導出する。
+    /// referenceDistance と監視判定がロック側基準のため、ガイドも同一側にそろえる。
+    /// 未校正時は nearSide にフォールバックする。起点は Overlay 側で referencePoints (校正時肩点) を使用。
     /// 画面ピクセルへの変換はビュー層（GeometryReader）で行う。
     private func updateGuideParameters() {
-        guard let nearSide = snapshot.nearSide,
+        guard let guideSide = snapshot.referenceSide ?? snapshot.nearSide,
               snapshot.visualizationPoints.count >= 6 else {
             snapshot.earShoulderVector = .zero
             return
         }
 
         let points = snapshot.visualizationPoints
-        let earIndex = nearSide == .left ? 2 : 3
-        let shoulderIndex = nearSide == .left ? 0 : 1
+        let earIndex = guideSide == .left ? 2 : 3
+        let shoulderIndex = guideSide == .left ? 0 : 1
         
         guard earIndex < points.count, shoulderIndex < points.count,
               points[earIndex] != .zero, points[shoulderIndex] != .zero else {

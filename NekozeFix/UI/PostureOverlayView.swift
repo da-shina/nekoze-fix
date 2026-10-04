@@ -33,13 +33,50 @@ struct PostureOverlayView: View {
     /// 距離閾値（%）。基準距離のこの%以上で猫背判定
     var slouchDistanceThresholdPercent: Double = 0
     /// 近側耳→肩ベクトル（Vision正規化座標系、正規化済み）。ガイド線の方向決定に使用
+    /// Session が referenceSide 基準で生成する（未校正時は nearSide フォールバック）。
     var earShoulderVector: CGVector = .zero
 
     // MARK: - ガイドアンカー用（キャリブレーション基準点）
-    
+
     /// キャリブレーションで確定した基準点（グレー基準線のアンカー用）。
-    /// referencePoints[5] = 近側肩、referencePoints[4] = 近側耳
+    /// referencePoints[5] = 校正時近側肩（= referenceSide 肩）、referencePoints[4] = 校正時近側耳
+    /// 起点は referenceSide 肩を使用し、方向・距離も同一側にそろえる。
     var referencePointsForGuide: [CGPoint] = []
+
+    // MARK: - テスト可能な幾何計算（製品ロジック）
+
+    /// 角度ガイドの上限・下限角を返す。
+    static func angleGuideAngles(centerAngle: CGFloat, thresholdDegrees: Double) -> (upper: CGFloat, lower: CGFloat) {
+        let thresholdRadians = CGFloat(thresholdDegrees * .pi / 180.0)
+        return (centerAngle + thresholdRadians, centerAngle - thresholdRadians)
+    }
+
+    /// AspectFit 補正係数（製品ロジック）。
+    static func aspectFitScales(imageAR: CGFloat, viewAR: CGFloat) -> (sx: CGFloat, sy: CGFloat) {
+        if viewAR > imageAR {
+            return (imageAR / viewAR, 1.0)
+        } else if viewAR < imageAR {
+            return (1.0, viewAR / imageAR)
+        }
+        return (1.0, 1.0)
+    }
+
+    /// 耳肩単位ベクトル（Vision正規化座標系）の画面上の1単位あたりピクセル長。
+    /// x と y でスケールが異なるため、ベクトル向きに応じた hypot で換算する。
+    static func screenPerUnit(earShoulderVector: CGVector, sx: CGFloat, sy: CGFloat, size: CGSize) -> CGFloat {
+        hypot(earShoulderVector.dx * sx * size.width, earShoulderVector.dy * sy * size.height)
+    }
+
+    /// 基準距離（正規化 0-1）を画面ピクセルに換算する。
+    static func baselineDistancePixels(referenceDistance: Double, earShoulderVector: CGVector, sx: CGFloat, sy: CGFloat, size: CGSize) -> CGFloat {
+        CGFloat(referenceDistance) * screenPerUnit(earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size)
+    }
+
+    /// 距離ガイドの上限・下限距離と閾値ピクセルを返す。要件 4.5: baseline × (1 ± threshold/100)。
+    static func distanceGuideDistances(baselineDistance: CGFloat, thresholdPercent: Double) -> (upper: CGFloat, lower: CGFloat, thresholdPixels: CGFloat) {
+        let thresholdPixels = baselineDistance * CGFloat(thresholdPercent / 100.0)
+        return (baselineDistance + thresholdPixels, baselineDistance - thresholdPixels, thresholdPixels)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -205,22 +242,41 @@ struct PostureOverlayView: View {
     @ViewBuilder
     private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
         let anchorPoints = guideAnchorPoints
+        // 起点は referenceSide 肩（校正時近側肩 = anchorPoints[5]）。
         let startPoint = normalizePoint(anchorPoints[5], in: size)
-        let (_, _, centerAngle, baselineDistance) = calibrationEarShoulderVector(in: size)
+        let (_, _, centerAngle, measuredLen) = calibrationEarShoulderVector(in: size)
+        let (sx, sy) = aspectFitScales(for: size)
+
+        // 基準距離は referenceDistance（正規化）を固定アンカー向きの画面換算でピクセル化する。
+        // モニター中はアンカー（校正時点列）が固定のため baseline も固定される。
+        // ライブ earShoulderVector を使うと毎フレーム向きが変わり baseline が可変になるため使用しない。
+        // x/y スケールが異なるため hypot で向き依存に換算する。未校正時は計測長にフォールバック。
+        let fixedUnit: CGVector = {
+            guard anchorPoints.count >= 6 else { return earShoulderVector }
+            let dx = anchorPoints[5].x - anchorPoints[4].x
+            let dy = anchorPoints[5].y - anchorPoints[4].y
+            let len = hypot(dx, dy)
+            guard len > 0 else { return earShoulderVector }
+            return CGVector(dx: dx / len, dy: dy / len)
+        }()
+        let convertedBaseline = Self.baselineDistancePixels(
+            referenceDistance: referenceDistance,
+            earShoulderVector: fixedUnit,
+            sx: sx, sy: sy, size: size
+        )
+        let baselineDistance: CGFloat = (referenceDistance > 0 && convertedBaseline > 0) ? convertedBaseline : measuredLen
         
         // すべてグレーで統一
         let guideColor: Color = Color.gray
         let lineWidth: CGFloat = 2.0
         let dotRadius: CGFloat = 6.0
         
-        let angleThresholdRadians = angleThresholdDegrees * .pi / 180.0
-        let upperAngle = centerAngle + angleThresholdRadians
-        let lowerAngle = centerAngle - angleThresholdRadians
+        let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
         
-        let distanceThresholdPixels = baselineDistance * slouchDistanceThresholdPercent / 100.0
-        
-        let upperDist = baselineDistance + distanceThresholdPixels
-        let lowerDist = baselineDistance - distanceThresholdPixels
+        let (upperDist, lowerDist, _) = Self.distanceGuideDistances(
+            baselineDistance: baselineDistance,
+            thresholdPercent: slouchDistanceThresholdPercent
+        )
         
         // 線の長さ（上限距離まで伸ばす）
         let lineLength = upperDist + 20
@@ -351,15 +407,6 @@ struct PostureOverlayView: View {
     /// 点列とベクトルで共有する AspectFit 補正係数（sx, sy）。
     /// normalizePoint と同一の分岐であり、両者のスケールを一致させる。
     private func aspectFitScales(for size: CGSize) -> (sx: CGFloat, sy: CGFloat) {
-        let imageAR = imageAspectRatio
-        let viewAR = size.width / size.height
-        if viewAR > imageAR {
-            // 画面が画像より横長 -> 左右に余白（ピラーボックス）、上下はぴったり
-            return (imageAR / viewAR, 1.0)
-        } else if viewAR < imageAR {
-            // 画面が画像より縦長 -> 上下に余白（レターボックス）、左右はぴったり
-            return (1.0, viewAR / imageAR)
-        }
-        return (1.0, 1.0)
+        Self.aspectFitScales(imageAR: imageAspectRatio, viewAR: size.width / size.height)
     }
 }
