@@ -59,16 +59,14 @@ final class PostureOverlayViewTests: XCTestCase {
         let (sx, sy) = PostureOverlayView.aspectFitScales(imageAR: 4.0/3.0, viewAR: size.width/size.height)
 
         // When: 製品ロジックで画面換算と距離ガイドを計算
-        let perUnit = PostureOverlayView.screenPerUnit(
-            earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size
-        )
         let baseline = PostureOverlayView.baselineDistancePixels(
             referenceDistance: 0.15, earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size
         )
+        let expected = 0.15 * hypot(earShoulderVector.dx * sx * size.width, earShoulderVector.dy * sy * size.height)
 
-        // Then: 垂直方向の換算が正しく、baseline が perUnit に比例する
-        XCTAssertGreaterThan(perUnit, 0)
-        XCTAssertEqual(baseline, 0.15 * perUnit, accuracy: 1e-10)
+        // Then: 垂直方向の換算が正しく、baseline が期待値と一致する
+        XCTAssertGreaterThan(baseline, 0)
+        XCTAssertEqual(baseline, expected, accuracy: 1e-10)
 
         // 垂直ベクトルは幾何学的に (0,1) になること（製品外の純粋幾何確認）
         let perpX = -earShoulderVector.dy
@@ -88,8 +86,8 @@ final class PostureOverlayViewTests: XCTestCase {
         let (sx, sy) = PostureOverlayView.aspectFitScales(imageAR: 4.0/3.0, viewAR: size.width/size.height)
 
         // When: 製品ロジックで画面換算（x/y 別スケールを向き依存で適用）
-        let perUnit = PostureOverlayView.screenPerUnit(
-            earShoulderVector: unit, sx: sx, sy: sy, size: size
+        let perUnit = PostureOverlayView.baselineDistancePixels(
+            referenceDistance: 1.0, earShoulderVector: unit, sx: sx, sy: sy, size: size
         )
         let expected = hypot(unitX * sx * size.width, unitY * sy * size.height)
 

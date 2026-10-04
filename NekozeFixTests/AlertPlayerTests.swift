@@ -22,13 +22,6 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertThrowsError(try sut.configureSession())
     }
 
-    func testPlayOnceWithNilPlayer_doesNotCrash() {
-        // 前提: audioPlayerがnilのAlertPlayer（無効なURLのため）
-        // 手順: playOnceが呼ばれる
-        // 検証: クラッシュしないはず
-        XCTAssertNoThrow(sut.playOnce())
-    }
-
     func testStartRepeatingWithNilPlayer_doesNotCrash() {
         // 前提: audioPlayerがnilのAlertPlayer
         // 手順: startRepeatingが呼ばれる

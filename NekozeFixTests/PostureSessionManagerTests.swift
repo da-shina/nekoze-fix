@@ -111,13 +111,13 @@ final class PostureSessionManagerTests: XCTestCase {
 
     func testStartMonitoring_setsFlag() {
         sut.startMonitoring()
-        XCTAssertTrue(sut.snapshot.isMonitoringEnabled)
+        XCTAssertTrue(sut.settingsStore.isMonitoringEnabled)
     }
 
     func testStopMonitoring_clearsFlag() {
         sut.startMonitoring()
         sut.stopMonitoring()
-        XCTAssertFalse(sut.snapshot.isMonitoringEnabled)
+        XCTAssertFalse(sut.settingsStore.isMonitoringEnabled)
     }
 
     // MARK: - フェーズ遷移（setPhase 不変条件の検証）

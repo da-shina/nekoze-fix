@@ -57,12 +57,12 @@ final class PerformanceTests: XCTestCase {
         XCTAssertNotNil(alertPlayer)
     }
 
-    /// AlertPlayer.playOnceが延迟なく発火することを検証
+    /// AlertPlayer.startRepeatingが延迟なく発火することを検証
     func testAlertPlayerPlayOnceDoesNotBlock() {
         let alertPlayer = AlertPlayer(soundURL: URL(fileURLWithPath: "/dev/null"))
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        alertPlayer.playOnce()
+        alertPlayer.startRepeating()
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
         // nilプレイヤーの場合はほぼ瞬時（< 0.1秒）

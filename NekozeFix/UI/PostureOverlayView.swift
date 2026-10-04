@@ -61,15 +61,10 @@ struct PostureOverlayView: View {
         return (1.0, 1.0)
     }
 
-    /// 耳肩単位ベクトル（Vision正規化座標系）の画面上の1単位あたりピクセル長。
-    /// x と y でスケールが異なるため、ベクトル向きに応じた hypot で換算する。
-    static func screenPerUnit(earShoulderVector: CGVector, sx: CGFloat, sy: CGFloat, size: CGSize) -> CGFloat {
-        hypot(earShoulderVector.dx * sx * size.width, earShoulderVector.dy * sy * size.height)
-    }
-
     /// 基準距離（正規化 0-1）を画面ピクセルに換算する。
+    /// x と y でスケールが異なるため、ベクトル向きに応じた hypot で換算する。
     static func baselineDistancePixels(referenceDistance: Double, earShoulderVector: CGVector, sx: CGFloat, sy: CGFloat, size: CGSize) -> CGFloat {
-        CGFloat(referenceDistance) * screenPerUnit(earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size)
+        CGFloat(referenceDistance) * hypot(earShoulderVector.dx * sx * size.width, earShoulderVector.dy * sy * size.height)
     }
 
     /// 距離ガイドの上限距離（猫背判定境界）を返す。要件 4.1: baseline × (1 + threshold/100) 以上で猫背。
@@ -217,9 +212,8 @@ struct PostureOverlayView: View {
     /// 点列と同一の AspectFit 補正係数で画面座標系へ変換する。代替時も見た目は不変。
     @ViewBuilder
     private func referenceArc(in size: CGSize, isReference: Bool) -> some View {
-        let (startPoint, greenAngle, _, _) = resolveReferenceVector(in: size)
+        let (startPoint, greenAngle, unitX, unitY) = resolveReferenceVector(in: size)
         let length: CGFloat = 200
-        let (_, _, unitX, unitY) = resolveReferenceVector(in: size)
 
         let end = CGPoint(
             x: startPoint.x + unitX * length,

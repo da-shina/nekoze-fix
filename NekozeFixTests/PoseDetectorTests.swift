@@ -21,6 +21,6 @@ final class PoseDetectorTests: XCTestCase {
     }
 
     func testClosestToCenter_empty_returnsNil() {
-        XCTAssertNil(PoseDetector.closestToCenter([CGRect](), box: { $0 }))
+        XCTAssertNil([CGRect]().min(by: { PoseDetector.centerDistance($0) < PoseDetector.centerDistance($1) }))
     }
 }

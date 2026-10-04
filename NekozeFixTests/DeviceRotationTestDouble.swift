@@ -109,12 +109,9 @@ extension FakeDeviceRotationService {
         $previewRotationAngle.eraseToAnyPublisher()
     }
 
-    /// 両角の結合配信。製品の同名配信口と同一形状。
-    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
-        $previewRotationAngle
-            .combineLatest($captureRotationAngle)
-            .map { (preview: $0, capture: $1) }
-            .eraseToAnyPublisher()
+    /// capture 角の配信。製品の同名配信口と同一形状。
+    var captureRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
+        $captureRotationAngle.eraseToAnyPublisher()
     }
 }
 

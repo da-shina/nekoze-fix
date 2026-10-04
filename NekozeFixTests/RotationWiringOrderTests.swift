@@ -142,14 +142,14 @@ final class RotationWiringOrderTests: XCTestCase {
         let fake = FakeDeviceRotationService()
         sut.attachRotationService(fake)
 
-        XCTAssertTrue(sut.rotationServiceForPreview === fake, "View 注入用に同一インスタンスを返す")
+        XCTAssertTrue(sut.rotationService === fake, "View 注入用に同一インスタンスを返す")
     }
 
     /// 注入用所有層は初回アクセス時に生成され、以後同一インスタンスである
     /// （所有権は Session。View 側で生成しない）。
     func testPreviewLayerForInjection_isStableSessionOwnedInstance() {
-        let first = sut.previewLayerForInjection
-        let second = sut.previewLayerForInjection
+        let first = sut.ensureOwnedPreviewLayer()
+        let second = sut.ensureOwnedPreviewLayer()
 
         XCTAssertTrue(first === second, "注入層は同一インスタンスを使い回す")
         XCTAssertTrue(sut.ownedPreviewLayer === first, "Session 所有層と同一である")

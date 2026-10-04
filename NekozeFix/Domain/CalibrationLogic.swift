@@ -21,7 +21,7 @@ struct CalibrationLogic {
 
     private var accumulatedAngles: [Double] = []
     private var accumulatedDistances: [Double] = []
-    private var accumulatedPoints: [[CGPoint]] = []
+    private var lastPoints: [CGPoint] = []
     private var isAccumulating = false
     /// 有効サンプルが蓄積された時間の合計（秒）。脱落中は加算されない。
     private var accumulatedDuration: TimeInterval = 0
@@ -93,7 +93,7 @@ struct CalibrationLogic {
             accumulatedAngles.append(sample.nearAngleDegrees)
             accumulatedDistances.append(sample.nearDistance)
             if !points.isEmpty {
-                accumulatedPoints.append(points)
+                lastPoints = points
             }
 
             // 蓄積が完了に十分かチェック（有効サンプルで requiredStableDuration 分たまったら完了）
@@ -102,7 +102,7 @@ struct CalibrationLogic {
                 // 蓄積された角度の平均を計算
                 let average = accumulatedAngles.reduce(0.0, +) / Double(accumulatedAngles.count)
                 let averageDistance = accumulatedDistances.reduce(0.0, +) / Double(accumulatedDistances.count)
-                let finalPoints = accumulatedPoints.last ?? []
+                let finalPoints = lastPoints
                 let completedProgress = CalibrationProgress.completed(
                     referenceNearAngleDegrees: average,
                     referenceDistance: averageDistance,
@@ -136,7 +136,7 @@ struct CalibrationLogic {
     private mutating func resetAccumulation() {
         accumulatedAngles = []
         accumulatedDistances = []
-        accumulatedPoints = []
+        lastPoints = []
         isAccumulating = false
         accumulatedDuration = 0
         lastSampleTime = 0
@@ -149,7 +149,7 @@ struct CalibrationLogic {
     private mutating func startNewWindow(sample: AngleSample, referenceSource: ReferenceVectorSource?, now: TimeInterval, points: [CGPoint]) -> CalibrationProgress {
         accumulatedAngles = [sample.nearAngleDegrees]
         accumulatedDistances = [sample.nearDistance]
-        accumulatedPoints = [points]
+        lastPoints = points
         isAccumulating = true
         accumulatedDuration = 0
         lastSampleTime = now
