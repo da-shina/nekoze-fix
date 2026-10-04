@@ -26,7 +26,7 @@ final class SettingsStore: ObservableObject {
     /// 距離閾値の下限（%）。FQ4
     static let distanceThresholdMinPercent: Double = 5.0
     /// 距離閾値の上限（%）。FQ4
-    static let distanceThresholdMaxPercent: Double = 15.0
+    static let distanceThresholdMaxPercent: Double = 30.0
     /// 距離閾値のデフォルト（%）。FQ2/FQ4
     static let distanceThresholdDefaultPercent: Double = 8.0
 
@@ -85,7 +85,7 @@ final class SettingsStore: ObservableObject {
     }
 
     /// 前出し距離の判定閾値（基準比%）。ロック側の耳-肩距離が基準のこの%以上で猫背候補。
-    /// 範囲: 5.0〜15.0（ステップ 0.5 は UI 側）、デフォルト: 8.0
+    /// 範囲: 5.0〜30.0（ステップ 0.5 は UI 側）、デフォルト: 8.0
     @Published var slouchDistanceThresholdPercent: Double {
         didSet {
             let clamped = SettingsStore.clamp(slouchDistanceThresholdPercent, to: Self.distanceThresholdMinPercent...Self.distanceThresholdMaxPercent)

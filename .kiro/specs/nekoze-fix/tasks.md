@@ -239,7 +239,7 @@
   - _Depends: 8.1, 8.2, 8.3, 8.4_
 
 - [x] 8.6 MonitorView: 距離スライダー（角度スライダーと横並び）
-  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...15.0, step 0.5), label with current value like the angle control
+  - Add distance % slider bound to `slouchDistanceThresholdPercent` beside the angle slider (5.0...30.0, step 0.5), label with current value like the angle control
   - Observable completion: monitor screen shows two sliders side by side; adjusting distance slider changes verdict threshold immediately
   - _Boundary: MonitorView_
   - _Requirements: 4.4_
@@ -408,8 +408,8 @@
 
 - [x] 15.3 MonitorView: スライダー操作状態の検出とガイドパラメータ受け渡し
   - 角度閾値・距離閾値の各スライダーに `.onDragGesture` 相当の操作検出を追加し、ドラッグ中のみガイド表示フラグと閾値値を `PostureOverlayView` へ渡す
-  - スライダー種別切替時（角度⇔距離）は前ガイド即消去・新ガイド即表示
-  - Observable completion: スライダーをドラッグ中にのみガイドが表示され、離すと消える。種別切替で即座に切り替わる
+  - いずれかのスライダー操作中は角度・距離の両ガイドを同時に表示する
+  - Observable completion: スライダーをドラッグ中にのみ両ガイドが表示され、離すと消える
   - _Boundary: MonitorView_
   - _Requirements: 4.5_
   - _Depends: 15.1, 15.2_
@@ -424,9 +424,9 @@
   - _Depends: 15.1, 15.2_
 
 - [x] 15.5 統合テスト: 閾値スライダー操作中のガイド表示/非表示・切替挙動
-  - 角度スライダー・距離スライダーそれぞれのドラッグ中に対応ガイドが表示されること
+  - いずれかのスライダーのドラッグ中に角度・距離の両ガイド表示フラグが適切に立つこと
   - ドラッグ終了でガイドが消えること
-  - 角度→距離スライダーへの切替で即座にガイドが切り替わること
+  - 角度→距離スライダーへの切替で表示フラグが即座に切り替わること（描画は両ガイド同時表示）
   - Observable completion: UI統合テストで全シナリオがパスする
   - _Boundary: MonitorView, PostureOverlayView_
   - _Requirements: 4.5_
