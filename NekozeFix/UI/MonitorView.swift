@@ -10,10 +10,8 @@ struct MonitorView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
 
     // MARK: - スライダー操作状態（閾値ガイド表示用）
-    // 主信号は Slider の onEditingChanged（開始 true／終了 false）。
-    // 補助として値変化でも操作中とみなす（編集開始通知を取りこぼした場合の
-    // ガイド不表示を防ぐ）。非表示は onEditingChanged(false) が担い、
-    // 画面離脱時（onDisappear）に残留を回収する。Timer による終了推測は持たない。
+    // Slider の onEditingChanged で直接追跡する。Timer による
+    // 終了推測は不要（タップ・同値 set を含め編集状態が正確に取れる）。
     @State private var isDraggingAngleSlider: Bool = false
     @State private var isDraggingDistanceSlider: Bool = false
 
@@ -132,9 +130,6 @@ struct MonitorView: View {
                     step: 0.5,
                     onEditingChanged: { editing in isDraggingAngleSlider = editing }
                 )
-                .onChange(of: settingsStore.slouchThresholdDegrees) { _, _ in
-                    isDraggingAngleSlider = true
-                }
             }
 
             // 距離閾値スライダー（前出し検出の第2指標・FQ3/FQ4）
@@ -157,16 +152,9 @@ struct MonitorView: View {
                     step: 0.5,
                     onEditingChanged: { editing in isDraggingDistanceSlider = editing }
                 )
-                .onChange(of: settingsStore.slouchDistanceThresholdPercent) { _, _ in
-                    isDraggingDistanceSlider = true
-                }
             }
         }
         .padding(.horizontal)
-        .onDisappear {
-            isDraggingAngleSlider = false
-            isDraggingDistanceSlider = false
-        }
     }
 
     private var controlButtons: some View {
