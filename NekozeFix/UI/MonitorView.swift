@@ -22,6 +22,9 @@ struct MonitorView: View {
             set: { newValue in
                 isDraggingAngleSlider = true
                 settingsStore.slouchThresholdDegrees = newValue
+                // 同値 set（タップや微小ドラッグ）では onChange が発火しないため、
+                // set 毎に非表示タイマーをリセットしてガイド残留を防ぐ。
+                onAngleValueChange(newValue)
             }
         )
     }
@@ -32,6 +35,9 @@ struct MonitorView: View {
             set: { newValue in
                 isDraggingDistanceSlider = true
                 settingsStore.slouchDistanceThresholdPercent = newValue
+                // 同値 set（タップや微小ドラッグ）では onChange が発火しないため、
+                // set 毎に非表示タイマーをリセットしてガイド残留を防ぐ。
+                onDistanceValueChange(newValue)
             }
         )
     }
