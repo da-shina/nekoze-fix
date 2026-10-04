@@ -87,6 +87,15 @@ struct PostureOverlayView: View {
         )
     }
 
+    /// 距離閾値の2ドット位置を返す。上限・下限の角度閾値レイ上の上限距離の点。
+    /// いずれも耳より上部（耳の外側）に配置される。下限距離の点は返さない。
+    static func distanceThresholdDots(startPoint: CGPoint, upperAngle: CGFloat, lowerAngle: CGFloat, upperDistance: CGFloat) -> (upper: CGPoint, lower: CGPoint) {
+        (
+            distanceThresholdPoint(startPoint: startPoint, centerAngle: upperAngle, upperDistance: upperDistance),
+            distanceThresholdPoint(startPoint: startPoint, centerAngle: lowerAngle, upperDistance: upperDistance)
+        )
+    }
+
     /// 距離ガイドの上限・下限距離と閾値ピクセルを返す。要件 4.5: baseline × (1 ± threshold/100)。
     /// 下限は旧仕様の残滓であり、ガイド表示には使用しない（upperDistance を使用）。
     static func distanceGuideDistances(baselineDistance: CGFloat, thresholdPercent: Double) -> (upper: CGFloat, lower: CGFloat, thresholdPixels: CGFloat) {
@@ -253,8 +262,9 @@ struct PostureOverlayView: View {
 
 /// 閾値ガイド（角度・距離の分離表示）。
     /// - 角度操作中（showAngleGuide）: キャリブレーション基準耳肩ラインから ±angleThreshold の2本の破線（グレー）
-    /// - 距離操作中（showDistanceGuide）: 中心線（基準耳肩ライン）の延長線上、肩起点で上限距離の位置に単一ドット（グレー）。
-    ///   猫背判定は上限超過（baseline × (1 + threshold/100) 以上）のみのため、下限ドット・下限弧は表示しない。
+    /// - 距離操作中（showDistanceGuide）: 上限・下限の角度閾値レイ上の上限距離に2ドット（グレー、耳より上部）と、
+    ///   それらを結ぶ破線の弧（半径＝上限距離）を表示する。
+    ///   猫背判定は上限超過（baseline × (1 + threshold/100) 以上）のみのため、下限距離のドット・弧は表示しない。
     @ViewBuilder
     private func thresholdGuide(in size: CGSize, isReference: Bool) -> some View {
         let anchorPoints = guideAnchorPoints
@@ -325,18 +335,39 @@ struct PostureOverlayView: View {
             }
         }
 
-        // 距離ガイド: 中心線延長線上の上限単一ドット（耳より上部）。下限は表示しない。
+        // 距離ガイド: 上下の角度閾値レイ上の上限2ドット（耳より上部）とそれらを結ぶ弧。下限距離は表示しない。
         if showDistanceGuide {
-            let dot = Self.distanceThresholdPoint(
+            let (upperAngle, lowerAngle) = Self.angleGuideAngles(centerAngle: centerAngle, thresholdDegrees: angleThresholdDegrees)
+            let (upperDot, lowerDot) = Self.distanceThresholdDots(
                 startPoint: startPoint,
-                centerAngle: centerAngle,
+                upperAngle: upperAngle,
+                lowerAngle: lowerAngle,
                 upperDistance: upperDist
             )
 
-            Circle()
-                .fill(Color.gray)
-                .frame(width: dotRadius * 2, height: dotRadius * 2)
-                .position(dot)
+            Group {
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: dotRadius * 2, height: dotRadius * 2)
+                    .position(upperDot)
+
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: dotRadius * 2, height: dotRadius * 2)
+                    .position(lowerDot)
+            }
+
+            Path { arc in
+                arc.addArc(
+                    center: startPoint,
+                    radius: upperDist,
+                    startAngle: .radians(lowerAngle),
+                    endAngle: .radians(upperAngle),
+                    clockwise: wrappedDelta(upperAngle - lowerAngle) < 0
+                )
+            }
+            .stroke(style: StrokeStyle(lineWidth: 2.0, dash: [6, 3]))
+            .foregroundColor(Color.gray)
         }
     }
 

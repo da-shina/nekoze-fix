@@ -396,14 +396,14 @@ final class MotionService {
 - `referenceVector: CGVector`（非オプショナル）を肩点起点に描画し、色・太さを変えない（無区別原則）。プレビューはダミー垂直ベクトルを渡す。
 - **閾値ガイド（操作中のみ）**:
   - 角度閾値: **グレーのキャリブレーション基準線（基準角度）に対して** ± 現在閾値 の位置に **破線の緑弧**（半径 80pt、基準弧と同中心・同半径）。既存の「現在」弧（緑実線）と色統一。
-  - 距離閾値: キャリブレーション基準肩点 `pS` を起点とする基準耳肩ベクトル `v` 方向の延長線上に、上限距離 `baselineDist × (1 + threshold/100)` の位置を示す **グレーの単一ドット** を描く（耳より上部）。猫背判定は上限超過のみのため下限は表示しない。角度ガイドとは分離表示し、距離スライダー操作中のみ表示する。
+  - 距離閾値: 上限・下限の角度閾値レイ上の上限距離 `baselineDist × (1 + threshold/100)` の位置を示す **グレーの2ドット**（耳より上部）と、それらを結ぶ **破線の弧**（半径＝上限距離）を描く。猫背判定は上限超過のみのため下限距離は表示しない。角度ガイド線とは分離表示し、距離スライダー操作中のみ表示する。
   - いずれも **ドラッグ中（onDrag）のみ表示**。スライダー種別切替時は即座に前ガイド消去・新ガイド表示。
   - 数値ラベルは出さない（スライダー横の数値表示で十分）。
 
 **Implementation Notes**
 - Integration: AspectFit 補正は点列と同一の係数をベクトル・ガイドに適用する。
 - 角度ガイド弧: `referenceArc` と同一の中心・半径・座標変換を使い、開始/終了角を `greenAngle ± deltaThreshold` にする。中心はキャリブレーション基準肩点（referencePointsForGuide[5]）。
-- 距離ガイドドット: 中心角（校正時耳肩方向）と上限距離 `upperDistance(baselineDistance:thresholdPercent:)` から `distanceThresholdPoint(startPoint:centerAngle:upperDistance:)` で算出した点をグレー円で描画する。`showDistanceGuide` 時のみ表示し、角度ガイド線とは独立させる。下限ドット・下限弧は描画しない。
+- 距離ガイドドット＋弧: 上限・下限の角度閾値角と上限距離 `upperDistance(baselineDistance:thresholdPercent:)` から `distanceThresholdDots(startPoint:upperAngle:lowerAngle:upperDistance:)` で2点を算出しグレー円で描画、半径 `upperDist` の破線弧で連結する。`showDistanceGuide` 時のみ表示し、角度ガイド線とは独立させる。下限距離のドット・弧は描画しない。
 - Validation: 実機目視（縦・横・代替時、両スライダー操作）を確認タスクにする。
 - Risks: 既存描画に加算のみで影響小さい。ガイド状態は `PostureOverlayView` へ追加引数で渡す（Session はスライダー操作フラグを保持しない）。
 
@@ -429,7 +429,7 @@ final class MotionService {
 
 ## Testing Strategy
 
-- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（向き非依存の K=normalize(−gx,−gy)・傾き鏡像回帰）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰、**閾値ガイド弧/線の幾何計算（角度: greenAngle±delta、距離: 中心線延長上の上限単一ドットの位置）**、DeviceRotationService 角度配信・再生成・不明時維持（`ios17-baseline` スペック task 2.2・5.1 で検証済み）
+- Unit Tests: `resolve` 三段解決（重力優先・肩退行・画像垂直終端）、Analyzer 重力注入（直立 0 度・前屈増加・傾斜肩の新期待値・OR 維持）、Motion 変換（向き非依存の K=normalize(−gx,−gy)・傾き鏡像回帰）と単一 0.5 秒ホールド・平置き無効・直立不変条件、近側ヒステリシス回帰、**閾値ガイド弧/線の幾何計算（角度: greenAngle±delta、距離: 角度2破線上の上限2ドット＋結ぶ弧の位置）**、DeviceRotationService 角度配信・再生成・不明時維持（`ios17-baseline` スペック task 2.2・5.1 で検証済み）
 - Integration Tests: Session 結合（TestDouble 重力で校正→基準保存→猫背→3 秒確定→改善停止）、代替中も同一ベクトルで判定表示が一致すること、背景・停止での Motion 停止、**閾値スライダー操作中のガイド表示/非表示・切替挙動**、回転角変更→自動再校正遷移の結合（TestDouble 角度注入で検証、`ios17-baseline` スペック task 4.2 で検証済み）
 - E2E/UI Tests: 実機で縦置き校正→前屈アラート、斜め設置での安定性、代替時の見た目不変の目視、回転前後の復帰
 - Performance/Load: フレーム処理 33ms 以内、Motion 1/30 時の 1 時間電池 15pct 以内（既存目標の維持確認）
