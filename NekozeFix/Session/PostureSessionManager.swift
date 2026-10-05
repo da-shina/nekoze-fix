@@ -490,9 +490,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 直近capture角で重力由来の基準値のみバッファ座標系へ回転させる（未確定時は無回転）。
             captureAngleDegrees: lastKnownCaptureAngle.map { Double($0) }
         )
-        // 判定が返した基準線ベクトルをそのまま表示へ受渡しする（単一解決、二重解決なし）。
+        // 判定が返した基準線ベクトルを表示へ受渡しする（単一解決、二重解決なし）。
         // analyze 済みでバッファ座標系（y上向き）の方向であり、変換は Overlay 側で点列と同一係数にて行う。
-        snapshot.referenceVector = CGVector(dx: resolvedReference.vector.x, dy: resolvedReference.vector.y)
+        // monitoring中は校正完了時点の向きに凍結し、人物ありの毎フレーム上書きによる微振動を防ぐ。
+        // 可変なのは肩点起点の耳-肩角度（黄線側）のみ。calibrating中はライブ更新を継続し、
+        // 向き・解決元変化の再校正では自動で解凍→完了時に再凍結される。
+        if snapshot.phase != .monitoring {
+            snapshot.referenceVector = CGVector(dx: resolvedReference.vector.x, dy: resolvedReference.vector.y)
+        }
 
         // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
         var points = [CGPoint](repeating: .zero, count: 6)

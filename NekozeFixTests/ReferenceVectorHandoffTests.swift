@@ -70,11 +70,11 @@ final class ReferenceVectorHandoffTests: XCTestCase {
         XCTAssertEqual(overlay.referenceVector.dy, 1.0, accuracy: 1e-9)
     }
 
-    // MARK: - 同一ベクトル受渡し（単一解決）
+    // MARK: - 同一ベクトル受渡し（単一解決・calibrating中はライブ更新）
 
-    /// 重力あり: snapshot のベクトルは判定が返したベクトルと同一である。
+    /// 重力あり・calibrating中: snapshot のベクトルは判定が返したベクトルと同一である。
     func testHandoff_gravity_matchesAnalyzerVector() {
-        seedCalibratedMonitoring()
+        sut.startCalibration()
         let frame = uprightFrame()
         let gravity = SIMD2<Double>(0, 1)
         sut.motionService.latestGravityInKeypointSpace = gravity
@@ -94,9 +94,9 @@ final class ReferenceVectorHandoffTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.referenceVector.dy, expected.vector.y, accuracy: 1e-9)
     }
 
-    /// 代替中（重力なし→肩直交）も判定と表示が同一ベクトルである（無区別表示の前提）。
+    /// 代替中（重力なし→肩直交）・calibrating中も判定と表示が同一ベクトルである（無区別表示の前提）。
     func testHandoff_fallback_matchesAnalyzerVector() {
-        seedCalibratedMonitoring()
+        sut.startCalibration()
         let frame = tiltedShoulderFrame()
         sut.motionService.latestGravityInKeypointSpace = nil
 

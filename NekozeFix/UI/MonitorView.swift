@@ -141,7 +141,7 @@ struct MonitorView: View {
 
                     Spacer()
 
-                    Text(String(format: "±%.1f%%", settingsStore.slouchDistanceThresholdPercent))
+                    Text(String(format: "+%.1f%%", settingsStore.slouchDistanceThresholdPercent))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
