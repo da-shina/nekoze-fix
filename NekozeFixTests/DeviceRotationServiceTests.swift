@@ -24,9 +24,8 @@ import Combine
 /// 非オプショナル型による nil 不可能性）のみを単体検証し、真の不明事象は
 /// 5.2 の実機 smoke に委ねる。
 
-/// 本番型の seam 形状適合のコンパイル保証。
-/// 不適合があれば本 extension の行でコンパイルが失敗する。
-extension DeviceRotationService: DeviceRotationServiceProtocol {}
+/// 本番型の seam 形状適合のコンパイル保証は製品の適合宣言
+/// （`DeviceRotationService` の extension）で行う。
 
 @MainActor
 final class DeviceRotationServiceTests: XCTestCase {

@@ -22,13 +22,6 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertThrowsError(try sut.configureSession())
     }
 
-    func testPlayOnceWithNilPlayer_doesNotCrash() {
-        // 前提: audioPlayerがnilのAlertPlayer（無効なURLのため）
-        // 手順: playOnceが呼ばれる
-        // 検証: クラッシュしないはず
-        XCTAssertNoThrow(sut.playOnce())
-    }
-
     func testStartRepeatingWithNilPlayer_doesNotCrash() {
         // 前提: audioPlayerがnilのAlertPlayer
         // 手順: startRepeatingが呼ばれる
@@ -55,5 +48,14 @@ final class AlertPlayerTests: XCTestCase {
         // 検証: クラッシュしないはず
         XCTAssertNoThrow(sut.stop())
         XCTAssertNoThrow(sut.stop())
+    }
+
+    func testConfigureSessionFailure_keepsIsPlayingFalse() {
+        // 前提: 無効URLで構成失敗
+        // 検証: 半構築プレイヤーが再生中と誤認しない(不変条件)
+        XCTAssertThrowsError(try sut.configureSession())
+        XCTAssertFalse(sut.isPlaying, "構成失敗後は再生中であってはならない")
+        XCTAssertNoThrow(sut.startRepeating(), "失敗後の再生要求もクラッシュしない")
+        XCTAssertFalse(sut.isPlaying)
     }
 }

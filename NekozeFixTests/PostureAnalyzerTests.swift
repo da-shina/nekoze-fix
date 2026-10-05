@@ -30,7 +30,6 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.farSideDetected, true)
         XCTAssertEqual(verdict, .good) // 角度は小さい（約2.86度）のため良好判定
     }
 
@@ -49,7 +48,6 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .right)
-        XCTAssertEqual(sample?.farSideDetected, true)
     }
 
     func testAngleCalculation_Acute0to90Degrees() {
@@ -125,7 +123,6 @@ final class PostureAnalyzerTests: XCTestCase {
 
         // 検証
         XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(sample?.farSideDetected, false) // far側未検出
     }
 
     func testHysteresis_SwitchesToOtherSideWhenClearlyReversed() {
@@ -332,23 +329,6 @@ final class PostureAnalyzerTests: XCTestCase {
         )
         // 右距離 0.25 は反対側のため無視 → 距離スキップ。角度 0 < 10 → good
         XCTAssertEqual(verdict, .good)
-    }
-
-    /// 両側検出時に farSideDetected が true になる
-    func testBothSidesDetected_ReturnsFarSideData() {
-        let frame = PoseFrame(
-            timestamp: 0,
-            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),
-            rightEar: Keypoint(x: 0.7, y: 0.45, confidence: 0.9),
-            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
-            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
-        )
-        let (sample, _, _) = postureAnalyzer.analyze(
-            frame: frame,
-            referenceNearAngleDegrees: 0,
-            slouchDeltaThresholdDegrees: 10
-        )
-        XCTAssertEqual(sample?.farSideDetected, true, "両側検出時は farSideDetected が true")
     }
 
     // MARK: - 両肩直交基準とフォールバック

@@ -21,7 +21,6 @@ final class ThresholdGuideIntegrationTests: XCTestCase {
         snapshot.referenceDistance = 0.15 // 正規化距離
         snapshot.referenceSide = .left
         snapshot.nearSide = .left
-        snapshot.isMonitoringEnabled = true
         snapshot.visualizationPoints = [
             CGPoint(x: 0.4, y: 0.6), // 左肩
             CGPoint(x: 0.6, y: 0.6), // 右肩
@@ -212,25 +211,21 @@ final class ThresholdGuideIntegrationTests: XCTestCase {
         XCTAssertEqual(snapshot.earShoulderVector.dy, 0.986, accuracy: 0.02)
 
         // 製品ロジックで距離ガイドを計算し、判定境界と一致することを確認
-        // 要件 4.5: baseline × (1 ± threshold/100)
+        // 要件 4.1: baseline × (1 + threshold/100) 以上で猫背（上限のみ）
         let size = CGSize(width: 393, height: 852)
         let (sx, sy) = PostureOverlayView.aspectFitScales(imageAR: 4.0/3.0, viewAR: size.width/size.height)
-        let perUnit = PostureOverlayView.screenPerUnit(
-            earShoulderVector: snapshot.earShoulderVector, sx: sx, sy: sy, size: size
-        )
         let baseline = PostureOverlayView.baselineDistancePixels(
             referenceDistance: snapshot.referenceDistance ?? 0,
             earShoulderVector: snapshot.earShoulderVector, sx: sx, sy: sy, size: size
         )
-        XCTAssertEqual(baseline, (snapshot.referenceDistance ?? 0) * perUnit, accuracy: 1e-6)
+        let expectedBaseline = (snapshot.referenceDistance ?? 0) * hypot(snapshot.earShoulderVector.dx * sx * size.width, snapshot.earShoulderVector.dy * sy * size.height)
+        XCTAssertEqual(baseline, expectedBaseline, accuracy: 1e-6)
         let distThresholdPercent = settingsStore.slouchDistanceThresholdPercent
-        let (upperDist, lowerDist, thresholdPixels) = PostureOverlayView.distanceGuideDistances(
+        let upperDist = PostureOverlayView.upperDistance(
             baselineDistance: baseline, thresholdPercent: distThresholdPercent
         )
         XCTAssertGreaterThan(baseline, 0)
-        XCTAssertGreaterThan(thresholdPixels, 0)
         XCTAssertEqual(upperDist, baseline * (1 + distThresholdPercent/100.0), accuracy: 1e-6)
-        XCTAssertEqual(lowerDist, baseline * (1 - distThresholdPercent/100.0), accuracy: 1e-6)
         
         // When: 距離スライダー操作中のパラメータを構築
         let showAngleGuide = false

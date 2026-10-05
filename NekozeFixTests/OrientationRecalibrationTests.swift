@@ -144,4 +144,75 @@ final class OrientationRecalibrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.referenceAngle, 10.0)
         XCTAssertEqual(sut.snapshot.referenceSide, .right)
     }
+
+    // MARK: - 基準解決元変化: 再校正しても Motion を継続する
+
+    /// 重力基準で校正済みの監視中に重力が欠測すると代替源への変化で再校正へ遷移する。
+    /// このとき Motion を停止してはならない。停止すると再校正中の重力が恒常nilになり
+    /// 代替基準でしか完了できず、完了時の Motion 再開で重力が戻ると即座に再発火する
+    /// 往復ループになり、基準角度が完了時点のライブ姿勢で書き換わり続ける。
+    private func seedGravityCalibratedMonitoring() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 10.0,
+            referenceDistance: 0.18,
+            referenceSide: .right,
+            referencePoints: [],
+            referenceSource: .gravity
+        )
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertTrue(sut.motionService.isRunning, "前提: 校正完了で Motion 開始")
+    }
+
+    /// 両肩そろいフレーム（重力nil時は肩直交代替に解決される）。
+    private func bothShouldersFrame() -> PoseFrame {
+        PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.5, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+    }
+
+    /// 解決元変化の再校正では基準破棄・遷移は行うが Motion は継続する。
+    func testSourceChangedRecalibration_keepsMotionRunning() {
+        seedGravityCalibratedMonitoring()
+
+        // 重力欠測（平置き・センサー途絶の再現）。次フレームは肩直交代替に解決される。
+        sut.motionService.latestGravityInKeypointSpace = nil
+        sut.processDetection(.pose(bothShouldersFrame()))
+
+        XCTAssertEqual(sut.snapshot.phase, .calibrating, "解決元変化で校正へ自動遷移")
+        XCTAssertNil(sut.snapshot.referenceAngle, "旧基準角度を破棄")
+        XCTAssertTrue(sut.motionService.isRunning, "再校正中も Motion を継続（重力再解決のため）")
+        XCTAssertFalse(sut.settingsStore.isMonitoringEnabled, "監視フラグは落とす")
+    }
+
+    /// 重力回復後に再校正が重力基準で完了すれば、以後の重力フレームで再発火しない。
+    /// （基準角度がライブ姿勢で書き換わり続ける往復ループの回帰網）
+    func testGravityRecoveryAfterSourceChangedRecalibration_staysMonitoring() {
+        seedGravityCalibratedMonitoring()
+
+        sut.motionService.latestGravityInKeypointSpace = nil
+        sut.processDetection(.pose(bothShouldersFrame()))
+        XCTAssertEqual(sut.snapshot.phase, .calibrating)
+
+        // 重力基準で再校正が完了した想定（校正完了＝監視開始で Motion 継続のはず）
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 11.0,
+            referenceDistance: 0.18,
+            referenceSide: .right,
+            referencePoints: [],
+            referenceSource: .gravity
+        )
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertTrue(sut.motionService.isRunning)
+
+        // 重力フレームが続いても解決元は一致するため再校正しない。基準角度を保持する。
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.processDetection(.pose(bothShouldersFrame()))
+
+        XCTAssertEqual(sut.snapshot.phase, .monitoring, "解決元一致では再校正しない")
+        XCTAssertEqual(sut.snapshot.referenceAngle, 11.0, "基準角度を保持")
+    }
 }

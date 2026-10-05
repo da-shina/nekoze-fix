@@ -20,8 +20,8 @@ struct CalibrationView: View {
             // 層出現時はペイロードなしで Session へ通知し、Session が所有層で recreate する。
             CameraPreviewView(
                 session: sessionManager.cameraManager.captureSession,
-                injectedPreviewLayer: sessionManager.previewLayerForInjection,
-                rotationSource: sessionManager.rotationServiceForPreview,
+                injectedPreviewLayer: sessionManager.ensureOwnedPreviewLayer(),
+                rotationSource: sessionManager.rotationService,
                 onPreviewLayerAppeared: {
                     Task { @MainActor in
                         sessionManager.handlePreviewLayerAppeared()

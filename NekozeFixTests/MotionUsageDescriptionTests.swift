@@ -15,14 +15,6 @@ final class MotionUsageDescriptionTests: XCTestCase {
         )
     }
 
-    func testMotionUsageDescriptionIsJapaneseAndEnglishTwoSentences() {
-        let text = Self.expectedMotionUsageDescription
-        XCTAssertTrue(text.contains("。"), "日本語の一文（句点あり）を含むこと")
-        XCTAssertTrue(text.contains("."), "英語の一文（ピリオドあり）を含むこと")
-        XCTAssertTrue(text.contains("傾き"), "利用目的（端末の傾き計測）への言及を含むこと")
-        XCTAssertTrue(text.contains("motion"), "英語文に motion への言及を含むこと")
-    }
-
     func testSourceInfoPlistContainsMotionWording() throws {
         guard let plistURL = Self.repoFileURL(["NekozeFix", "Info.plist"]) else {
             throw XCTSkip("ソース NekozeFix/Info.plist がリポジトリに見つからないためスキップ")

@@ -85,6 +85,11 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
     // MARK: - プライベートプロパティ
 
     private let sessionQueue = DispatchQueue(label: "com.nekozefix.camera.session")
+    /// Vision推論専用キュー。制御系（sessionQueue）と分離し、人物ありの高負荷
+    /// フレームが回転角適用・カメラ再構成を head-of-line ブロックするのを防ぐ。
+    /// `alwaysDiscardsLateVideoFrames = true` と併せ、処理中の後続フレームは
+    /// AVFoundation 側で間引かれるため滞留しない。
+    private let detectionQueue = DispatchQueue(label: "com.nekozefix.camera.detection")
     private var videoOutput: AVCaptureVideoDataOutput?
     private var sampleBufferDelegate: AVCaptureVideoDataOutputSampleBufferDelegate?
 
@@ -190,7 +195,9 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
         ]
         output.alwaysDiscardsLateVideoFrames = true
-        output.setSampleBufferDelegate(sampleBufferDelegate, queue: sessionQueue)
+        // 検出コールバックは detectionQueue で受け、制御系 sessionQueue を塞がない。
+        // 人物ありの高負荷推論中も回転角適用・カメラ再構成が即時実行される。
+        output.setSampleBufferDelegate(sampleBufferDelegate, queue: detectionQueue)
 
         // 既存の出力を削除
         captureSession.outputs.forEach { captureSession.removeOutput($0) }

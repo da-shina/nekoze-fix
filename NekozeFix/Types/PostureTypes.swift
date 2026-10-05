@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 
 // 型層: 共通の値オブジェクトと列挙型。
 // 完全な仕様は design.md "Types" セクション参照.
@@ -14,6 +15,29 @@ protocol VideoRotationConnection: AnyObject {
 }
 
 extension AVCaptureConnection: VideoRotationConnection {}
+
+/// 回転角サービスの単一シーム。`DeviceRotationService` が適合し、
+/// テストでは `FakeDeviceRotationService` が適合する。
+/// 起停・再生成の指示口と両角の配信口を一本化したもの
+/// （旧 `SessionRotationService`／`SessionRotationAngleSource`／
+/// `PreviewRotationAngleSource` の統合。適合クラスは当初から1つのみだった）。
+protocol DeviceRotationServiceProtocol: AnyObject {
+    /// preview 用回転角（度）。KVO 由来の本番ではメイン配送される。
+    var previewRotationAngle: CGFloat { get }
+    /// capture 用回転角（度）。KVO 由来の本番ではメイン配送される。
+    var captureRotationAngle: CGFloat { get }
+    /// preview 角の配信。View が同一インスタンスを購読する。
+    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> { get }
+    /// capture 角の配信。Session が同一インスタンスを購読する。
+    /// Session は preview 角を使わないため結合配信は持たない。
+    var captureRotationAnglePublisher: AnyPublisher<CGFloat, Never> { get }
+    /// 監視・校正開始時に呼ばれる（Motion 起停と同一則）。
+    func start()
+    /// 停止・背景移行時に呼ばれる（Motion 起停と同一則）。
+    func stop()
+    /// カメラ確定時・プレビュー層出現時に Session が呼ぶ再生成。
+    func recreate(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer?)
+}
 
 enum CameraPosition: String, Codable, Equatable {
     case front
@@ -53,7 +77,6 @@ enum Side: Equatable {
 struct AngleSample: Equatable {
     var nearSide: Side
     var nearAngleDegrees: Double
-    var farSideDetected: Bool
     /// 近傍側の耳-肩距離（Vision 正規化座標系、単位の基準なし）。前出し検出の第2指標。
     var nearDistance: Double
 }
@@ -116,7 +139,6 @@ struct SessionSnapshot: Equatable {
     /// 人物は映っているが肩のキーポイントが読めない状態（顔のみ検出）。
     /// 校正中の「肩が映っていません」案内に使用。
     var isShoulderMissing: Bool = false
-    var isMonitoringEnabled: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     var referenceAngle: Double? = nil

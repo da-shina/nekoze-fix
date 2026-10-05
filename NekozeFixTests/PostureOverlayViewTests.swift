@@ -59,16 +59,14 @@ final class PostureOverlayViewTests: XCTestCase {
         let (sx, sy) = PostureOverlayView.aspectFitScales(imageAR: 4.0/3.0, viewAR: size.width/size.height)
 
         // When: 製品ロジックで画面換算と距離ガイドを計算
-        let perUnit = PostureOverlayView.screenPerUnit(
-            earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size
-        )
         let baseline = PostureOverlayView.baselineDistancePixels(
             referenceDistance: 0.15, earShoulderVector: earShoulderVector, sx: sx, sy: sy, size: size
         )
+        let expected = 0.15 * hypot(earShoulderVector.dx * sx * size.width, earShoulderVector.dy * sy * size.height)
 
-        // Then: 垂直方向の換算が正しく、baseline が perUnit に比例する
-        XCTAssertGreaterThan(perUnit, 0)
-        XCTAssertEqual(baseline, 0.15 * perUnit, accuracy: 1e-10)
+        // Then: 垂直方向の換算が正しく、baseline が期待値と一致する
+        XCTAssertGreaterThan(baseline, 0)
+        XCTAssertEqual(baseline, expected, accuracy: 1e-10)
 
         // 垂直ベクトルは幾何学的に (0,1) になること（製品外の純粋幾何確認）
         let perpX = -earShoulderVector.dy
@@ -88,8 +86,8 @@ final class PostureOverlayViewTests: XCTestCase {
         let (sx, sy) = PostureOverlayView.aspectFitScales(imageAR: 4.0/3.0, viewAR: size.width/size.height)
 
         // When: 製品ロジックで画面換算（x/y 別スケールを向き依存で適用）
-        let perUnit = PostureOverlayView.screenPerUnit(
-            earShoulderVector: unit, sx: sx, sy: sy, size: size
+        let perUnit = PostureOverlayView.baselineDistancePixels(
+            referenceDistance: 1.0, earShoulderVector: unit, sx: sx, sy: sy, size: size
         )
         let expected = hypot(unitX * sx * size.width, unitY * sy * size.height)
 
@@ -98,38 +96,6 @@ final class PostureOverlayViewTests: XCTestCase {
         let perpX = -unitY
         let perpY = unitX
         XCTAssertEqual(unitX * perpX + unitY * perpY, 0.0, accuracy: 1e-10)
-    }
-
-    func testDistanceGuideLines_UpperLowerCenterPositions() {
-        // Given: 基準距離 50、閾値 20%（=10px相当）
-        let baselineDistance: CGFloat = 50
-
-        // When: 製品ロジックで上限・下限を計算
-        let (upperDist, lowerDist, thresholdPixels) = PostureOverlayView.distanceGuideDistances(
-            baselineDistance: baselineDistance, thresholdPercent: 20.0
-        )
-
-        // Then: baseline × (1 ± threshold/100)
-        XCTAssertEqual(thresholdPixels, 10.0, accuracy: 1e-10)
-        XCTAssertEqual(upperDist, 60.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerDist, 40.0, accuracy: 1e-10)
-
-        // 中心点への適用例: 肩点 (100,100)、単位ベクトル (0,-1) = 上向き
-        let startPoint = CGPoint(x: 100, y: 100)
-        let unitX: CGFloat = 0.0
-        let unitY: CGFloat = -1.0
-        let upperCenter = CGPoint(
-            x: startPoint.x + unitX * upperDist,
-            y: startPoint.y + unitY * upperDist
-        )
-        let lowerCenter = CGPoint(
-            x: startPoint.x + unitX * lowerDist,
-            y: startPoint.y + unitY * lowerDist
-        )
-        XCTAssertEqual(upperCenter.x, 100.0, accuracy: 1e-10)
-        XCTAssertEqual(upperCenter.y, 40.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerCenter.x, 100.0, accuracy: 1e-10)
-        XCTAssertEqual(lowerCenter.y, 60.0, accuracy: 1e-10)
     }
 
     func testDistanceGuideLines_LineEndpoints() {

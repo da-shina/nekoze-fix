@@ -21,7 +21,8 @@ final class AlertPlayer {
     /// - Parameter soundURL: アラートサウンドファイルのURL
     init(soundURL: URL) {
         self.soundURL = soundURL
-        configureAudioSession()
+        try? audioSession.setCategory(.playback, options: .duckOthers)
+        try? audioSession.setActive(true)
     }
 
     // MARK: - パブリックメソッド
@@ -32,11 +33,6 @@ final class AlertPlayer {
         let player = try AVAudioPlayer(contentsOf: soundURL)
         player.prepareToPlay()
         self.audioPlayer = player
-    }
-
-    /// アラート音を即座に1回だけ再生します
-    func playOnce() {
-        play(loops: 0)
     }
 
     /// 音声を1ループ再生し、終了直後から次のループを繰り返します
@@ -57,10 +53,4 @@ final class AlertPlayer {
         player.play()
     }
 
-    // MARK: - プライベートメソッド
-
-    private func configureAudioSession() {
-        try? audioSession.setCategory(.playback, options: .duckOthers)
-        try? audioSession.setActive(true)
-    }
 }

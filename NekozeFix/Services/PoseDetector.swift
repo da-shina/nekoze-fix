@@ -24,16 +24,6 @@ final class PoseDetector: @unchecked Sendable {
 
     // MARK: - 検出
 
-    /// 画面中央 (0.5, 0.5) に最も近い boundingBox を持つ観測を1つ選ぶ。
-    /// 複数人物が写っている場合の「認識する人物」の単一基準（design.md / FR 4.7）。
-    /// boundingBox は VNObservation 基底には無く個別クラス側に定義されているため、
-    /// 取得クロージャを渡す汎用実装にする。
-    static func closestToCenter<T>(_ observations: [T], box: (T) -> CGRect) -> T? {
-        observations.min { a, b in
-            centerDistance(box(a)) < centerDistance(box(b))
-        }
-    }
-
     /// Body Pose 観測の有効キーポイントを囲む矩形（人物位置の代理 boundingBox）。
     /// VNHumanBodyPoseObservation には boundingBox が無いため、抽出済み
     /// PoseFrame のキーポイントから算出する。キーポイントが無ければ .zero。
@@ -64,8 +54,8 @@ final class PoseDetector: @unchecked Sendable {
         // パス1: 顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
         var faceBounds: CGRect?
         let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
-            faceBounds = (request.results as? [VNFaceObservation])
-                .flatMap { Self.closestToCenter($0, box: \.boundingBox) }?
+            faceBounds = (request.results as? [VNFaceObservation])?
+                .min(by: { Self.centerDistance($0.boundingBox) < Self.centerDistance($1.boundingBox) })?
                 .boundingBox
         }
 
@@ -81,7 +71,7 @@ final class PoseDetector: @unchecked Sendable {
             // 抽出済みキーポイントの囲み矩形を人物位置の代理として中央距離で選ぶ。
             let frames = (request.results as? [VNHumanBodyPoseObservation])?
                 .compactMap { self.extractPoseFrame(from: $0) } ?? []
-            guard let frame = Self.closestToCenter(frames, box: Self.poseBoundingBox) else {
+            guard let frame = frames.min(by: { Self.centerDistance(Self.poseBoundingBox($0)) < Self.centerDistance(Self.poseBoundingBox($1)) }) else {
                 return
             }
             poseResult = .pose(frame)

@@ -10,65 +10,29 @@ struct MonitorView: View {
     @EnvironmentObject private var settingsStore: SettingsStore
 
     // MARK: - スライダー操作状態（閾値ガイド表示用）
-
+    // Slider の onEditingChanged で直接追跡する。Timer による
+    // 終了推測は不要（タップ・同値 set を含め編集状態が正確に取れる）。
     @State private var isDraggingAngleSlider: Bool = false
     @State private var isDraggingDistanceSlider: Bool = false
 
-    // MARK: - スライダー値変更検知用のカスタムバインディング
+    // MARK: - ガイド付きオーバーレイの共通ビルダ（参照・現在の二重呼び出しを一本化）
 
-    private var angleThresholdBinding: Binding<Double> {
-        Binding(
-            get: { settingsStore.slouchThresholdDegrees },
-            set: { newValue in
-                isDraggingAngleSlider = true
-                settingsStore.slouchThresholdDegrees = newValue
-                // 同値 set（タップや微小ドラッグ）では onChange が発火しないため、
-                // set 毎に非表示タイマーをリセットしてガイド残留を防ぐ。
-                onAngleValueChange(newValue)
-            }
+    private func guideOverlay(mode: PostureOverlayView.Mode, points: [CGPoint], referencePointsForGuide: [CGPoint]) -> some View {
+        PostureOverlayView(
+            mode: mode,
+            currentPoints: points,
+            nearSide: sessionManager.snapshot.nearSide,
+            imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
+            referenceVector: sessionManager.snapshot.referenceVector,
+            showAngleGuide: isDraggingAngleSlider,
+            angleThresholdDegrees: settingsStore.slouchThresholdDegrees,
+            showDistanceGuide: isDraggingDistanceSlider,
+            referenceDistance: sessionManager.snapshot.referenceDistance ?? 0,
+            slouchDistanceThresholdPercent: settingsStore.slouchDistanceThresholdPercent,
+            earShoulderVector: sessionManager.snapshot.earShoulderVector,
+            referencePointsForGuide: referencePointsForGuide
         )
-    }
-
-    private var distanceThresholdBinding: Binding<Double> {
-        Binding(
-            get: { settingsStore.slouchDistanceThresholdPercent },
-            set: { newValue in
-                isDraggingDistanceSlider = true
-                settingsStore.slouchDistanceThresholdPercent = newValue
-                // 同値 set（タップや微小ドラッグ）では onChange が発火しないため、
-                // set 毎に非表示タイマーをリセットしてガイド残留を防ぐ。
-                onDistanceValueChange(newValue)
-            }
-        )
-    }
-
-    // ドラッグ終了検知用（値変更が一定時間止まったら終了とみなす）
-    @State private var angleDragTimer: Timer?
-    @State private var distanceDragTimer: Timer?
-
-    private func onAngleValueChange(_ newValue: Double) {
-        angleDragTimer?.invalidate()
-        angleDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            self.isDraggingAngleSlider = false
-        }
-    }
-
-    private func onDistanceValueChange(_ newValue: Double) {
-        distanceDragTimer?.invalidate()
-        distanceDragTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-            self.isDraggingDistanceSlider = false
-        }
-    }
-
-    // MARK: - ガイド表示パラメータ（両オーバーレイ共通）
-
-    private var guideParams: (showAngleGuide: Bool, angleThresholdDegrees: Double, showDistanceGuide: Bool, referenceDistance: Double, slouchDistanceThresholdPercent: Double, earShoulderVector: CGVector) {
-        (isDraggingAngleSlider,
-         settingsStore.slouchThresholdDegrees,
-         isDraggingDistanceSlider,
-         sessionManager.snapshot.referenceDistance ?? 0,
-         settingsStore.slouchDistanceThresholdPercent,
-         sessionManager.snapshot.earShoulderVector)
+        .ignoresSafeArea()
     }
 
     // MARK: - 本文
@@ -77,39 +41,15 @@ struct MonitorView: View {
         ZStack {
             // 校正で確定した姿勢を薄いグレーで固定表示（背面）
             if let refPoints = sessionManager.snapshot.referencePoints {
-                PostureOverlayView(
-                    mode: .reference,
-                    currentPoints: refPoints,
-                    nearSide: sessionManager.snapshot.nearSide,
-                    imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                    referenceVector: sessionManager.snapshot.referenceVector,
-                    showAngleGuide: guideParams.showAngleGuide,
-                    angleThresholdDegrees: guideParams.angleThresholdDegrees,
-                    showDistanceGuide: guideParams.showDistanceGuide,
-                    referenceDistance: guideParams.referenceDistance,
-                    slouchDistanceThresholdPercent: guideParams.slouchDistanceThresholdPercent,
-                    earShoulderVector: guideParams.earShoulderVector,
-                    referencePointsForGuide: refPoints
-                )
-                .ignoresSafeArea()
+                guideOverlay(mode: .reference, points: refPoints, referencePointsForGuide: refPoints)
             }
 
             // 現在の姿勢をカラーで表示（背面）
-            PostureOverlayView(
+            guideOverlay(
                 mode: .current,
-                currentPoints: sessionManager.snapshot.visualizationPoints,
-                nearSide: sessionManager.snapshot.nearSide,
-                imageAspectRatio: sessionManager.snapshot.videoAspectRatio,
-                referenceVector: sessionManager.snapshot.referenceVector,
-                showAngleGuide: guideParams.showAngleGuide,
-                angleThresholdDegrees: guideParams.angleThresholdDegrees,
-                showDistanceGuide: guideParams.showDistanceGuide,
-                referenceDistance: guideParams.referenceDistance,
-                slouchDistanceThresholdPercent: guideParams.slouchDistanceThresholdPercent,
-                earShoulderVector: guideParams.earShoulderVector,
+                points: sessionManager.snapshot.visualizationPoints,
                 referencePointsForGuide: sessionManager.snapshot.referencePoints ?? []
             )
-            .ignoresSafeArea()
 
             // メインコンテンツ（最前面）
             VStack(spacing: 24) {
@@ -185,13 +125,11 @@ struct MonitorView: View {
                 }
 
                 Slider(
-                    value: angleThresholdBinding,
+                    value: $settingsStore.slouchThresholdDegrees,
                     in: SettingsStore.thresholdMinDegrees...SettingsStore.thresholdMaxDegrees,
-                    step: 0.5
+                    step: 0.5,
+                    onEditingChanged: { editing in isDraggingAngleSlider = editing }
                 )
-                .onChange(of: settingsStore.slouchThresholdDegrees) { _, newValue in
-                    onAngleValueChange(newValue)
-                }
             }
 
             // 距離閾値スライダー（前出し検出の第2指標・FQ3/FQ4）
@@ -203,19 +141,17 @@ struct MonitorView: View {
 
                     Spacer()
 
-                    Text(String(format: "±%.1f%%", settingsStore.slouchDistanceThresholdPercent))
+                    Text(String(format: "+%.1f%%", settingsStore.slouchDistanceThresholdPercent))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
 
                 Slider(
-                    value: distanceThresholdBinding,
+                    value: $settingsStore.slouchDistanceThresholdPercent,
                     in: SettingsStore.distanceThresholdMinPercent...SettingsStore.distanceThresholdMaxPercent,
-                    step: 0.5
+                    step: 0.5,
+                    onEditingChanged: { editing in isDraggingDistanceSlider = editing }
                 )
-                .onChange(of: settingsStore.slouchDistanceThresholdPercent) { _, newValue in
-                    onDistanceValueChange(newValue)
-                }
             }
         }
         .padding(.horizontal)
@@ -285,15 +221,34 @@ struct MonitorView: View {
             .opacity(0.8)
     }
 
+    // MARK: - 表示対応表(純粋関数。MonitorViewStyleTests が全分岐を固定)
+
+    /// フェーズ→(アイコン,文言)。色は statusColor が担当する。
+    static func statusContent(for phase: SessionPhase) -> (icon: String, text: String) {
+        switch phase {
+        case .monitoring:
+            return ("antenna.radiowaves.left.and.right", "監視中")
+        default:
+            return ("stop.circle", "停止中")
+        }
+    }
+
+    /// 姿勢→(アイコン,文言)。色は postureColor が担当する。
+    static func postureContent(for posture: DisplayedPosture) -> (icon: String, text: String) {
+        switch posture {
+        case .good:
+            return ("checkmark.circle.fill", "良好")
+        case .slouch:
+            return ("exclamationmark.triangle.fill", "猫背を検出")
+        case .personMissing:
+            return ("person.slash.fill", "人を検出できません")
+        }
+    }
+
     // MARK: - 計算プロパティ
 
     private var statusIcon: String {
-        switch sessionManager.snapshot.phase {
-        case .monitoring:
-            return "antenna.radiowaves.left.and.right"
-        default:
-            return "stop.circle"
-        }
+        Self.statusContent(for: sessionManager.snapshot.phase).icon
     }
 
     private var statusColor: Color {
@@ -301,23 +256,11 @@ struct MonitorView: View {
     }
 
     private var statusText: String {
-        switch sessionManager.snapshot.phase {
-        case .monitoring:
-            return "監視中"
-        default:
-            return "停止中"
-        }
+        Self.statusContent(for: sessionManager.snapshot.phase).text
     }
 
     private var postureIcon: String {
-        switch sessionManager.snapshot.displayedPosture {
-        case .good:
-            return "checkmark.circle.fill"
-        case .slouch:
-            return "exclamationmark.triangle.fill"
-        case .personMissing:
-            return "person.slash.fill"
-        }
+        Self.postureContent(for: sessionManager.snapshot.displayedPosture).icon
     }
 
     private var postureColor: Color {
@@ -332,14 +275,7 @@ struct MonitorView: View {
     }
 
     private var postureText: String {
-        switch sessionManager.snapshot.displayedPosture {
-        case .good:
-            return "良好"
-        case .slouch:
-            return "猫背を検出"
-        case .personMissing:
-            return "人を検出できません"
-        }
+        Self.postureContent(for: sessionManager.snapshot.displayedPosture).text
     }
 
 }

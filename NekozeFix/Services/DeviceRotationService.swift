@@ -53,10 +53,12 @@ final class DeviceRotationService: ObservableObject {
         observations.removeAll()
         let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
         self.coordinator = coordinator
-        publish(
-            preview: coordinator.videoRotationAngleForHorizonLevelPreview,
-            capture: coordinator.videoRotationAngleForHorizonLevelCapture
-        )
+        let preview = coordinator.videoRotationAngleForHorizonLevelPreview
+        let capture = coordinator.videoRotationAngleForHorizonLevelCapture
+        publish {
+            $0.previewRotationAngle = preview
+            $0.captureRotationAngle = capture
+        }
         if isStarted {
             beginObserving()
         }
@@ -67,10 +69,12 @@ final class DeviceRotationService: ObservableObject {
         guard !isStarted else { return }
         isStarted = true
         beginObserving()
-        publish(
-            preview: coordinator.videoRotationAngleForHorizonLevelPreview,
-            capture: coordinator.videoRotationAngleForHorizonLevelCapture
-        )
+        let preview = coordinator.videoRotationAngleForHorizonLevelPreview
+        let capture = coordinator.videoRotationAngleForHorizonLevelCapture
+        publish {
+            $0.previewRotationAngle = preview
+            $0.captureRotationAngle = capture
+        }
     }
 
     /// 監視停止・背景移行時に呼ぶ（Motion 起停と同一則）。保持角は破棄せず維持する
@@ -92,14 +96,14 @@ final class DeviceRotationService: ObservableObject {
             options: [.new]
         ) { [weak self] _, change in
             guard let self, let angle = change.newValue else { return }
-            self.publishPreview(angle)
+            self.publish { $0.previewRotationAngle = angle }
         }
         let captureObservation = coordinator.observe(
             \.videoRotationAngleForHorizonLevelCapture,
             options: [.new]
         ) { [weak self] _, change in
             guard let self, let angle = change.newValue else { return }
-            self.publishCapture(angle)
+            self.publish { $0.captureRotationAngle = angle }
         }
         observations = [previewObservation, captureObservation]
     }
@@ -114,19 +118,18 @@ final class DeviceRotationService: ObservableObject {
             }
         }
     }
+}
 
-    private func publish(preview: CGFloat, capture: CGFloat) {
-        publish {
-            $0.previewRotationAngle = preview
-            $0.captureRotationAngle = capture
-        }
+// MARK: - DeviceRotationServiceProtocol 適合（配信口）
+
+extension DeviceRotationService: DeviceRotationServiceProtocol {
+    /// preview 角の配信。View が同一インスタンスを購読する。
+    var previewRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
+        $previewRotationAngle.eraseToAnyPublisher()
     }
 
-    private func publishPreview(_ angle: CGFloat) {
-        publish { $0.previewRotationAngle = angle }
-    }
-
-    private func publishCapture(_ angle: CGFloat) {
-        publish { $0.captureRotationAngle = angle }
+    /// capture 角の配信。Session が同一インスタンスを購読する。
+    var captureRotationAnglePublisher: AnyPublisher<CGFloat, Never> {
+        $captureRotationAngle.eraseToAnyPublisher()
     }
 }

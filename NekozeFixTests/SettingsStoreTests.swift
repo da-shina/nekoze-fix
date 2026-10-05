@@ -57,6 +57,29 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertNil(suite.object(forKey: "com.nekozefix.sensitivity"))
     }
 
+    func testMigration_legacyAboveMax_clampedToMax() {
+        // 旧マッピング 20 - (-1.0)*15 = 35 → 上限 20.0 に丸め
+        suite.set(-1.0, forKey: "com.nekozefix.sensitivity")
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.slouchThresholdDegrees, 20.0, accuracy: 0.001)
+    }
+
+    func testMigration_legacyBelowMin_clampedToMin() {
+        // 旧マッピング 20 - 2.0*15 = -10 → 下限 1.0 に丸め
+        suite.set(2.0, forKey: "com.nekozefix.sensitivity")
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.slouchThresholdDegrees, 1.0, accuracy: 0.001)
+    }
+
+    func testMigration_newKeyWins_removesLegacyKey() {
+        // 新キー優先時も旧キーは削除される(移行の一回切り保証)
+        suite.set(0.0, forKey: "com.nekozefix.sensitivity") // 変換なら20度になる
+        suite.set(7.0, forKey: "com.nekozefix.slouchThresholdDegrees")
+        let store = SettingsStore(defaults: suite)
+        XCTAssertEqual(store.slouchThresholdDegrees, 7.0, accuracy: 0.001)
+        XCTAssertNil(suite.object(forKey: "com.nekozefix.sensitivity"))
+    }
+
     // MARK: - 距離閾値（%）
 
     func testDefaultDistanceThreshold_is8Percent() {

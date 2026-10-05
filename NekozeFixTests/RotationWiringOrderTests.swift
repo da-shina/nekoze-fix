@@ -14,17 +14,10 @@ import Combine
 /// KVO 配送はメイン、最新値の上書きのみ。
 ///
 /// 【TestDouble 方針】角度値は `FakeDeviceRotationService` から注入し、接続は
-/// 本ファイルの Fake（`VideoRotationConnection` 適合）へ注入する。simulator には video デバイスが存在しないため実接続は使わない。
+/// 共有 `FakeCaptureConnection`（DeviceRotationTestDouble.swift）へ注入する。
+/// simulator には video デバイスが存在しないため実接続は使わない。
 /// デバイスを要する箇所は audio フォールバック＋graceful-skip（1.2／2.1／3.2 と同一パターン）。
 /// 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
-extension FakeDeviceRotationService: SessionRotationAngleSource {
-    var rotationAnglesPublisher: AnyPublisher<(preview: CGFloat, capture: CGFloat), Never> {
-        $previewRotationAngle
-            .combineLatest($captureRotationAngle)
-            .map { (preview: $0, capture: $1) }
-            .eraseToAnyPublisher()
-    }
-}
 
 @MainActor
 final class RotationWiringOrderTests: XCTestCase {
@@ -40,33 +33,7 @@ final class RotationWiringOrderTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Fake
-
-    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakeCaptureConnection: VideoRotationConnection {
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(initialAngle: CGFloat = 0.0) {
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
-    }
-
-    /// `VideoRotationConnection` 適合の TestDouble（全角対応）。
-    final class WiringFakePreviewConnection: VideoRotationConnection {
-        var videoRotationAngle: CGFloat
-        var isVideoMirroringSupported: Bool = false
-        var isVideoMirrored: Bool = false
-
-        init(initialAngle: CGFloat = 0.0) {
-            self.videoRotationAngle = initialAngle
-        }
-
-        func isVideoRotationAngleSupported(_ videoRotationAngle: CGFloat) -> Bool { true }
-    }
+    // MARK: - Fake 接続は共有 FakeCaptureConnection（DeviceRotationTestDouble.swift）を使用
 
     private func anyWiringDevice() -> AVCaptureDevice? {
         AVCaptureDevice.default(for: .video) ?? AVCaptureDevice.default(for: .audio)
@@ -88,8 +55,8 @@ final class RotationWiringOrderTests: XCTestCase {
     /// data-output 接続へ転送される（requirements 2.1, 2.2）。
     func testAttachedServiceAngleInjection_flowsToCaptureConnection() {
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
-        let connection = WiringFakeCaptureConnection(initialAngle: 0.0)
+        sut.rotationService = fake
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         fake.inject(preview: 90.0, capture: 90.0)
@@ -104,7 +71,7 @@ final class RotationWiringOrderTests: XCTestCase {
     func testAttachedServiceCaptureChange_triggersRecalibrationViaSubscription() {
         seedCalibratedMonitoring()
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         XCTAssertEqual(sut.snapshot.phase, .monitoring, "結線時の初期角（0°）では遷移しない")
 
         fake.inject(preview: 90.0, capture: 90.0)
@@ -124,8 +91,8 @@ final class RotationWiringOrderTests: XCTestCase {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
         }
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
-        let connection = WiringFakeCaptureConnection(initialAngle: 0.0)
+        sut.rotationService = fake
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
         // 初回：カメラ構成時の確定通知（Session→recreate の順序）。
@@ -153,7 +120,7 @@ final class RotationWiringOrderTests: XCTestCase {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
         }
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
         sut.cameraManager.deviceFinalizedHandler?(device)
         await MainActor.run {}
         XCTAssertEqual(fake.recreateCallCount, 1, "前提：初回確定で1回再生成")
@@ -173,16 +140,16 @@ final class RotationWiringOrderTests: XCTestCase {
     /// （二重解決・隠れた共有所有を作らない。design.md Boundary Map）。
     func testRotationServiceForPreview_sharesSameInstanceWithSession() {
         let fake = FakeDeviceRotationService()
-        sut.attachRotationService(fake)
+        sut.rotationService = fake
 
-        XCTAssertTrue(sut.rotationServiceForPreview === fake, "View 注入用に同一インスタンスを返す")
+        XCTAssertTrue(sut.rotationService === fake, "View 注入用に同一インスタンスを返す")
     }
 
     /// 注入用所有層は初回アクセス時に生成され、以後同一インスタンスである
     /// （所有権は Session。View 側で生成しない）。
     func testPreviewLayerForInjection_isStableSessionOwnedInstance() {
-        let first = sut.previewLayerForInjection
-        let second = sut.previewLayerForInjection
+        let first = sut.ensureOwnedPreviewLayer()
+        let second = sut.ensureOwnedPreviewLayer()
 
         XCTAssertTrue(first === second, "注入層は同一インスタンスを使い回す")
         XCTAssertTrue(sut.ownedPreviewLayer === first, "Session 所有層と同一である")
@@ -194,7 +161,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// （requirements 2.1, 2.2。updateUIView 経路の TestDouble 駆動）。
     func testPreviewViewResubscribe_afterAttach_appliesInjectedAngle() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-        let connection = WiringFakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         // View 出現時点では未結線（rotationSource なし）。
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
@@ -211,7 +178,7 @@ final class RotationWiringOrderTests: XCTestCase {
     /// 同一インスタンスへの再通知では購読し直さない（重複購読なし）。
     func testPreviewViewResubscribe_sameInstance_doesNotResubscribe() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-        let connection = WiringFakePreviewConnection(initialAngle: 0.0)
+        let connection = FakeCaptureConnection(initialAngle: 0.0)
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             rotationSource: fake,

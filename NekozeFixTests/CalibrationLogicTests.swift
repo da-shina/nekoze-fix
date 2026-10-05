@@ -32,10 +32,9 @@ final class CalibrationLogicTests: XCTestCase {
     /// テスト用の有効な AngleSample を作成。
     private func makeSample(
         nearSide: Side = .left,
-        angle: Double = 45.0,
-        farSideDetected: Bool = false
+        angle: Double = 45.0
     ) -> AngleSample {
-        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, farSideDetected: farSideDetected, nearDistance: 0.3)
+        AngleSample(nearSide: nearSide, nearAngleDegrees: angle, nearDistance: 0.3)
     }
 
     // MARK: - 2.5: 人物未検出 - 完了不可
@@ -458,7 +457,7 @@ final class CalibrationLogicTests: XCTestCase {
         var lastProgress: CalibrationProgress = .waitingForPerson
         for frameIndex in 0...300 {
             let t = Double(frameIndex) / 60.0
-            let sample = AngleSample(nearSide: .left, nearAngleDegrees: 45.0, farSideDetected: false, nearDistance: 0.25)
+            let sample = AngleSample(nearSide: .left, nearAngleDegrees: 45.0, nearDistance: 0.25)
             lastProgress = sut.ingest(sample: sample, referenceSource: nil, presence: .personDetected, now: t)
         }
 
