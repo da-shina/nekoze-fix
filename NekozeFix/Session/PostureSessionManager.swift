@@ -453,10 +453,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
     /// captureOutput の Task 本体。テストは合成フレームの Detection を直接投入できる。
     func processDetection(_ detection: PoseDetector.Detection) {
+        // DEBUG 表示用の信頼度記録は毎フレーム取り直す（.pose 側で上書き）。
+        snapshot.keypointConfidences = []
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
-            snapshot.keypointConfidences = []
             updateState(presence: .personMissing, sample: nil, resolvedReference: nil)
             return
         }
@@ -465,7 +466,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 肩欠測デバウンス: 猶予期間内は前回の可視化ポイントを維持し
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(var frame) = detection else {
-            snapshot.keypointConfidences = []
             let now = CACurrentMediaTime()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false

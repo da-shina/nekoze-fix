@@ -53,8 +53,8 @@ struct PostureAnalyzer {
 
         if leftValid && rightValid {
             // 縮退（耳＝肩の完全一致）の選択時寄与は 0 度扱い。報告角度は後段でガードする。
-            let leftAngle = Self.acuteAngleDegrees(ear: frame.leftEar!, shoulder: frame.leftShoulder!, perpX: perpX, perpY: perpY) ?? 0
-            let rightAngle = Self.acuteAngleDegrees(ear: frame.rightEar!, shoulder: frame.rightShoulder!, perpX: perpX, perpY: perpY) ?? 0
+            let leftAngle = Self.earShoulderGeometry(ear: frame.leftEar!, shoulder: frame.leftShoulder!, perpX: perpX, perpY: perpY)?.angle ?? 0
+            let rightAngle = Self.earShoulderGeometry(ear: frame.rightEar!, shoulder: frame.rightShoulder!, perpX: perpX, perpY: perpY)?.angle ?? 0
 
             if let prev = previousNearSide, abs(leftAngle - rightAngle) < Self.nearSideHysteresisDegrees {
                 // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
@@ -77,14 +77,12 @@ struct PostureAnalyzer {
             return (nil, .insufficientKeypoints, resolvedReference)
         }
 
-        // ステップ4: 選択側の鋭角を計算（0〜90度。報告値の単一算出点）
-        let vx = nearEar!.x - nearShoulder!.x
-        let vy = nearEar!.y - nearShoulder!.y
-        let length = sqrt(vx * vx + vy * vy)
-        guard length > 0,
-              let acuteAngle = Self.acuteAngleDegrees(ear: nearEar!, shoulder: nearShoulder!, perpX: perpX, perpY: perpY) else {
+        // ステップ4: 選択側の幾何量を取得（0〜90度の鋭角＋長さ。報告値の単一算出点）
+        guard let geometry = Self.earShoulderGeometry(ear: nearEar!, shoulder: nearShoulder!, perpX: perpX, perpY: perpY) else {
             return (nil, .insufficientKeypoints, resolvedReference)
         }
+        let acuteAngle = geometry.angle
+        let length = geometry.length
 
         // ステップ4b: 耳-肩距離（前出し検出の第2指標）。
         // 監視中（distanceMetric あり）は角度の近側選択と独立にロック側ペアで評価する（FQ1）。
@@ -175,15 +173,15 @@ struct PostureAnalyzer {
         )
     }
 
-    /// 肩→耳ベクトルと基準線のなす鋭角（0〜90度）。縮退（長さ0）は nil。
-    private static func acuteAngleDegrees(ear: Keypoint, shoulder: Keypoint, perpX: Double, perpY: Double) -> Double? {
+    /// 肩→耳ベクトルの幾何量（基準線との鋭角 0〜90度＋ベクトル長）。縮退（長さ0）は nil。
+    private static func earShoulderGeometry(ear: Keypoint, shoulder: Keypoint, perpX: Double, perpY: Double) -> (angle: Double, length: Double)? {
         let vx = ear.x - shoulder.x
         let vy = ear.y - shoulder.y
         let length = sqrt(vx * vx + vy * vy)
         guard length > 0 else { return nil }
         let clampedCos = max(-1.0, min(1.0, (vx * perpX + vy * perpY) / length))
         let thetaDegrees = acos(clampedCos) * 180.0 / .pi
-        return min(thetaDegrees, 180.0 - thetaDegrees)
+        return (min(thetaDegrees, 180.0 - thetaDegrees), length)
     }
 
     private func isValidPair(ear: Keypoint?, shoulder: Keypoint?, minimumConfidence: Double) -> Bool {
