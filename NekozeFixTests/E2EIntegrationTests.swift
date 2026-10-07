@@ -16,8 +16,8 @@ final class E2EIntegrationTests: XCTestCase {
     }
 
     func testE2ECriticalPath() {
-        // フェーズ1: 許可確認
-        XCTAssertEqual(sut.snapshot.phase, .awaitingPermission)
+        // フェーズ1: 開始画面（スプラッシュ）で待機
+        XCTAssertEqual(sut.snapshot.phase, .idle)
 
         // フェーズ3: キャリブレーション
         sut.startCalibration()

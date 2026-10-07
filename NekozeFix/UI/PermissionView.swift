@@ -46,18 +46,11 @@ struct PermissionView: View {
             Spacer()
 
             // 許可状態に応じたコンテンツ
+            // idle は RootView で SplashView に遷移するためここには来ない。
+            // フォールバックは許可要求表示とする。
             switch sessionManager.snapshot.phase {
             case .permissionDenied:
                 deniedContent
-            case .idle:
-                // 監視停止後（idle）: 権限は既にあるため再校正の入口のみ提示
-                Button(action: { sessionManager.startCalibration() }) {
-                    Label("キャリブレーションを開始", systemImage: "arrow.triangle.2.circlepath")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(accent)
             default:
                 requestingContent
             }
