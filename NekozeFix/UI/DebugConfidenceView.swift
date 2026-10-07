@@ -5,18 +5,21 @@ import SwiftUI
 ///（見た目・レイアウトへの影響なし）。
 
 struct DebugConfidenceView: View {
+    /// 検証時のみ true にして使う。恒常表示はしない（削除せず無効化で残す）。
+    static var isEnabled = false
+
     var confidences: [Double?] = []
 
     var body: some View {
         #if DEBUG
-        Text(displayText)
-            .font(.system(.caption, design: .monospaced))
-            .foregroundColor(.white)
-            .padding(6)
-            .background(Color.black.opacity(0.6))
-            .cornerRadius(8)
-        #else
-        EmptyView()
+        if Self.isEnabled {
+            Text(displayText)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.white)
+                .padding(6)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(8)
+        }
         #endif
     }
 
