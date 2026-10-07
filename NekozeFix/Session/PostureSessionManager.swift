@@ -502,7 +502,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // キーポイントの瞬断ホールド（猶予 0.5 秒。既存グレースと同一則）。
         // 肩が切れると耳も連動して落ちる実測のため、点単位で直近値を保持し
         // 校正蓄積・可視化のチラつきを防ぐ。人物不在 (.absent) 時は保持しない。
-        frame = holdingMissingKeypoints(frame, now: CACurrentMediaTime())
+        // 復元時も現向きの閾値を適用する（校正中の向き変更ではホールドが
+        // リセットされないため、ランドスケープ保持の低信頼度点がポートレートに
+        // 混入するのを防ぐ）。
+        frame = holdingMissingKeypoints(
+            frame,
+            now: CACurrentMediaTime(),
+            minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
+        )
 
         // 2. 姿勢分析
         let refAngle = snapshot.referenceAngle
@@ -719,13 +726,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 欠測キーポイントの直近値ホールド（人物不在時は対象外。呼び出し側で分岐済み）。
     /// 猶予内の再検出は前回値をそのまま使い、超過後は破棄する。
-    private func holdingMissingKeypoints(_ frame: PoseFrame, now: TimeInterval) -> PoseFrame {
+    /// 復元する保持点にも現向きの閾値を適用する（向き変更で混入した低信頼度点を排除）。
+    private func holdingMissingKeypoints(_ frame: PoseFrame, now: TimeInterval, minimumConfidence: Double) -> PoseFrame {
         var frame = frame
         for (index, path) in Self.jointKeyPaths.enumerated() {
             if let current = frame[keyPath: path] {
                 lastHeldKeypoints[index] = current
                 lastJointSeenTime[index] = now
             } else if let held = lastHeldKeypoints[index],
+                      held.confidence >= minimumConfidence,
                       let seen = lastJointSeenTime[index],
                       now - seen < Self.keypointHoldGracePeriod {
                 frame[keyPath: path] = held

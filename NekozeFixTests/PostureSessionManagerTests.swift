@@ -372,6 +372,23 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は直近の肩を保持する")
     }
 
+    /// 校正中の向き変更ではホールドがリセットされないため、復元時も現向きの閾値を適用する。
+    /// ランドスケープ保持の 0.12 の肩はポートレートに戻すと復元されない。
+    func testHold_appliesCurrentOrientationThresholdAfterRotation() {
+        var snapshot = SessionSnapshot()
+        snapshot.isLandscape = true
+        let manager = PostureSessionManager(settingsStore: SettingsStore(defaults: suite), snapshot: snapshot)
+        manager.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        XCTAssertNotEqual(manager.snapshot.visualizationPoints[0], .zero)
+        // 校正中の回転（portrait 角）に切り替える。リセット対象外のためホールドは残る。
+        manager.handleRotationAngleChange(preview: 90, capture: 90)
+        XCTAssertFalse(manager.snapshot.isLandscape)
+        var dropped = testFrame(shoulderConfidence: 0.12)
+        dropped.leftShoulder = nil
+        manager.processDetection(.pose(dropped))
+        XCTAssertEqual(manager.snapshot.visualizationPoints[0], .zero, "ポートレートでは 0.12 の保持点を復元しない")
+    }
+
     /// 人物不在ではホールドを破棄する（不在前の点を別人の判定に使わない）。
     func testAbsent_clearsKeypointHold() {
         sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
