@@ -1,16 +1,22 @@
 import Foundation
 
 struct PostureAnalyzer {
+    /// 近側選択のヒステリシス幅（度）。旧位置0.02則 ≒ 耳肩長0.2正規化で約5.7° と等価。
+    private static let nearSideHysteresisDegrees = 5.0
+
     /// 姿勢フレームを分析して猫背かどうかを判定する。
     ///
-    /// 近傍側の選択: 両側が有効な場合、x座標が小さい方の肩を近傍側とする（Q9）。
+    /// 近傍側の選択: 両側が有効な場合、解決済み基準線との鋭角が大きい
+    /// （鈍角側の）ペアを近傍側とする（要件4.7・感度優先）。
+    /// 角度差がヒステリシス幅未満の場合は前回の選択を維持する。
     /// 片側のみ有効な場合、その側が自動的に近傍側となる（Q11）。
     ///
     /// 角度計算: 肩から耳へのベクトルと解決済み基準ベクトル（重力→両肩ライン直交上向き法線→
     /// 画像垂直 (0,1) の順に同ファイル内 `resolve` で解決）の角度。
     /// 結果は鋭角 0〜90度。移動平均フィルタなし（Q12）。
     ///
-    /// 信頼度 < 0.3 のキーポイントは除外される（4.5）。
+    /// 信頼度ゲートは minimumConfidence 引数で受ける（Session が向き別閾値を注入。
+    /// 既定は minimumKeypointConfidence。要件4.5/4.6）。
     /// カメラの取り付け角度は基準値に吸収される。
     ///
     /// 重力は値として受け取る（Domain は Services を参照しない）。nil は代替解決を意味し、
@@ -26,35 +32,35 @@ struct PostureAnalyzer {
         slouchDistanceThresholdPercent: Double = 8.0,   // 距離閾値%（8.3 までは未使用）
         previousNearSide: Side? = nil,
         gravityInKeypointSpace: SIMD2<Double>? = nil,    // MotionService 変換済みか nil（12.2）
-        captureAngleDegrees: Double? = nil               // capture用回転角（度）。nil は無回転
+        captureAngleDegrees: Double? = nil,               // capture用回転角（度）。nil は無回転
+        minimumConfidence: Double = minimumKeypointConfidence // 向き別信頼度ゲート（Session が注入）
     ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ResolvedReferenceVector) {
 
-        // ステップ1: 各側の有効なキーポイントペアを特定（信頼度 >= 0.3）
-        let leftValid = isValidPair(ear: frame.leftEar, shoulder: frame.leftShoulder)
-        let rightValid = isValidPair(ear: frame.rightEar, shoulder: frame.rightShoulder)
+        // ステップ1: 各側の有効なキーポイントペアを特定（向き別ゲート。Session が同値で事前フィルタ済み）
+        let leftValid = isValidPair(ear: frame.leftEar, shoulder: frame.leftShoulder, minimumConfidence: minimumConfidence)
+        let rightValid = isValidPair(ear: frame.rightEar, shoulder: frame.rightShoulder, minimumConfidence: minimumConfidence)
 
-        // ステップ2: 近傍側の選択
+        // ステップ2: 解決済み基準ベクトルを先に確定する（近側選択に両側の角度が必要なため）。
+        // resolve はフレームのみに依存し選択に依存しない（単一解決）。
+        let resolvedReference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees, minimumConfidence: minimumConfidence)
+        let perpX = resolvedReference.vector.x
+        let perpY = resolvedReference.vector.y
+
+        // ステップ3: 近側の選択（鈍角側優先・感度優先。要件4.7）
         var nearSide: Side?
         var nearEar: Keypoint?
         var nearShoulder: Keypoint?
 
         if leftValid && rightValid {
-            let lx = frame.leftShoulder!.x
-            let rx = frame.rightShoulder!.x
+            // 縮退（耳＝肩の完全一致）の選択時寄与は 0 度扱い。報告角度は後段でガードする。
+            let leftAngle = Self.acuteAngleDegrees(ear: frame.leftEar!, shoulder: frame.leftShoulder!, perpX: perpX, perpY: perpY) ?? 0
+            let rightAngle = Self.acuteAngleDegrees(ear: frame.rightEar!, shoulder: frame.rightShoulder!, perpX: perpX, perpY: perpY) ?? 0
 
-            // ヒステリシスの導入: 前回の判定がある場合、一定の閾値を超えない限り維持する
-            let hysteresisThreshold = 0.02 // 座標系(0-1)における2%のバッファ
-
-            if let prev = previousNearSide {
-                let diff = rx - lx
-                if abs(diff) < hysteresisThreshold {
-                    // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
-                    nearSide = prev
-                } else {
-                    nearSide = diff > 0 ? .left : .right
-                }
+            if let prev = previousNearSide, abs(leftAngle - rightAngle) < Self.nearSideHysteresisDegrees {
+                // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
+                nearSide = prev
             } else {
-                nearSide = lx < rx ? .left : .right
+                nearSide = (leftAngle >= rightAngle) ? .left : .right
             }
 
             nearEar = (nearSide == .left) ? frame.leftEar : frame.rightEar
@@ -68,26 +74,19 @@ struct PostureAnalyzer {
             nearEar = frame.rightEar
             nearShoulder = frame.rightShoulder
         } else {
-            return (nil, .insufficientKeypoints, Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees))
+            return (nil, .insufficientKeypoints, resolvedReference)
         }
 
-        // ステップ3: 解決済み基準ベクトル（重力→肩ライン直交→画像垂直）と鋭角を計算（0〜90度）
-        let resolvedReference = Self.resolve(gravityInKeypointSpace: gravityInKeypointSpace, frame: frame, captureAngleDegrees: captureAngleDegrees)
-        let perpX = resolvedReference.vector.x
-        let perpY = resolvedReference.vector.y
-
+        // ステップ4: 選択側の鋭角を計算（0〜90度。報告値の単一算出点）
         let vx = nearEar!.x - nearShoulder!.x
         let vy = nearEar!.y - nearShoulder!.y
         let length = sqrt(vx * vx + vy * vy)
-        guard length > 0 else { return (nil, .insufficientKeypoints, resolvedReference) }
+        guard length > 0,
+              let acuteAngle = Self.acuteAngleDegrees(ear: nearEar!, shoulder: nearShoulder!, perpX: perpX, perpY: perpY) else {
+            return (nil, .insufficientKeypoints, resolvedReference)
+        }
 
-        let cosTheta = (vx * perpX + vy * perpY) / length
-        let clampedCos = max(-1.0, min(1.0, cosTheta))
-        let thetaRadians = acos(clampedCos)
-        let thetaDegrees = thetaRadians * 180.0 / .pi
-        let acuteAngle = min(thetaDegrees, 180.0 - thetaDegrees)
-
-        // ステップ3b: 耳-肩距離（前出し検出の第2指標）。
+        // ステップ4b: 耳-肩距離（前出し検出の第2指標）。
         // 監視中（distanceMetric あり）は角度の近側選択と独立にロック側ペアで評価する（FQ1）。
         // ロック側ペアが信頼度未満等で使用できないフレームでは距離条件をスキップし、
         // 角度のみで判定を継続する。校正中（nil）は近側の素値を記録するだけ。
@@ -97,7 +96,7 @@ struct PostureAnalyzer {
         if let metric = distanceMetric, metric.referenceDistance > 0 {
             let lockEar = (metric.side == .left) ? frame.leftEar : frame.rightEar
             let lockShoulder = (metric.side == .left) ? frame.leftShoulder : frame.rightShoulder
-            if isValidPair(ear: lockEar, shoulder: lockShoulder) {
+            if isValidPair(ear: lockEar, shoulder: lockShoulder, minimumConfidence: minimumConfidence) {
                 let dx = lockEar!.x - lockShoulder!.x
                 let dy = lockEar!.y - lockShoulder!.y
                 let lockDistance = sqrt(dx * dx + dy * dy)
@@ -107,7 +106,7 @@ struct PostureAnalyzer {
             // ロック側ペアが使用できないフレームは距離条件をスキップし角度のみで判定（反対側代用なし・要件4.1）。
         }
 
-        // ステップ4: 判定を決定（角度 OR 距離基準比・FQ6）
+        // ステップ5: 判定を決定（角度 OR 距離基準比・FQ6）
         let referenceAngle = referenceNearAngleDegrees ?? 0.0
         let delta = acuteAngle - referenceAngle
         let verdict: PostureVerdict = (delta >= slouchDeltaThresholdDegrees || distanceOverThreshold) ? .slouchCandidate : .good
@@ -133,7 +132,8 @@ struct PostureAnalyzer {
     private static func resolve(
         gravityInKeypointSpace: SIMD2<Double>?,
         frame: PoseFrame,
-        captureAngleDegrees: Double? = nil
+        captureAngleDegrees: Double? = nil,
+        minimumConfidence: Double
     ) -> ResolvedReferenceVector {
         // 第一段: 重力（有効な単位化可能ベクトルのみ採用）
         if let gravity = gravityInKeypointSpace {
@@ -145,7 +145,7 @@ struct PostureAnalyzer {
         }
         // 第二段: 両肩ライン直交上向き法線（従来式を移設）
         if let ls = frame.leftShoulder, let rs = frame.rightShoulder,
-           ls.confidence >= minimumKeypointConfidence, rs.confidence >= minimumKeypointConfidence {
+           ls.confidence >= minimumConfidence, rs.confidence >= minimumConfidence {
             let leftShoulder = (ls.x <= rs.x) ? ls : rs
             let rightShoulder = (ls.x <= rs.x) ? rs : ls
             let sdx = rightShoulder.x - leftShoulder.x
@@ -175,11 +175,22 @@ struct PostureAnalyzer {
         )
     }
 
-    private func isValidPair(ear: Keypoint?, shoulder: Keypoint?) -> Bool {
+    /// 肩→耳ベクトルと基準線のなす鋭角（0〜90度）。縮退（長さ0）は nil。
+    private static func acuteAngleDegrees(ear: Keypoint, shoulder: Keypoint, perpX: Double, perpY: Double) -> Double? {
+        let vx = ear.x - shoulder.x
+        let vy = ear.y - shoulder.y
+        let length = sqrt(vx * vx + vy * vy)
+        guard length > 0 else { return nil }
+        let clampedCos = max(-1.0, min(1.0, (vx * perpX + vy * perpY) / length))
+        let thetaDegrees = acos(clampedCos) * 180.0 / .pi
+        return min(thetaDegrees, 180.0 - thetaDegrees)
+    }
+
+    private func isValidPair(ear: Keypoint?, shoulder: Keypoint?, minimumConfidence: Double) -> Bool {
         guard let ear = ear,
               let shoulder = shoulder,
-              ear.confidence >= minimumKeypointConfidence,
-              shoulder.confidence >= minimumKeypointConfidence
+              ear.confidence >= minimumConfidence,
+              shoulder.confidence >= minimumConfidence
         else {
             return false
         }

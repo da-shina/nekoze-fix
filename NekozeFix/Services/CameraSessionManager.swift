@@ -3,8 +3,10 @@ import UIKit
 
 /// フロントカメラのセッション管理とパーミッション。
 ///
-/// `.high` プリセット (720p)、シリアルキャプチャキュー、
+/// `.vga640x480` プリセット (4:3)、シリアルキャプチャキュー、
 /// 非同期認証による AVCaptureSession の管理。
+/// 4:3 は 720p (16:9) と異なりセンサー上下を切り落とさないため、
+/// 横向き使用時の垂直画角を確保できる（ADR 0020）。
 ///
 /// 設計参照: design.md の "CameraSessionManager" セクション。
 final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendable {
@@ -161,7 +163,14 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
 
-        captureSession.sessionPreset = .high  // 720p
+        // 横向きの垂直画角確保のため 4:3 の VGA を優先する。
+        // 720p (16:9) はセンサー上下を切り落とし、横向きで肩が画角外になる（ADR 0020）。
+        // 非対応機種では従来の .high に退行する。
+        if captureSession.canSetSessionPreset(.vga640x480) {
+            captureSession.sessionPreset = .vga640x480
+        } else {
+            captureSession.sessionPreset = .high
+        }
 
         // 既存の入力を削除
         captureSession.inputs.forEach { captureSession.removeInput($0) }

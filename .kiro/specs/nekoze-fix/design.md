@@ -207,10 +207,10 @@ private static func resolve(
 | Field | Detail |
 |-------|--------|
 | Intent | 解決済み基準線との鋭角算出と OR 判定を担う |
-| Requirements | 2.7, 3.5, 4.1, 4.3, 4.5, 4.6 |
+| Requirements | 2.7, 3.5, 4.1, 4.3, 4.5, 4.6, 4.7 |
 
 **Responsibilities & Constraints**
-- 近側選択・ヒステリシス・距離 OR・鋭角化の現行則を維持する。
+- 近側選択は鈍角側優先（両側有効時は解決済み基準線との鋭角が大きい側を選択、角度差5度未満は前回維持）・距離 OR・鋭角化の現行則を維持する。旧x座標則（小さい側＋位置0.02ヒステリシス）は廃止。
 - ロック側ペア欠測のフレームでは距離条件をスキップし角度のみで判定する（反対側代用なし、grill Q1決定）。`fallbackReferenceDistance` 枝と Session 側の遠側基準構築は削除する。
 - 基準線は同ファイル内 `resolve` に集約する（Session からの二重解決なし）。
 
@@ -236,7 +236,7 @@ func analyze(
 
 - Preconditions: gravity は MotionService 変換済みか nil。nil は代替解決を意味する。
 - Postconditions: 角度は 0〜90 度の鋭角。sample は近側・遠側情報を従来通り含む。
-- Invariants: gravity 以外の入力が同一なら従来と同一の近側・距離・判定を返す。
+- Invariants: gravity 以外の入力が同一なら同一の近側・距離・判定を返す（近側選択は鈍角側優先・5度ヒステリシス則）。
 
 **Implementation Notes**
 - Integration: Session のみ新引数を渡す。

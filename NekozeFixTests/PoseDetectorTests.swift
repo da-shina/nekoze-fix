@@ -23,4 +23,14 @@ final class PoseDetectorTests: XCTestCase {
     func testClosestToCenter_empty_returnsNil() {
         XCTAssertNil([CGRect]().min(by: { PoseDetector.centerDistance($0) < PoseDetector.centerDistance($1) }))
     }
+
+    // MARK: - 向き別の信頼度閾値（要件4.6）
+
+    func testConfidenceThreshold_portrait_isStrict() {
+        XCTAssertEqual(keypointConfidenceThreshold(isLandscape: false), 0.3, accuracy: 1e-9)
+    }
+
+    func testConfidenceThreshold_landscape_isRelaxed() {
+        XCTAssertEqual(keypointConfidenceThreshold(isLandscape: true), 0.1, accuracy: 1e-9)
+    }
 }

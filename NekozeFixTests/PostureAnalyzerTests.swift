@@ -15,11 +15,11 @@ final class PostureAnalyzerTests: XCTestCase {
         super.tearDown()
     }
 
-    func testNearSideSelection_LeftShoulderSmallerX() {
-        // 前提: 左肩のx座標 < 右肩のx座標
+    func testNearSideSelection_SelectsMoreObtuseSide() {
+        // 前提: 左はほぼ直立（約2.86度）、右は前屈（45度）
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 155, y: 350, confidence: 0.9),  // 肩から少し右にずらして小さな角度を作る
+            leftEar: Keypoint(x: 155, y: 350, confidence: 0.9),
             rightEar: Keypoint(x: 300, y: 200, confidence: 0.9),
             leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.9),
             rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.9)
@@ -28,26 +28,29 @@ final class PostureAnalyzerTests: XCTestCase {
         // 手順
         let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // 検証
-        XCTAssertEqual(sample?.nearSide, .left)
-        XCTAssertEqual(verdict, .good) // 角度は小さい（約2.86度）のため良好判定
+        // 検証: 鈍角側（右）を選択する（要件4.7・感度優先）
+        XCTAssertEqual(sample?.nearSide, .right)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 45.0, accuracy: 0.5)
+        XCTAssertEqual(verdict, .slouchCandidate)
     }
 
-    func testNearSideSelection_RightShoulderSmallerX() {
-        // 前提: 右肩のx座標 < 左肩のx座標
+    func testNearSideSelection_SelectsMoreObtuseSideOnLeft() {
+        // 前提: 左が前屈（45度）、右はほぼ直立（約2.86度）
         let frame = PoseFrame(
             timestamp: 0,
-            leftEar: Keypoint(x: 250, y: 200, confidence: 0.9),
-            rightEar: Keypoint(x: 100, y: 200, confidence: 0.9),
-            leftShoulder: Keypoint(x: 250, y: 250, confidence: 0.9),
-            rightShoulder: Keypoint(x: 150, y: 250, confidence: 0.9)
+            leftEar: Keypoint(x: 100, y: 200, confidence: 0.9),
+            rightEar: Keypoint(x: 245, y: 350, confidence: 0.9),
+            leftShoulder: Keypoint(x: 150, y: 250, confidence: 0.9),
+            rightShoulder: Keypoint(x: 250, y: 250, confidence: 0.9)
         )
 
         // 手順
-        let (sample, _, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
+        let (sample, verdict, _) = postureAnalyzer.analyze(frame: frame, referenceNearAngleDegrees: 0, slouchDeltaThresholdDegrees: 10)
 
-        // 検証
-        XCTAssertEqual(sample?.nearSide, .right)
+        // 検証: 鈍角側（左）を選択する
+        XCTAssertEqual(sample?.nearSide, .left)
+        XCTAssertEqual(sample?.nearAngleDegrees ?? 0, 45.0, accuracy: 0.5)
+        XCTAssertEqual(verdict, .slouchCandidate)
     }
 
     func testAngleCalculation_Acute0to90Degrees() {
@@ -126,7 +129,7 @@ final class PostureAnalyzerTests: XCTestCase {
     }
 
     func testHysteresis_SwitchesToOtherSideWhenClearlyReversed() {
-        // 前提: 前回 .left、今回は右肩が明確に近い (rx - lx = -100 >> 閾値0.02)
+        // 前提: 前回 .left、今回は右が明確に鈍角（左0度・右約24度、差は5度超）
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 300, y: 200, confidence: 0.9),
@@ -148,7 +151,7 @@ final class PostureAnalyzerTests: XCTestCase {
     }
 
     func testHysteresis_KeepsPreviousSideWithinThreshold() {
-        // 前提: 前回 .left、差が閾値内 (rx - lx = 0.01) で右肩がわずかに近い
+        // 前提: 前回 .left、両側とも約0度で差が5度未満
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 0.51, y: 0.8, confidence: 0.9),

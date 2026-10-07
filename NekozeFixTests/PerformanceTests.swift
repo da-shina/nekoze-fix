@@ -31,10 +31,10 @@ final class PerformanceTests: XCTestCase {
         XCTAssertNotNil(poseDetector)
     }
 
-    /// CameraSessionManagerがパフォーマンス用に.highプリセット（720p）を使用することを検証
+    /// CameraSessionManagerが4:3プリセット（VGA、非対応時は.high退行）を使用することを検証
     func testCameraSessionUsesHighPreset() {
         let cameraManager = CameraSessionManager()
-        // .highプリセットを使用（configureSessionで設定済み）
+        // VGAプリセットを使用（configureSessionで設定済み。ADR 0020）
         XCTAssertNotNil(cameraManager)
     }
 

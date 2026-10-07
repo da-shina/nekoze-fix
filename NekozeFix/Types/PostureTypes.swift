@@ -160,6 +160,9 @@ struct SessionSnapshot: Equatable {
     var calibrationReferenceSource: ReferenceVectorSource? = nil
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
+    /// 直近に検出された4点の生信頼度 [左耳, 右耳, 左肩, 右肩]（DEBUG 表示用。フィルタ前）。
+    /// 欠測は nil。検出なし・顔のみの場合は空配列。
+    var keypointConfidences: [Double?] = []
     
     // MARK: - 閾値ガイド表示用（スライダー操作中のみ使用）
     
@@ -179,3 +182,14 @@ func shoulderMissingGuidance(isLandscape: Bool) -> String {
 /// キーポイントを解析に含めるための最低信頼度閾値。
 // 設計仕様: confidence < 0.3 → 猫背検出から除外（なで肩等の低信頼度帯を救うため 0.5 → 0.3 に改訂）。
 let minimumKeypointConfidence: Double = 0.3
+
+/// ランドスケープ時の最低信頼度閾値（実機検証済みの設計値）。
+/// 横向きは垂直画角が足りず肩・耳の confidence が下がりがちなため、
+/// ポートレートより緩める。実測では耳0.7台・肩0.2〜0.4台のため、
+/// この緩和は実質的に肩のみに効く。0.25→0.2→0.15→0.1と段階検証し誤検出なしを確認。
+let landscapeMinimumKeypointConfidence: Double = 0.1
+
+/// 向き別の信頼度閾値の単一解決点（PoseDetector が使用）。
+func keypointConfidenceThreshold(isLandscape: Bool) -> Double {
+    isLandscape ? landscapeMinimumKeypointConfidence : minimumKeypointConfidence
+}

@@ -71,6 +71,16 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 最後に肩キーポイントを検出した時刻（nil は肩未検出継続中）
     private var lastShoulderSeenTime: TimeInterval?
 
+    /// キーポイント瞬断ホールドの猶予時間（秒）。既存グレースと同一則。
+    static let keypointHoldGracePeriod: TimeInterval = 0.5
+    /// ホールド対象の4点 [左耳, 右耳, 左肩, 右肩]。
+    private static let jointKeyPaths: [WritableKeyPath<PoseFrame, Keypoint?>] = [
+        \.leftEar, \.rightEar, \.leftShoulder, \.rightShoulder,
+    ]
+    /// 点単位の直近値・最終検出時刻（ホールド用）。
+    private var lastHeldKeypoints: [Keypoint?] = [nil, nil, nil, nil]
+    private var lastJointSeenTime: [TimeInterval?] = [nil, nil, nil, nil]
+
     /// 可視化ポイントの EMA スムージング係数（新値の重み）。
     /// 小さいほど滑らかだが追従遅延が増す。.zero はスムージング対象外。
     private let smoothingFactor: CGFloat = 0.3
@@ -156,6 +166,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         lastGateTickTime = nil
         snapshot.visualizationPoints = []
         smoothedPoints = []
+        lastHeldKeypoints = [nil, nil, nil, nil]
+        lastJointSeenTime = [nil, nil, nil, nil]
     }
 
     /// Motion・回転サービスの起停を一本化する（暗転中継続・背景停止は呼び出し側の則）。
@@ -306,6 +318,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         calibrationLogic.start()
         smoothedPoints = []
         lastShoulderSeenTime = nil
+        lastHeldKeypoints = [nil, nil, nil, nil]
+        lastJointSeenTime = [nil, nil, nil, nil]
         Task {
             await startCameraPipeline()
         }
@@ -442,6 +456,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
+            snapshot.keypointConfidences = []
             updateState(presence: .personMissing, sample: nil, resolvedReference: nil)
             return
         }
@@ -449,7 +464,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 顔のみ検出（.personOnly）: 人物はいるが肩キーポイントなし。
         // 肩欠測デバウンス: 猶予期間内は前回の可視化ポイントを維持し
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
-        guard case .pose(let frame) = detection else {
+        guard case .pose(var frame) = detection else {
+            snapshot.keypointConfidences = []
             let now = CACurrentMediaTime()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false
@@ -465,6 +481,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // .pose: 肩キーポイント検出あり
         lastShoulderSeenTime = CACurrentMediaTime()
         snapshot.isShoulderMissing = false
+
+        // DEBUG 表示用にフィルタ前の生信頼度を記録する。
+        snapshot.keypointConfidences = [
+            frame.leftEar?.confidence,
+            frame.rightEar?.confidence,
+            frame.leftShoulder?.confidence,
+            frame.rightShoulder?.confidence,
+        ]
+
+        // 向き別の信頼度フィルタ（ランドスケープは緩め。要件4.6）。
+        // 検出層は全点を保持してくるため、ここで snapshot.isLandscape に応じて落とす。
+        // 検出キューから snapshot を読むとアクタ境界をまたぐため方針判断は MainActor 側に寄せる。
+        frame = applyingKeypointThreshold(frame, isLandscape: snapshot.isLandscape)
+
+        // キーポイントの瞬断ホールド（猶予 0.5 秒。既存グレースと同一則）。
+        // 肩が切れると耳も連動して落ちる実測のため、点単位で直近値を保持し
+        // 校正蓄積・可視化のチラつきを防ぐ。人物不在 (.absent) 時は保持しない。
+        frame = holdingMissingKeypoints(frame, now: CACurrentMediaTime())
 
         // 2. 姿勢分析
         let refAngle = snapshot.referenceAngle
@@ -488,7 +522,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             gravityInKeypointSpace: self.motionService.latestGravityInKeypointSpace,
             // 重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため、
             // 直近capture角で重力由来の基準値のみバッファ座標系へ回転させる（未確定時は無回転）。
-            captureAngleDegrees: lastKnownCaptureAngle.map { Double($0) }
+            captureAngleDegrees: lastKnownCaptureAngle.map { Double($0) },
+            // Analyzer 側のゲートにも向き別閾値を注入する（Session 事前フィルタと同値。
+            // 注入なしでは Analyzer 内の 0.3 既定がランドスケープ緩和を無効化する）。
+            minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
         )
         // 判定が返した基準線ベクトルを表示へ受渡しする（単一解決、二重解決なし）。
         // analyze 済みでバッファ座標系（y上向き）の方向であり、変換は Overlay 側で点列と同一係数にて行う。
@@ -502,7 +539,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 可視化用ポイントの抽出 (固定インデックス: 0:左肩, 1:右肩, 2:左耳, 3:右耳, 4:近傍耳, 5:近傍肩)
         var points = [CGPoint](repeating: .zero, count: 6)
 
-        // 1. 肩の描画 (側ごとに信頼度 0.3 以上で表示。片側欠測でももう片側は出す)
+        // 1. 肩の描画 (側ごとに閾値以上で表示。片側欠測でももう片側は出す)
         if let ls = frame.leftShoulder {
             points[0] = CGPoint(x: ls.x, y: ls.y)
         }
@@ -510,7 +547,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             points[1] = CGPoint(x: rs.x, y: rs.y)
         }
 
-        // 2. 耳の描画 (側ごとに信頼度 0.3 以上で表示)
+        // 2. 耳の描画 (側ごとに閾値以上で表示)
         if let le = frame.leftEar {
             points[2] = CGPoint(x: le.x, y: le.y)
         }
@@ -657,6 +694,43 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referencePoints = referencePoints
         snapshot.calibrationReferenceSource = referenceSource
         updateGuideParameters()
+    }
+
+    /// 向き別の信頼度でキーポイントを落とす（ランドスケープは緩め。要件4.6）。
+    /// 横向きは垂直画角不足で confidence が下がりがちなため閾値を下げる。
+    private func applyingKeypointThreshold(_ frame: PoseFrame, isLandscape: Bool) -> PoseFrame {
+        let threshold = keypointConfidenceThreshold(isLandscape: isLandscape)
+        func keep(_ keypoint: Keypoint?) -> Keypoint? {
+            guard let keypoint, keypoint.confidence >= threshold else { return nil }
+            return keypoint
+        }
+        return PoseFrame(
+            timestamp: frame.timestamp,
+            leftEar: keep(frame.leftEar),
+            rightEar: keep(frame.rightEar),
+            leftShoulder: keep(frame.leftShoulder),
+            rightShoulder: keep(frame.rightShoulder)
+        )
+    }
+
+    /// 欠測キーポイントの直近値ホールド（人物不在時は対象外。呼び出し側で分岐済み）。
+    /// 猶予内の再検出は前回値をそのまま使い、超過後は破棄する。
+    private func holdingMissingKeypoints(_ frame: PoseFrame, now: TimeInterval) -> PoseFrame {
+        var frame = frame
+        for (index, path) in Self.jointKeyPaths.enumerated() {
+            if let current = frame[keyPath: path] {
+                lastHeldKeypoints[index] = current
+                lastJointSeenTime[index] = now
+            } else if let held = lastHeldKeypoints[index],
+                      let seen = lastJointSeenTime[index],
+                      now - seen < Self.keypointHoldGracePeriod {
+                frame[keyPath: path] = held
+            } else {
+                lastHeldKeypoints[index] = nil
+                lastJointSeenTime[index] = nil
+            }
+        }
+        return frame
     }
 
     /// 閾値ガイド表示用パラメータを更新する（スライダー操作中のみ使用）。

@@ -92,6 +92,10 @@ struct CalibrationView: View {
                 .cornerRadius(16)
             }
             .padding()
+            .overlay(alignment: .topLeading) {
+                DebugConfidenceView(confidences: sessionManager.snapshot.keypointConfidences)
+                    .padding(8)
+            }
         }
         .navigationBarTitle("校正", displayMode: .inline)
         .onAppear {
