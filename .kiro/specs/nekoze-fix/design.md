@@ -230,13 +230,14 @@ func analyze(
   distanceMetric: DistanceMetric?,
   slouchDistanceThresholdPercent: Double,
   previousNearSide: Side?,
-  gravityInKeypointSpace: SIMD2<Double>?
+  gravityInKeypointSpace: SIMD2<Double>?,
+  minimumConfidence: Double,  // 向き別信頼度ゲート（Session が注入）
 ) -> (sample: AngleSample?, verdict: PostureVerdict, referenceVector: ReferenceVector)
 ```
 
 - Preconditions: gravity は MotionService 変換済みか nil。nil は代替解決を意味する。
 - Postconditions: 角度は 0〜90 度の鋭角。sample は近側・遠側情報を従来通り含む。
-- Invariants: gravity 以外の入力が同一なら同一の近側・距離・判定を返す（近側選択は鈍角側優先・5度ヒステリシス則）。
+- Invariants: 解決済み基準線を含む入力が同一なら同一の近側・距離・判定を返す（近側選択は鈍角側優先・5度ヒステリシス則。同一フレームでも重力方向が変わると角度の大小が逆転し得る）。
 
 **Implementation Notes**
 - Integration: Session のみ新引数を渡す。

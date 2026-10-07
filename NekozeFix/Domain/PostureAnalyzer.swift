@@ -52,15 +52,25 @@ struct PostureAnalyzer {
         var nearShoulder: Keypoint?
 
         if leftValid && rightValid {
-            // 縮退（耳＝肩の完全一致）の選択時寄与は 0 度扱い。報告角度は後段でガードする。
-            let leftAngle = Self.earShoulderGeometry(ear: frame.leftEar!, shoulder: frame.leftShoulder!, perpX: perpX, perpY: perpY)?.angle ?? 0
-            let rightAngle = Self.earShoulderGeometry(ear: frame.rightEar!, shoulder: frame.rightShoulder!, perpX: perpX, perpY: perpY)?.angle ?? 0
+            // 縮退ペア（耳＝肩の完全一致）は選択対象から除外する。
+            // 長さを 0 度に読み替えると、ヒステリシスが測定不能側を維持し
+            // 反対側の有効角度を捨ててしまう。報告角度は後段でガードする。
+            let leftAngle = Self.earShoulderGeometry(ear: frame.leftEar!, shoulder: frame.leftShoulder!, perpX: perpX, perpY: perpY)?.angle
+            let rightAngle = Self.earShoulderGeometry(ear: frame.rightEar!, shoulder: frame.rightShoulder!, perpX: perpX, perpY: perpY)?.angle
 
-            if let prev = previousNearSide, abs(leftAngle - rightAngle) < Self.nearSideHysteresisDegrees {
+            if let prev = previousNearSide,
+               let l = leftAngle, let r = rightAngle,
+               abs(l - r) < Self.nearSideHysteresisDegrees {
                 // 差が閾値内の場合は前回の判定を維持（小刻みな切り替わり防止）
                 nearSide = prev
+            } else if let l = leftAngle, let r = rightAngle {
+                nearSide = (l >= r) ? .left : .right
+            } else if leftAngle != nil {
+                nearSide = .left
+            } else if rightAngle != nil {
+                nearSide = .right
             } else {
-                nearSide = (leftAngle >= rightAngle) ? .left : .right
+                return (nil, .insufficientKeypoints, resolvedReference)
             }
 
             nearEar = (nearSide == .left) ? frame.leftEar : frame.rightEar

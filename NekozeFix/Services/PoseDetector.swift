@@ -26,10 +26,13 @@ final class PoseDetector: @unchecked Sendable {
 
     /// Body Pose 観測の有効キーポイントを囲む矩形（人物位置の代理 boundingBox）。
     /// VNHumanBodyPoseObservation には boundingBox が無いため、抽出済み
-    /// PoseFrame のキーポイントから算出する。キーポイントが無ければ .zero。
+    /// PoseFrame のキーポイントから算出する。人物選択用に信頼度 0.3 以上の点のみで
+    /// 算出する（検出層の足切りなし方針とは独立。低信頼度の外れ値が複数人時の
+    /// 中央判定をずらすのを防ぐ）。キーポイントが無ければ .zero。
     static func poseBoundingBox(_ frame: PoseFrame) -> CGRect {
         let points = [frame.leftEar, frame.rightEar, frame.leftShoulder, frame.rightShoulder]
             .compactMap { $0 }
+            .filter { $0.confidence >= minimumKeypointConfidence }
             .map { CGPoint(x: $0.x, y: $0.y) }
         guard let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
               let minY = points.map(\.y).min(), let maxY = points.map(\.y).max() else {

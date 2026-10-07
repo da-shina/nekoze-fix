@@ -458,6 +458,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
+            // ホールドも破棄する。不在前の点を直後の .pose に補完すると、
+            // 別人物の耳と肩で判定してしまう。
+            lastHeldKeypoints = [nil, nil, nil, nil]
+            lastJointSeenTime = [nil, nil, nil, nil]
             updateState(presence: .personMissing, sample: nil, resolvedReference: nil)
             return
         }

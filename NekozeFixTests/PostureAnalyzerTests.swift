@@ -172,6 +172,31 @@ final class PostureAnalyzerTests: XCTestCase {
         XCTAssertEqual(sample?.nearSide, .left)
     }
 
+    func testDegeneratePair_ExcludedFromSelection() {
+        // 前提: 左は縮退（耳＝肩）、右は有効約1.8度、前回 .left。
+        // 旧則（縮退を0度扱い）では差1.8度 < 5度で左に固着し insufficient になった。
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 100, y: 200, confidence: 0.9),
+            rightEar: Keypoint(x: 197, y: 298, confidence: 0.9),
+            leftShoulder: Keypoint(x: 100, y: 200, confidence: 0.9),
+            rightShoulder: Keypoint(x: 200, y: 200, confidence: 0.9)
+        )
+
+        // 手順
+        let (sample, verdict, _) = postureAnalyzer.analyze(
+            frame: frame,
+            referenceNearAngleDegrees: 0,
+            slouchDeltaThresholdDegrees: 10,
+            previousNearSide: .left
+        )
+
+        // 検証: 測定不能な左ではなく有効な右で判定を継続する
+        XCTAssertEqual(sample?.nearSide, .right)
+        XCTAssertNotNil(sample)
+        XCTAssertEqual(verdict, .good)
+    }
+
     // MARK: - 前出し距離指標: OR 判定（FQ1/FQ6）
 
     /// 角度 GOOD・距離 OVER → slouchCandidate。距離はロック側（右）ペアで評価され、

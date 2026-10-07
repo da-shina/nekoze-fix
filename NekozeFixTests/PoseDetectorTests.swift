@@ -33,4 +33,22 @@ final class PoseDetectorTests: XCTestCase {
     func testConfidenceThreshold_landscape_isRelaxed() {
         XCTAssertEqual(keypointConfidenceThreshold(isLandscape: true), 0.1, accuracy: 1e-9)
     }
+
+    // MARK: - 人物選択矩形は有効点のみで算出
+
+    func testPoseBoundingBox_ignoresLowConfidenceOutliers() {
+        // 前提: 中心人物の高信頼度3点＋離れた低信頼度1点
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.45, y: 0.5, confidence: 0.9),
+            rightEar: Keypoint(x: 0.55, y: 0.5, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.45, y: 0.7, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.05, y: 0.1, confidence: 0.1)
+        )
+
+        // 検証: 外れ値を除いた矩形になる
+        let box = PoseDetector.poseBoundingBox(frame)
+        XCTAssertEqual(box.minX, 0.45, accuracy: 1e-9)
+        XCTAssertEqual(box.maxX, 0.55, accuracy: 1e-9)
+    }
 }

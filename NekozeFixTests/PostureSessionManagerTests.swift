@@ -372,6 +372,16 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は直近の肩を保持する")
     }
 
+    /// 人物不在ではホールドを破棄する（不在前の点を別人の判定に使わない）。
+    func testAbsent_clearsKeypointHold() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.absent)
+        var dropped = testFrame(shoulderConfidence: 0.9)
+        dropped.leftShoulder = nil
+        sut.processDetection(.pose(dropped))
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "不在後は保持しない")
+    }
+
     /// 猶予（0.5秒）超過後の欠測は破棄する（古い値を使い続けない）。
     func testKeypointHold_releasesAfterGracePeriod() {
         sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))

@@ -157,20 +157,19 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         }
     }
 
+    // MARK: - プリセット選択
+
+    /// 優先プリセットの純粋選択（テスト容易性のための抽出）。
+    /// VGA 対応時は VGA、非対応時は従来の .high に退行する。
+    static func preferredPreset(canSetVGA: Bool) -> AVCaptureSession.Preset {
+        canSetVGA ? .vga640x480 : .high
+    }
+
     // MARK: - プライベートメソッド
 
     private func configureSession(position: AVCaptureDevice.Position) throws {
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
-
-        // 横向きの垂直画角確保のため 4:3 の VGA を優先する。
-        // 720p (16:9) はセンサー上下を切り落とし、横向きで肩が画角外になる（ADR 0020）。
-        // 非対応機種では従来の .high に退行する。
-        if captureSession.canSetSessionPreset(.vga640x480) {
-            captureSession.sessionPreset = .vga640x480
-        } else {
-            captureSession.sessionPreset = .high
-        }
 
         // 既存の入力を削除
         captureSession.inputs.forEach { captureSession.removeInput($0) }
@@ -214,6 +213,14 @@ final class CameraSessionManager: NSObject, ObservableObject, @unchecked Sendabl
         if captureSession.canAddOutput(output) {
             captureSession.addOutput(output)
             self.videoOutput = output
+
+            // 横向きの垂直画角確保のため 4:3 の VGA を優先する。
+            // 判定は新 I/O 追加後に行う（空構成・旧構成基準では新カメラの対応と
+            // 異なる結果になり .high に誤退行する）。
+            // 720p (16:9) はセンサー上下を切り落とし、横向きで肩が画角外になる（ADR 0020）。
+            captureSession.sessionPreset = Self.preferredPreset(
+                canSetVGA: captureSession.canSetSessionPreset(.vga640x480)
+            )
 
             // data-output 接続へ直近有効角を再適用する（カメラ切替時の継続）。
             // preview 接続には触らない。デバイス姿勢の推測は行わない。
