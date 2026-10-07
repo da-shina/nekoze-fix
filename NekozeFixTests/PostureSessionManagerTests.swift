@@ -22,8 +22,9 @@ final class PostureSessionManagerTests: XCTestCase {
 
     // MARK: - フェーズ遷移
 
-    func testDefaultPhase_isAwaitingPermission() {
-        XCTAssertEqual(sut.snapshot.phase, .awaitingPermission)
+    func testDefaultPhase_isIdle() {
+        // 初回起動はスプラッシュ (idle) で待機し、タップで bootstrap → 校正へ進む。
+        XCTAssertEqual(sut.snapshot.phase, .idle)
     }
 
     func testStartCalibration_changesPhaseToCalibrating() {

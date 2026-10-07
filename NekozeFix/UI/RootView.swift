@@ -21,12 +21,12 @@ struct RootView: View {
             case .monitoring:
                 MonitorView()
             case .idle:
-                PermissionView()
-            }
-        }
-        .onAppear {
-            Task {
-                await sessionManager.bootstrap()
+                // 初回起動・監視停止後の開始画面。タップで許可要求→校正へ。
+                SplashView(onStartCalibration: {
+                    Task {
+                        await sessionManager.bootstrap()
+                    }
+                })
             }
         }
         // ライフサイクル自動停止・復帰（要求 8.1/8.2、タスク3.5）

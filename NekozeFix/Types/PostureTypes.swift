@@ -132,7 +132,7 @@ struct DistanceMetric: Equatable {
 }
 
 struct SessionSnapshot: Equatable {
-    var phase: SessionPhase = .awaitingPermission
+    var phase: SessionPhase = .idle
     var displayedPosture: DisplayedPosture = .good
     var isDimmed: Bool = false
     var isPersonDetected: Bool = false
