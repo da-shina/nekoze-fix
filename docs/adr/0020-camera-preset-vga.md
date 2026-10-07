@@ -7,6 +7,7 @@
 ## 詳細
 
 - 720p (16:9) は 4:3 センサーの上下を切り落とすため、横向きでは垂直画角が足りず肩が画角外になる。VGA (4:3) はセンサー全高を使うため、同一幅で約33%縦に広く写る。
+  根拠は Apple 公式ドキュメント `AVCaptureSession.hardwareCost` の記述："Some formats use the full sensor (4:3) and others a crop (16:9)"（https://developer.apple.com/documentation/avfoundation/avcapturesession/hardwarecost）。センサーがランドスケープネイティブであることは WWDC23 10106 でも言及されている。
 - Vision の姿勢推定は内部でネットワーク入力サイズまで縮小するため、640x480 でも検出精度への影響は軽微と見込む（実機検証で確認）。
 - NFR 8.1（15fps以上）はバッファ縮小によりむしろ余裕ができる。
 - 非対応機種では `.high` に退行する（`canSetSessionPreset` で実行時判定）。
