@@ -325,4 +325,98 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
         XCTAssertTrue(sut.motionService.isRunning, "監視再開で Motion 再開")
     }
+
+    // MARK: - 向き別の信頼度フィルタ（要件4.6）
+
+    /// 境界値 0.12 の肩: ランドスケープ (0.1) では保持される。
+    func testConfidenceThreshold_landscape_keepsLowConfidenceShoulder() {
+        var snapshot = SessionSnapshot()
+        snapshot.isLandscape = true
+        let manager = PostureSessionManager(settingsStore: SettingsStore(defaults: suite), snapshot: snapshot)
+        manager.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        XCTAssertNotEqual(manager.snapshot.visualizationPoints[0], .zero, "landscape は 0.12 の肩を保持する")
+    }
+
+    /// 境界値 0.12 の肩: ポートレート (0.3) では落とされる。耳 (0.9) は残る。
+    func testConfidenceThreshold_portrait_dropsLowConfidenceShoulder() {
+        var snapshot = SessionSnapshot()
+        snapshot.isLandscape = false
+        let manager = PostureSessionManager(settingsStore: SettingsStore(defaults: suite), snapshot: snapshot)
+        manager.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        XCTAssertEqual(manager.snapshot.visualizationPoints[0], .zero, "portrait は 0.12 の肩を落とす")
+        XCTAssertNotEqual(manager.snapshot.visualizationPoints[2], .zero, "0.9 の耳は残る")
+    }
+
+    /// DEBUG 表示用にフィルタ前の生信頼度 [左耳, 右耳, 左肩, 右肩] を記録する。
+    func testProcessDetection_recordsRawKeypointConfidences() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        XCTAssertEqual(sut.snapshot.keypointConfidences, [0.9, nil, 0.12, nil])
+    }
+
+    /// 人物なしでは信頼度記録を空にする。
+    func testProcessDetection_absent_clearsKeypointConfidences() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        sut.processDetection(.absent)
+        XCTAssertEqual(sut.snapshot.keypointConfidences, [])
+    }
+
+    // MARK: - キーポイント瞬断ホールド
+
+    /// 肩が1フレーム欠測しても直近値を保持する（チラつき対策）。
+    func testKeypointHold_holdsMissingShoulder() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
+        var dropped = testFrame(shoulderConfidence: 0.9)
+        dropped.leftShoulder = nil
+        sut.processDetection(.pose(dropped))
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は直近の肩を保持する")
+    }
+
+    /// 校正中の向き変更ではホールドがリセットされないため、復元時も現向きの閾値を適用する。
+    /// ランドスケープ保持の 0.12 の肩はポートレートに戻すと復元されない。
+    func testHold_appliesCurrentOrientationThresholdAfterRotation() {
+        var snapshot = SessionSnapshot()
+        snapshot.isLandscape = true
+        let manager = PostureSessionManager(settingsStore: SettingsStore(defaults: suite), snapshot: snapshot)
+        manager.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
+        XCTAssertNotEqual(manager.snapshot.visualizationPoints[0], .zero)
+        // 校正中の回転（portrait 角）に切り替える。リセット対象外のためホールドは残る。
+        manager.handleRotationAngleChange(preview: 90, capture: 90)
+        XCTAssertFalse(manager.snapshot.isLandscape)
+        var dropped = testFrame(shoulderConfidence: 0.12)
+        dropped.leftShoulder = nil
+        manager.processDetection(.pose(dropped))
+        XCTAssertEqual(manager.snapshot.visualizationPoints[0], .zero, "ポートレートでは 0.12 の保持点を復元しない")
+    }
+
+    /// 人物不在ではホールドを破棄する（不在前の点を別人の判定に使わない）。
+    func testAbsent_clearsKeypointHold() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.absent)
+        var dropped = testFrame(shoulderConfidence: 0.9)
+        dropped.leftShoulder = nil
+        sut.processDetection(.pose(dropped))
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "不在後は保持しない")
+    }
+
+    /// 猶予（0.5秒）超過後の欠測は破棄する（古い値を使い続けない）。
+    func testKeypointHold_releasesAfterGracePeriod() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        Thread.sleep(forTimeInterval: 0.6)
+        var dropped = testFrame(shoulderConfidence: 0.9)
+        dropped.leftShoulder = nil
+        sut.processDetection(.pose(dropped))
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は破棄する")
+    }
+
+    /// ホールド確認用の全点そろったフレーム（耳 0.9・肩は指定信頼度）。
+    private func testFrame(shoulderConfidence: Double) -> PoseFrame {
+        PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: shoulderConfidence),
+            rightShoulder: nil
+        )
+    }
 }

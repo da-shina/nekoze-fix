@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import NekozeFix
 
 @MainActor
@@ -31,11 +32,14 @@ final class PerformanceTests: XCTestCase {
         XCTAssertNotNil(poseDetector)
     }
 
-    /// CameraSessionManagerがパフォーマンス用に.highプリセット（720p）を使用することを検証
-    func testCameraSessionUsesHighPreset() {
-        let cameraManager = CameraSessionManager()
-        // .highプリセットを使用（configureSessionで設定済み）
-        XCTAssertNotNil(cameraManager)
+    /// プリセット選択: VGA 対応時は VGA を優先する（ADR 0020）
+    func testPreferredPreset_prefersVGAWhenSupported() {
+        XCTAssertEqual(CameraSessionManager.preferredPreset(canSetVGA: true), .vga640x480)
+    }
+
+    /// プリセット選択: 非対応時は従来の .high に退行する
+    func testPreferredPreset_fallsBackToHighWhenUnsupported() {
+        XCTAssertEqual(CameraSessionManager.preferredPreset(canSetVGA: false), .high)
     }
 
     /// 非同期処理チェーン: camera -> vision -> analyzer を検証

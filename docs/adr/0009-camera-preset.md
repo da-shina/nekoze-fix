@@ -1,5 +1,7 @@
 # カメラプレビューのプリセット
 
+> Superseded by ADR 0020（横向きの垂直画角確保のため VGA に切替）。
+
 ## 概要
 
 Vision キーポイント検出の精度とパフォーマンスのバランスを取るため、`AVCaptureSession.Preset.high` (720p) を使用する。

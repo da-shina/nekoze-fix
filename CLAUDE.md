@@ -40,7 +40,7 @@ Types → Domain → Services → Session → UI
 - **Session** (`NekozeFix/Session/`): `PostureSessionManager` がセッション状態の**唯一の書き込み点**。UI は状態表示とコマンド送信のみ
 - **UI** (`NekozeFix/UI/`): SwiftUI 画面。`SessionSnapshot` の公開状態だけを購読する
 
-判定の核心: 近側（画像上 x 座標が小さい側）の耳→肩ベクトルと垂直ベクトルのなす鋭角が、キャリブレーション基準角度 + 閾値以上増加 → 3秒連続で「確定猫背」→ 通知音。暗転モードは独立サービスではなく `SessionSnapshot.isDimmed` フラグに対する UI 表現（監視・判定は継続）。
+判定の核心: 近側（両側検出時は基準線との鋭角が大きい鈍角側、角度差5度未満は前回維持）の耳→肩ベクトルと垂直ベクトルのなす鋭角が、キャリブレーション基準角度 + 閾値以上増加 → 3秒連続で「確定猫背」→ 通知音。暗転モードは独立サービスではなく `SessionSnapshot.isDimmed` フラグに対する UI 表現（監視・判定は継続）。
 
 ## Specification-Driven 開発（Kiro）
 
