@@ -509,6 +509,142 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "校正開始で初期化され古い状態による判定の乱れがない")
     }
 
+    // MARK: - 結線と判定非回帰の結合検証 (vision-fps-throttle 3.2)
+
+    /// 条件化は間引き計数へ逆流しない（順序は間引き→条件化の一方通行。requirements 2.4）。
+    func testThrottleOrder_conditioningDoesNotTouchThrottleCounters() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.absent)
+        let metrics = sut.frameThrottle.snapshot()
+        XCTAssertEqual(metrics.arrivals, 0, "条件化は到達計数へ触れない")
+        XCTAssertEqual(metrics.inferences, 0, "条件化は推論計数へ触れない")
+        XCTAssertEqual(metrics.drops, 0, "条件化は破棄計数へ触れない")
+    }
+
+    /// ゲート判定はセッション状態を変えない（破棄フレームは snapshot 書込みなし。requirements 2.4/6.4）。
+    func testThrottleOrder_gateDecisionDoesNotMutateSnapshot() {
+        let before = sut.snapshot
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertEqual(sut.snapshot, before, "間引き判定はセッション状態へ副作用を持たない")
+    }
+
+    /// 背面移行は非監視時も判定状態を初期化する（停止経路の無条件初期化。requirements 6.1）。
+    func testDidEnterBackground_whenIdle_stillResetsThrottle() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+        sut.handleDidEnterBackground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "idle 時の背景移行でも初期化する")
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "初期化直後は同一時刻でも推論対象になる")
+    }
+
+    /// 間引き下でも猫背3秒連続で確定し、回復で即改善する（時刻駆動の証明。requirements 4.1/4.2）。
+    /// 10fps相当間隔（100ms）で投入し、ネイティブ60fps換算の回数基準（180）より
+    /// 大幅に少ないフレーム数で確定することを数えて示す（回数基準なら確定しない）。
+    func testThrottledRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        for _ in 0..<3 {
+            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は良好")
+
+        let deadline = Date().addingTimeInterval(15)
+        var fedFrames = 0
+        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+            fedFrames += 1
+            usleep(100_000) // 10fps相当間隔（間引き通過レートの再現）
+        }
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "間引き下でも猫背3秒連続で確定する")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertLessThan(fedFrames, 60, "確定は時刻駆動であり到達回数に依存しない")
+
+        for _ in 0..<5 {
+            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
+        XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
+    }
+
+    /// 間引き下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
+    func testThrottledRate_personMissingGraceSurvivesThinning() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        XCTAssertTrue(sut.snapshot.isPersonDetected)
+
+        // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
+        for _ in 0..<3 {
+            usleep(100_000)
+            sut.processDetection(.absent)
+        }
+        XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
+
+        // 計0.7秒 → 不在確定
+        for _ in 0..<4 {
+            usleep(100_000)
+            sut.processDetection(.absent)
+        }
+        XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
+    }
+
+    /// 間引き下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
+    func testThrottledRate_keypointHoldGraceSurvivesThinning() {
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
+
+        // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
+        for _ in 0..<3 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            sut.processDetection(.pose(dropped))
+        }
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は間引き下でも直近の肩を保持する")
+
+        // 計0.7秒 → 破棄
+        for _ in 0..<4 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            sut.processDetection(.pose(dropped))
+        }
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は間引き下でも破棄する")
+    }
+
+    /// 条件化は解像度由来の状態へ触れない（解像度・プリセット不変。requirements 4.4）。
+    /// videoAspectRatio の唯一の書き込み点は captureOutput の Task のままである。
+    func testProcessDetection_doesNotTouchVideoAspectRatio() {
+        let defaultAR = sut.snapshot.videoAspectRatio
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.absent)
+        XCTAssertEqual(sut.snapshot.videoAspectRatio, defaultAR, "条件化は解像度由来の状態を変えない")
+    }
+
+    /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
+    /// DistanceMetricIntegrationTests と同一則（角度0度・距離のみで猫背候補を作る）。
+    private func throttledRateFrame(rightEarDistance: Double) -> PoseFrame {
+        PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.6 - 0.1, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.6 - rightEarDistance, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.3, y: 0.6, confidence: 0.9),
+            rightShoulder: Keypoint(x: 0.7, y: 0.6, confidence: 0.9)
+        )
+    }
+
     /// ホールド確認用の全点そろったフレーム（耳 0.9・肩は指定信頼度）。
     private func testFrame(shoulderConfidence: Double) -> PoseFrame {
         PoseFrame(
