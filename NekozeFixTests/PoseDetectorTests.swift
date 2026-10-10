@@ -1,5 +1,6 @@
 import XCTest
 import Vision
+import CoreMedia
 @testable import NekozeFix
 
 final class PoseDetectorTests: XCTestCase {
@@ -51,4 +52,79 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertEqual(box.minX, 0.45, accuracy: 1e-9)
         XCTAssertEqual(box.maxX, 0.55, accuracy: 1e-9)
     }
+
+    // MARK: - 条件付き顔検出の合成則（ADR 0021、tasks 2.1）
+
+    func testSynthesize_poseWinsRegardlessOfFace() {
+        // Q2確定：観測あり（4点全 nil を含む）は顔有無にかかわらず成功経路（.pose）のままであること
+        let frame = PoseFrame(timestamp: 0, leftEar: nil, rightEar: nil, leftShoulder: nil, rightShoulder: nil)
+        for faceBounds in [CGRect(x: 0, y: 0, width: 1, height: 1), nil] {
+            let result = PoseDetector.synthesize(pose: .pose(frame), faceBounds: faceBounds)
+            guard case .pose = result else {
+                return XCTFail("姿勢観測ありは顔有無にかかわらず .pose を返すこと")
+            }
+        }
+    }
+
+    func testSynthesize_faceOnlyBecomesPersonOnly() {
+        let result = PoseDetector.synthesize(pose: nil, faceBounds: CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2))
+        guard case .personOnly = result else {
+            return XCTFail("姿勢なし・顔ありは .personOnly であること")
+        }
+    }
+
+    func testSynthesize_noPoseNoFaceBecomesAbsent() {
+        let result = PoseDetector.synthesize(pose: nil, faceBounds: nil)
+        guard case .absent = result else {
+            return XCTFail("両方なしは .absent であること")
+        }
+    }
+
+    // MARK: - 推論計測器（tasks 1.3 / 2.1）
+
+    func testMetrics_initialStateIsZero() {
+        XCTAssertEqual(PoseDetector().snapshot(), PoseDetector.Metrics())
+    }
+
+    func testMetrics_resetRestoresZero() throws {
+        // 前提: 無効バッファ検出（計数不変）→ reset → 初期値に戻ること
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+        let detector = PoseDetector()
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up)
+        detector.reset()
+        XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics())
+    }
+
+    func testDetect_invalidBufferReturnsAbsentWithoutCounting() throws {
+        // 前提: 画像を含まないサンプルバッファ（Visionに触れずガードで不在を返す）
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+
+        let detector = PoseDetector()
+        let result = detector.detect(sampleBuffer: buffer, orientation: .up)
+
+        guard case .absent = result else {
+            return XCTFail("無効バッファは .absent であること")
+        }
+        XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics(), "無効バッファでは計数が進まないこと")
+    }
+
+    // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する（tasks 3.1）。
+    // シミュレータでは VNDetectHumanBodyPoseRequest の setup 自体が
+    // Code=9 で失敗するため、ここでは合成則と計測器の単体検証に留める。
 }
