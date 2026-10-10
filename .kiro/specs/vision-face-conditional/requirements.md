@@ -21,6 +21,7 @@
 1. When 人体姿勢の検出が有効なキーポイントを返した, the NekozeFix shall 顔検出を実行せずに姿勢検出結果を確定する
 2. While 人体姿勢の検出が連続して有効である, the NekozeFix shall 顔検出の実行を省略し続ける
 3. When 顔検出を省略した, the NekozeFix shall 姿勢角度・キーポイント内容・人物位置の選択結果を省略前と同一に保つ
+4. When 姿勢観測はあるが4点全てがnilのPoseFrameである, the NekozeFix shall 成功経路とみなして顔検出を省略し、.pose経路（ホールド継続）で処理して.personOnly経路の肩欠測デバウンスとは別扱いにすること
 
 ### Requirement 2: キーポイント不足時の顔検出フォールバック
 
