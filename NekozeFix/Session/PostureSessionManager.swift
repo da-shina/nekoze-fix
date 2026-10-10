@@ -318,6 +318,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             setPhase(.calibrating)
             setMotionRotationRunning(true)
             await startCameraPipeline()
+            startMetricsLogging()
         case .denied:
             setPhase(.permissionDenied)
         case .notDetermined:
@@ -337,6 +338,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         lastJointSeenTime = [nil, nil, nil, nil]
         Task {
             await startCameraPipeline()
+            startMetricsLogging()
         }
     }
 
@@ -352,6 +354,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         setMotionRotationRunning(true)
         Task {
             await startCameraPipeline()
+            startMetricsLogging()
         }
     }
 
@@ -363,6 +366,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         cameraManager.stop()
         resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
+        stopMetricsLogging()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
     }
@@ -377,6 +381,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         cameraManager.stop()
         resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
+        stopMetricsLogging()
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             setPhase(.idle)
         }
@@ -392,6 +397,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         guard snapshot.phase == .idle else { return } // 校正中等进行中フェーズは触らない
         startMonitoring()
+        // startMonitoring 内で startMetricsLogging が呼ばれる
     }
 
     // MARK: - 暗転モード（design.md Q2/Q24、ADR 0013）
@@ -405,6 +411,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         savedBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = 0.0
         snapshot.isDimmed = true
+        stopMetricsLogging()
     }
 
     /// ディムモードを終了する（輝度復元のみ。暗転解除後も自動スリープは復活しない — 要求 8.4）
@@ -415,6 +422,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         savedBrightness = nil
         snapshot.isDimmed = false
+        // 監視中ならログ再開（idle 時は startMonitoring で再開される）
+        if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
+            startMetricsLogging()
+        }
     }
 
     // MARK: - プライベートメソッド
@@ -425,6 +436,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.visualizationPoints = []
         smoothedPoints = []
         await startCameraPipeline()
+        startMetricsLogging()
     }
 
     private func startCameraPipeline() async {
@@ -468,6 +480,46 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         throttleResetQueue.async { [weak self] in
             self?.resetDetectionPipelineState()
         }
+    }
+
+    // MARK: - 計測用定期ログ (vision-fps-throttle 3.3)
+
+    /// 計測用の定期ログタイマー。5秒ごとに FrameThrottle のスナップショットと導出 FPS を出力する。
+    /// 本番ビルドでも有効（負荷は struct 複写と整数除算のみ）。プロセス内メモリのみ・永続化・外部送出なし。
+    private var metricsLogTimer: Timer?
+
+    /// 計測開始時刻（単調時計）。ログ開始時に記録し、経過秒の基準とする。
+    private var metricsStartTime: TimeInterval = 0
+
+    /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
+    func startMetricsLogging() {
+        guard metricsLogTimer == nil else { return }
+        metricsStartTime = CACurrentMediaTime()
+        metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.logMetricsSnapshot()
+        }
+        RunLoop.current.add(metricsLogTimer!, forMode: .common)
+    }
+
+    /// 定期ログを停止する。監視停止・背景移行・暗転突入等の停止点から呼ぶ。
+    func stopMetricsLogging() {
+        metricsLogTimer?.invalidate()
+        metricsLogTimer = nil
+    }
+
+    /// 現在の FrameThrottle スナップショットと導出 FPS を os_log へ出力する。
+    /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 待ち時間推定(フレーム間隔-推論時間).
+    private func logMetricsSnapshot() {
+        let metrics = frameThrottle.snapshot()
+        let elapsed = CACurrentMediaTime() - metricsStartTime
+        let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
+        let inferFPS = elapsed > 0 ? Double(metrics.inferences) / elapsed : 0
+        let avgInferenceTime = metrics.inferences > 0 ? metrics.totalInferenceTime / Double(metrics.inferences) : 0
+        let dropRate = metrics.arrivals > 0 ? Double(metrics.drops) / Double(metrics.arrivals) : 0
+        let frameInterval = inferFPS > 0 ? 1.0 / inferFPS : 0
+        let estimatedWaitTime = frameInterval > avgInferenceTime ? frameInterval - avgInferenceTime : 0
+
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) estWait=\(String(format: "%.4f", estimatedWaitTime))s limitFPS=\(frameThrottle.maxFPS)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
