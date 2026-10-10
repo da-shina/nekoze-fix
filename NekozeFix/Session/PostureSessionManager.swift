@@ -21,8 +21,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
     /// 検出キューに閉じ込めて直列に扱うため錠は持たない。
     /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
-    /// 停止・再開時の初期化配送はタスク 2.2 の所有（ここでは結線しない）。
+    /// 停止・再開時の初期化配送は `resetDetectionPipeline()` が担う（タスク 2.2）。
     nonisolated(unsafe) private(set) var frameThrottle = FrameThrottle()
+    /// 判定パイプライン初期化の配送先 (vision-fps-throttle 2.2, requirements 6.1)。
+    /// CameraSessionManager の検出キュー（sampleBuffer delegate queue）は同クラス内で
+    /// private のため Session 側から直接配送できない。CameraSessionManager に手を入れず
+    /// MainActor を block しないよう、Session 側で専用の直列キューを所有し async 配送する。
+    /// reset は前回推論時刻のクリア（ゲートを開放方向へ倒す冪等操作）のみであり、
+    /// 飛行中の captureOutput 判定との競合が過剰破棄を生むことはない。
+    /// 将来 CameraSessionManager が検出キューを公開すれば本キューを置き換え、
+    /// 飛行中判定との同一キュー直列化に格上げする。
+    let throttleResetQueue = DispatchQueue(label: "com.nekozefix.session.throttleReset")
     private let postureAnalyzer = PostureAnalyzer()
     /// 重力の取得・変換・保持を所有する（タスク13.1）。
     /// 起停は Session が駆動する（開始系で start、停止・背景移行で stop、暗転中は継続）。
@@ -321,6 +330,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         setPhase(.calibrating)
         setMotionRotationRunning(true)
         calibrationLogic.start()
+        resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         smoothedPoints = []
         lastShoulderSeenTime = nil
         lastHeldKeypoints = [nil, nil, nil, nil]
@@ -337,6 +347,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
+        resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         lastGateTickTime = nil
         setMotionRotationRunning(true)
         Task {
@@ -350,6 +361,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         exitDimMode()
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
+        resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
@@ -363,6 +375,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
+        resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             setPhase(.idle)
@@ -408,6 +421,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private func restartCameraPipeline() async {
         cameraManager.stop()
+        resetDetectionPipeline() // 切替え時の古い判定状態を初期化する（2.2, requirements 6.1）
         snapshot.visualizationPoints = []
         smoothedPoints = []
         await startCameraPipeline()
@@ -433,6 +447,27 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 検出キュー confinement を前提とする（錠なし）。
     nonisolated func shouldInferFrame(at timestamp: TimeInterval) -> Bool {
         frameThrottle.shouldInfer(at: timestamp)
+    }
+
+    /// 判定パイプラインの同期初期化コア (vision-fps-throttle 2.2, requirements 6.1)。
+    /// 検出キュー confinement を前提とする（呼ぶのは検出キュー上またはテストのみ）。
+    /// 順序の正本は「FrameThrottle.reset() → MainHopGate.reset()」であり本タスクが所有する
+    /// （mainactor-throttle 側の二重リセット順序は本タスクを参照する）。
+    /// MainHopGate は mainactor-throttle 側が所有するため本タスクでは生成せず、
+    /// 予約枠として本シーケンスの第二段に置く。
+    nonisolated func resetDetectionPipelineState() {
+        frameThrottle.reset()
+        // ── 予約枠: MainHopGate.reset() はここ（FrameThrottle.reset() の直後）に置く ──
+    }
+
+    /// 判定パイプライン初期化の非同期配送ラッパ (vision-fps-throttle 2.2)。
+    /// 停止・再開経路から呼び、`throttleResetQueue` へ async 配送して直列実行する。
+    /// MainActor を block しないよう sync 配送は行わない。ラッパ自体は最小限に保ち、
+    /// 振る舞いの検証点は `resetDetectionPipelineState()` に寄せる。
+    func resetDetectionPipeline() {
+        throttleResetQueue.async { [weak self] in
+            self?.resetDetectionPipelineState()
+        }
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
