@@ -198,4 +198,72 @@ final class FrameThrottleTests: XCTestCase {
         // 検証: 計測の有無で検出結果と呼出順序（結果列）が変わらない
         XCTAssertEqual(measuredResults, plainResults)
     }
+
+    func test_setLimit_lowerFPS_appliesNewIntervalFromPreservedLastTime() {
+        // 前提: 15FPS（上限間隔約0.0667秒）、時刻0で推論済み
+        var throttle = FrameThrottle(maxFPS: 15.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 0.0))
+
+        // 手順: 判定中に上限を10FPS（上限間隔0.1秒）へ切替え
+        throttle.setLimit(10.0)
+
+        // 検証: 前回推論時刻を維持し、次回判定から新間隔で評価する
+        // 旧間隔なら対象（0.08 >= 0.0667）だが新間隔では対象外
+        XCTAssertEqual(throttle.maxFPS, 10.0)
+        XCTAssertEqual(throttle.minInterval, 0.1, accuracy: 1e-9)
+        XCTAssertFalse(throttle.shouldInfer(at: 0.08))
+        XCTAssertTrue(throttle.shouldInfer(at: 0.1))
+    }
+
+    func test_setLimit_higherFPS_allowsEarlierNextInfer() {
+        // 前提: 10FPS（上限間隔0.1秒）、時刻0で推論済み
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 0.0))
+
+        // 手順: 判定中に上限を15FPS（上限間隔約0.0667秒）へ切替え
+        throttle.setLimit(15.0)
+
+        // 検証: 新間隔では0.08が推論対象になる（旧間隔なら対象外）
+        XCTAssertEqual(throttle.maxFPS, 15.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 0.08))
+    }
+
+    func test_setLimit_doesNotResetCounters() {
+        // 前提: 10FPS、計数が進んだ状態（到達2・推論1・破棄1）
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 0.0))
+        XCTAssertFalse(throttle.shouldInfer(at: 0.05))
+
+        // 手順: 上限のみ切替え
+        throttle.setLimit(15.0)
+
+        // 検証: 計数は維持される
+        let snapshot = throttle.snapshot()
+        XCTAssertEqual(snapshot.arrivals, 2)
+        XCTAssertEqual(snapshot.inferences, 1)
+        XCTAssertEqual(snapshot.drops, 1)
+    }
+
+    func test_setLimit_invalidFPS_fallsBackToDefault() {
+        // 前提: 10FPS、時刻0で推論済み
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 0.0))
+
+        // 手順: 不正値へ切替え（initと同一の防御則で既定値に倒す）
+        throttle.setLimit(0.0)
+
+        // 検証: 既定15.0FPSに倒し、前回推論時刻は維持される
+        XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS)
+        XCTAssertEqual(throttle.minInterval, 1.0 / FrameThrottle.defaultMaxFPS, accuracy: 1e-9)
+        XCTAssertFalse(throttle.shouldInfer(at: 0.05))
+        XCTAssertTrue(throttle.shouldInfer(at: 1.0 / FrameThrottle.defaultMaxFPS))
+
+        // 検証: 不正値の別種（NaN・負・無限大）も既定値に倒す
+        throttle.setLimit(.nan)
+        XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS)
+        throttle.setLimit(-5.0)
+        XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS)
+        throttle.setLimit(.infinity)
+        XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS)
+    }
 }
