@@ -266,4 +266,56 @@ final class FrameThrottleTests: XCTestCase {
         throttle.setLimit(.infinity)
         XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS)
     }
+
+    func test_init_invalidFPS_fallsBackToDefault() {
+        // 前提: 不正な上限値での生成（initとsetLimitは同一の防御則）
+        // 検証: いずれも既定15.0FPSに倒し、上限間隔も既定から導出される
+        for invalid in [0.0, -5.0, Double.nan, Double.infinity, -Double.infinity] {
+            let throttle = FrameThrottle(maxFPS: invalid)
+            XCTAssertEqual(throttle.maxFPS, FrameThrottle.defaultMaxFPS, "init(\(invalid))")
+            XCTAssertEqual(throttle.minInterval, 1.0 / FrameThrottle.defaultMaxFPS, accuracy: 1e-9)
+        }
+    }
+
+    func test_recordInference_invalidDuration_ignored() {
+        // 前提: 推論所要時間を記録済みの判定器
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        throttle.recordInference(duration: 0.02)
+
+        // 手順: 無効値（NaN・負・無限大）を記録
+        throttle.recordInference(duration: .nan)
+        throttle.recordInference(duration: -0.01)
+        throttle.recordInference(duration: .infinity)
+        throttle.recordInference(duration: -.infinity)
+
+        // 検証: 推論累積時間は有効値の記録のみを反映し、無効値は無視される
+        XCTAssertEqual(throttle.snapshot().totalInferenceTime, 0.02, accuracy: 1e-9)
+    }
+
+    func test_shouldInfer_intervalAboveLimit_returnsTrue() {
+        // 前提: 10FPS（上限間隔0.1秒）、時刻100.0で推論済み
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 100.0))
+
+        // 手順: 上限間隔を超える時刻を提示
+        let result = throttle.shouldInfer(at: 100.15)
+
+        // 検証: 推論対象
+        XCTAssertTrue(result)
+    }
+
+    func test_shouldInfer_intervalWithinEpsilon_returnsTrue() {
+        // 前提: 10FPS（上限間隔0.1秒）、時刻100.0で推論済み
+        // 境界比較には -1e-9 のイプシロンを用いる（Double誤差対策）
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 100.0))
+
+        // 検証: 上限間隔まで1e-9未満の不足は推論対象（含む）
+        var withinThrottle = throttle
+        XCTAssertTrue(withinThrottle.shouldInfer(at: 100.0 + 0.1 - 5e-10))
+
+        // 検証: 上限間隔まで1e-9を超える不足は推論対象外
+        var outsideThrottle = throttle
+        XCTAssertFalse(outsideThrottle.shouldInfer(at: 100.0 + 0.1 - 2e-9))
+    }
 }
