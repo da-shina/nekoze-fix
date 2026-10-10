@@ -31,7 +31,7 @@
   - _Depends: 1.1_
   - _Boundary: PostureSessionManager呼出点_
   - _Requirements: 2.1, 2.4, 3.1, 3.3, 6.2, 6.3, 6.4_
-- [ ] 2.2 停止・再開経路からの初期化配送
+- [x] 2.2 停止・再開経路からの初期化配送
   - カメラ停止・再開時に判定状態の初期化を検出キューへ配送し、同一キュー上で「FrameThrottle.reset() → MainHopGate.reset()」の順に直列実行する（順序の正本は本タスクとし、mainactor-throttle側の二重リセット順序は本タスクを参照する）
   - 再開直後の過剰破棄や古い状態による判定の乱れが起きないことを確認できる
   - _Boundary: PostureSessionManager呼出点_

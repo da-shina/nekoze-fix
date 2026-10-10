@@ -446,6 +446,69 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(metrics.drops, 1)
     }
 
+    // MARK: - 停止・再開時の判定パイプライン初期化 (vision-fps-throttle 2.2, requirements 6.1)
+
+    /// 同期コア: 判定状態と計数をクリアし、次フレームが推論対象になる（再開直後の過剰破棄なし）。
+    func testResetDetectionPipelineState_clearsGateAndCounters() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        sut.resetDetectionPipelineState()
+        let metrics = sut.frameThrottle.snapshot()
+        XCTAssertEqual(metrics.arrivals, 0)
+        XCTAssertEqual(metrics.inferences, 0)
+        XCTAssertEqual(metrics.drops, 0)
+        XCTAssertEqual(metrics.totalInferenceTime, 0.0, accuracy: 1e-9)
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "初期化直後は同一時刻でも推論対象になる")
+    }
+
+    /// 同期コア: 初期化は上限設定を変えない（再開後に制限値が維持される）。
+    func testResetDetectionPipelineState_preservesMaxFPS() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        let before = sut.frameThrottle.maxFPS
+        sut.resetDetectionPipelineState()
+        XCTAssertEqual(sut.frameThrottle.maxFPS, before)
+    }
+
+    /// 停止経路: stopMonitoring が検出キューへ初期化を配送する。
+    func testStopMonitoring_dispatchesThrottleReset() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        sut.stopMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "停止で初期化され再開直後の過剰破棄がない")
+    }
+
+    /// 停止経路: 背景移行が検出キューへ初期化を配送する。
+    func testDidEnterBackground_dispatchesThrottleReset() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        sut.handleDidEnterBackground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "背景停止で初期化され復帰直後の過剰破棄がない")
+    }
+
+    /// 再開経路: startMonitoring が検出キューへ初期化を配送する。
+    func testStartMonitoring_dispatchesThrottleReset() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "開始で初期化され古い状態による判定の乱れがない")
+    }
+
+    /// 再開経路: startCalibration が検出キューへ初期化を配送する。
+    func testStartCalibration_dispatchesThrottleReset() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        sut.startCalibration()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "校正開始で初期化され古い状態による判定の乱れがない")
+    }
+
     /// ホールド確認用の全点そろったフレーム（耳 0.9・肩は指定信頼度）。
     private func testFrame(shoulderConfidence: Double) -> PoseFrame {
         PoseFrame(
