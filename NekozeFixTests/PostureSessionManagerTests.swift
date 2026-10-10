@@ -409,6 +409,43 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は破棄する")
     }
 
+    // MARK: - 間引きゲート結線 (vision-fps-throttle 2.1)
+
+    /// 初回フレームは推論対象（ゲート開放）。
+    func testThrottleGate_firstFrame_passes() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+    }
+
+    /// 上限間隔未満の後続フレームは破棄対象（detect に到達させない）。
+    func testThrottleGate_rapidSuccessor_drops() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+    }
+
+    /// 通過フレームのみが条件化へ渡る順序を保つ（破棄は前回推論時刻を進めない）。
+    func testThrottleGate_droppedFrame_doesNotAdvanceBaseline() {
+        let interval = 1.0 / FrameThrottle.defaultMaxFPS
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.0 + interval / 2))
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0 + interval))
+    }
+
+    /// 無効時刻は実行側に倒す（検出欠落を起こさない）。
+    func testThrottleGate_invalidTimestamp_failsOpen() {
+        XCTAssertTrue(sut.shouldInferFrame(at: Double.nan))
+        XCTAssertTrue(sut.shouldInferFrame(at: -1.0))
+    }
+
+    /// 計数がゲート判定を反映する（到達・推論・破棄の区別）。
+    func testThrottleGate_metrics_reflectGateDecisions() {
+        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        let metrics = sut.frameThrottle.snapshot()
+        XCTAssertEqual(metrics.arrivals, 2)
+        XCTAssertEqual(metrics.inferences, 1)
+        XCTAssertEqual(metrics.drops, 1)
+    }
+
     /// ホールド確認用の全点そろったフレーム（耳 0.9・肩は指定信頼度）。
     private func testFrame(shoulderConfidence: Double) -> PoseFrame {
         PoseFrame(

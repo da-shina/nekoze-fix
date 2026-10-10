@@ -18,6 +18,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var cancellables = Set<AnyCancellable>()
     let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
+    /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
+    /// 検出キューに閉じ込めて直列に扱うため錠は持たない。
+    /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
+    /// 停止・再開時の初期化配送はタスク 2.2 の所有（ここでは結線しない）。
+    nonisolated(unsafe) private(set) var frameThrottle = FrameThrottle()
     private let postureAnalyzer = PostureAnalyzer()
     /// 重力の取得・変換・保持を所有する（タスク13.1）。
     /// 起停は Session が駆動する（開始系で start、停止・背景移行で stop、暗転中は継続）。
@@ -423,7 +428,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
+    /// 間引き判定のシーム。提示時刻（秒）に対する推論可否を返す。
+    /// captureOutput 先頭から呼ばれ、順序「間引き→条件化」の検証点をここに隔離する。
+    /// 検出キュー confinement を前提とする（錠なし）。
+    nonisolated func shouldInferFrame(at timestamp: TimeInterval) -> Bool {
+        frameThrottle.shouldInfer(at: timestamp)
+    }
+
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // 間引きゲート (vision-fps-throttle 2.1): 提示時刻の間隔基準で判定し、
+        // 対象外フレームは検出実行前に破棄する。通過分のみ顔条件付き実行へ渡す
+        // （順序「間引き→条件化」）。破棄時は snapshot 書込み・UI 更新を行わない。
+        // 新規キュー・バッファ・蓄積は作らず、遅延破棄運用は AVFoundation 側のまま。
+        let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        guard shouldInferFrame(at: timestamp) else { return }
+
         // バッファ実寸から画像アスペクト比を算出（可視化のクロップ補正に使用）
         let imageAR: CGFloat
         if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
@@ -442,7 +461,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
         // タップ応答の遅延・取りこぼしを引き起こす。
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
+        // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
+        let inferenceStart = CACurrentMediaTime()
         let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+        frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
 
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
