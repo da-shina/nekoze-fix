@@ -592,9 +592,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         ) else { return }
 
         Task { @MainActor in
-            self.snapshot.videoAspectRatio = pending.aspectRatio
+            self.applyDeliveredAspectRatio(pending.aspectRatio)
             self.processDetection(pending.detection)
         }
+    }
+
+    /// 排出時の画面比率の反映 (mainactor-throttle 3.2)。
+    /// 前回表示値から変化した場合のみ書き込み、不変時は省略して再描画 churn を抑える。
+    /// 判定が参照する値（基準角・距離・近側・ゲート）には触れない。
+    func applyDeliveredAspectRatio(_ newValue: CGFloat) {
+        if shouldUpdateAspectRatio(newValue) {
+            snapshot.videoAspectRatio = newValue
+        }
+    }
+
+    /// 表示専用値の不変書込み省略の判定 (mainactor-throttle 3.2)。
+    /// 許容誤差の定義は受け渡し集約器と単一化する（`MainHopGate.aspectTolerance`）。
+    func shouldUpdateAspectRatio(_ newValue: CGFloat) -> Bool {
+        abs(snapshot.videoAspectRatio - newValue) > MainHopGate.aspectTolerance
     }
 
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。

@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import NekozeFix
 
 @MainActor
@@ -716,6 +717,39 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.resetDetectionPipelineState()
         XCTAssertEqual(sut.hopGate.pendingCount, 0)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+    }
+
+    // MARK: - 表示専用値の不変書込み省略 (mainactor-throttle 3.2)
+
+    /// 画面比率が不変の場合は書込み（publish）を省略する。
+    func testAspectSkip_unchangedValue_doesNotPublish() {
+        var events: [CGFloat] = []
+        let cancellable = sut.$snapshot.map(\.videoAspectRatio).sink { events.append($0) }
+        XCTAssertEqual(events.count, 1, "購読直後の初期値のみ")
+        sut.applyDeliveredAspectRatio(sut.snapshot.videoAspectRatio)
+        XCTAssertEqual(events.count, 1, "不変時は書込みを省略する")
+        cancellable.cancel()
+    }
+
+    /// 画面比率の変化時は変化後の値で更新する。
+    func testAspectSkip_changedValue_publishesNewValue() {
+        var events: [CGFloat] = []
+        let cancellable = sut.$snapshot.map(\.videoAspectRatio).sink { events.append($0) }
+        sut.applyDeliveredAspectRatio(16.0 / 9.0)
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(Double(events.last ?? 0), 16.0 / 9.0, accuracy: 1e-9)
+        XCTAssertEqual(Double(sut.snapshot.videoAspectRatio), 16.0 / 9.0, accuracy: 1e-9)
+        cancellable.cancel()
+    }
+
+    /// 微小差は不変とみなし、判定が参照する値には触れない。
+    func testAspectSkip_toleranceAndJudgmentUntouched() {
+        XCTAssertFalse(sut.shouldUpdateAspectRatio(sut.snapshot.videoAspectRatio))
+        XCTAssertFalse(sut.shouldUpdateAspectRatio(sut.snapshot.videoAspectRatio + MainHopGate.aspectTolerance / 2))
+        XCTAssertTrue(sut.shouldUpdateAspectRatio(16.0 / 9.0))
+        let before = sut.snapshot.referenceAngle
+        sut.applyDeliveredAspectRatio(16.0 / 9.0)
+        XCTAssertEqual(sut.snapshot.referenceAngle, before, "判定が参照する値には触れない")
     }
 
     /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
