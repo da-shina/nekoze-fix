@@ -110,13 +110,15 @@ final class PoseDetector: @unchecked Sendable {
 
         let poseStart = CACurrentMediaTime()
         do {
+            defer {
+                let poseElapsed = CACurrentMediaTime() - poseStart
+                metricsLock.withLock { _metrics.poseTotalTime += poseElapsed }
+            }
             try handler.perform([poseRequest])
         } catch {
             print("Vision Handler Error: \(error)")
             return .absent
         }
-        let poseElapsed = CACurrentMediaTime() - poseStart
-        metricsLock.withLock { _metrics.poseTotalTime += poseElapsed }
 
         // 姿勢観測あり（4点全 nil の PoseFrame を含む）は顔推論を省略して確定する。
         // Body Pose でキーポイントが取れなくても、顔が映っていれば人物あり
@@ -137,15 +139,17 @@ final class PoseDetector: @unchecked Sendable {
 
         let faceStart = CACurrentMediaTime()
         do {
+            defer {
+                let faceElapsed = CACurrentMediaTime() - faceStart
+                metricsLock.withLock {
+                    _metrics.faceExecutedCount += 1
+                    _metrics.faceTotalTime += faceElapsed
+                }
+            }
             try handler.perform([faceRequest])
         } catch {
             print("Vision Handler Error: \(error)")
             return .absent
-        }
-        let faceElapsed = CACurrentMediaTime() - faceStart
-        metricsLock.withLock {
-            _metrics.faceExecutedCount += 1
-            _metrics.faceTotalTime += faceElapsed
         }
 
         return Self.synthesize(pose: nil, faceBounds: faceBounds)
