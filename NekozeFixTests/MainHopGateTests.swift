@@ -149,4 +149,38 @@ final class MainHopGateTests: XCTestCase {
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.2), .deliver)
         XCTAssertEqual(gate.snapshot().lastDrainWait, 0.12, accuracy: 1e-9)
     }
+
+    /// 表示更新間隔は注入時に定まる（異なる間隔で境界が変わる）。
+    func testCustomDisplayInterval_respected() {
+        var gate = MainHopGate(displayInterval: 0.5)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.0), .deliver)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.2), .coalesce)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.5), .deliver)
+    }
+
+    /// 不正な表示更新間隔は既定値に倒す。
+    func testInvalidDisplayInterval_fallsBackToDefault() {
+        var gate = MainHopGate(displayInterval: -1.0)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.0), .deliver)
+        XCTAssertEqual(
+            gate.submit(
+                kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0,
+                at: 100.0 + MainHopGate.defaultDisplayInterval
+            ),
+            .deliver
+        )
+    }
+
+    /// 読出し同士は独立した複写である（後の判定が既読値に影響しない）。
+    func testSnapshots_areIndependentCopies() {
+        var gate = MainHopGate(displayInterval: 0.1)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.0), .deliver)
+        let first = gate.snapshot()
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.05), .coalesce)
+        let second = gate.snapshot()
+        XCTAssertEqual(first.submits, 1)
+        XCTAssertEqual(second.submits, 2)
+        XCTAssertEqual(first.coalesced, 0)
+        XCTAssertEqual(second.coalesced, 1)
+    }
 }

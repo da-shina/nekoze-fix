@@ -719,6 +719,81 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
     }
 
+    // MARK: - 削減下の判定・体験の非回帰 (mainactor-throttle 4.2)
+
+    /// ゲート判定はセッション状態を変えない（集約・配送の選定自体に副作用なし）。
+    func testHopOrder_gateDecisionDoesNotMutateSnapshot() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let before = sut.snapshot
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertNotNil(sut.hopGate.submit(detection: .absent, aspectRatio: 4.0 / 3.0, now: 300.02))
+        XCTAssertEqual(sut.snapshot, before, "受け渡し選定はセッション状態へ副作用を持たない")
+    }
+
+    /// 受け渡し選定は推論間引き計数へ逆流しない（上流計数の独立性）。
+    func testHopOrder_gateDoesNotTouchThrottleCounters() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        let metrics = sut.frameThrottle.snapshot()
+        XCTAssertEqual(metrics.arrivals, 0, "受け渡し選定は到達計数へ触れない")
+        XCTAssertEqual(metrics.inferences, 0, "受け渡し選定は推論計数へ触れない")
+        XCTAssertEqual(metrics.drops, 0, "受け渡し選定は破棄計数へ触れない")
+    }
+
+    /// 削減下でも猫背3秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
+    /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
+    func testHopGatedRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        for _ in 0..<3 {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+            }
+            usleep(16_666)
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は良好")
+
+        let deadline = Date().addingTimeInterval(15)
+        var processed = 0
+        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.21)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+                processed += 1
+            }
+            usleep(16_666) // 60fps到達の再現（ゲートが10Hzへ間引く）
+        }
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "削減下でも猫背3秒連続で確定する")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertLessThan(processed, 60, "確定は時刻駆動であり削減後の処理回数に依存しない")
+
+        for _ in 0..<5 {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+            }
+            usleep(16_666)
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
+        XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
+    }
+
     // MARK: - 表示専用値の不変書込み省略 (mainactor-throttle 3.2)
 
     /// 画面比率が不変の場合は書込み（publish）を省略する。
