@@ -19,16 +19,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
     /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
-    /// 検出キューに閉じ込めて直列に扱うため錠は持たない。
+    /// 錠付き保持器のため全キュー（検出・初期化・計測読出し）から呼べる。
+    /// 同期境界は保持器内の単一の錠に一本化する（レビュー指摘 4241621567 対応）。
     /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
     /// 停止・再開時の初期化配送は `resetDetectionPipeline()` が担う（タスク 2.2）。
-    nonisolated(unsafe) private(set) var frameThrottle = FrameThrottle()
+    /// 参照自体は不変であり、指し先が内部同期（Sendable）のため
+    /// nonisolated からの参照を許可する（`var` のため冗長警告の対象外）。
+    nonisolated(unsafe) private(set) var frameThrottle = LockedFrameThrottle()
     /// 判定パイプライン初期化の配送先 (vision-fps-throttle 2.2, requirements 6.1)。
     /// CameraSessionManager の検出キュー（sampleBuffer delegate queue）は同クラス内で
     /// private のため Session 側から直接配送できない。CameraSessionManager に手を入れず
     /// MainActor を block しないよう、Session 側で専用の直列キューを所有し async 配送する。
-    /// reset は前回推論時刻のクリア（ゲートを開放方向へ倒す冪等操作）のみであり、
-    /// 飛行中の captureOutput 判定との競合が過剰破棄を生むことはない。
+    /// 検出キュー・本キュー・計測読出し（Main）の三者間の競合は `LockedFrameThrottle`
+    /// 内の単一の錠で直列化するため、配送先キューが検出キューと別でも安全である。
     /// 将来 CameraSessionManager が検出キューを公開すれば本キューを置き換え、
     /// 飛行中判定との同一キュー直列化に格上げする。
     let throttleResetQueue = DispatchQueue(label: "com.nekozefix.session.throttleReset")
@@ -436,7 +439,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.visualizationPoints = []
         smoothedPoints = []
         await startCameraPipeline()
-        startMetricsLogging()
+        restartMetricsLogging() // 計数初期化と対になる区間再開（4241621573 対応）
     }
 
     private func startCameraPipeline() async {
@@ -492,15 +495,29 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var metricsStartTime: TimeInterval = 0
 
     /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
+    /// Timer 稼働中は何もしない（区間の二重開始を防ぐ）。
     func startMetricsLogging() {
         guard metricsLogTimer == nil else { return }
-        metricsStartTime = CACurrentMediaTime()
+        beginMetricsWindow()
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.logMetricsSnapshot()
             }
         }
         RunLoop.current.add(metricsLogTimer!, forMode: .common)
+    }
+
+    /// 計測区間を開始する（開始時刻と計数を同一区間にそろえる。レビュー指摘 4241621573 対応）。
+    private func beginMetricsWindow() {
+        metricsStartTime = CACurrentMediaTime()
+        frameThrottle.resetCounts()
+    }
+
+    /// 定期ログを再開する。カメラ再起動等、Timer 稼働中の再開点から呼ぶ。
+    /// 停止中の Timer に対する呼出しは開始と等価である。
+    func restartMetricsLogging() {
+        stopMetricsLogging()
+        startMetricsLogging()
     }
 
     /// 定期ログを停止する。監視停止・背景移行・暗転突入等の停止点から呼ぶ。
@@ -510,7 +527,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }
 
     /// 現在の FrameThrottle スナップショットと導出 FPS を os_log へ出力する。
-    /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 待ち時間推定(フレーム間隔-推論時間).
+    /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 残余時間(推論間隔-推論時間).
     private func logMetricsSnapshot() {
         let metrics = frameThrottle.snapshot()
         let elapsed = CACurrentMediaTime() - metricsStartTime
@@ -519,9 +536,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         let avgInferenceTime = metrics.inferences > 0 ? metrics.totalInferenceTime / Double(metrics.inferences) : 0
         let dropRate = metrics.arrivals > 0 ? Double(metrics.drops) / Double(metrics.arrivals) : 0
         let frameInterval = inferFPS > 0 ? 1.0 / inferFPS : 0
-        let estimatedWaitTime = frameInterval > avgInferenceTime ? frameInterval - avgInferenceTime : 0
+        // 推論間の残余時間。キュー待ち時間ではない（待機列を持たない破棄設計のため
+        // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
+        let inferenceResidual = frameInterval > avgInferenceTime ? frameInterval - avgInferenceTime : 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) estWait=\(String(format: "%.4f", estimatedWaitTime))s limitFPS=\(frameThrottle.maxFPS)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(frameThrottle.maxFPS)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {

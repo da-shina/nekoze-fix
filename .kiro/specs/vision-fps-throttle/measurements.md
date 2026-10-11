@@ -30,7 +30,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 
 ### ログ形式
 ```
-[NekozeFix Metrics] arrivals=150 inferences=75 drops=75 totalInferenceTime=1.2345s inputFPS=30.00 inferFPS=15.00 avgInferTime=0.0165s dropRate=50.00% estWait=0.0500s limitFPS=15.0
+[NekozeFix Metrics] arrivals=150 inferences=75 drops=75 totalInferenceTime=1.2345s inputFPS=30.00 inferFPS=15.00 avgInferTime=0.0165s dropRate=50.00% residual=0.0500s limitFPS=15.0
 ```
 
 各フィールド:
@@ -42,7 +42,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 - `inferFPS`: 推論 FPS = inferences / 経過秒
 - `avgInferTime`: 平均推論時間 = totalInferenceTime / inferences
 - `dropRate`: ドロップ率 = drops / arrivals
-- `estWait`: 推定待ち時間 = (1/inferFPS) - avgInferTime（キュー待ちの近似）
+- `residual`: 推論間の残余時間 = (1/inferFPS) - avgInferTime（キュー待ち時間ではない。待機列を持たない破棄設計のため真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）
 - `limitFPS`: 現在の推論 FPS 上限設定値
 
 ---
@@ -52,7 +52,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 ### 設定 A: 現状（無制限 / 実質 1000 FPS 相当）
 > `FrameThrottle.defaultMaxFPS` を一時的に大きな値（例: 1000）に変更してビルド、または `setLimit(1000)` を呼ぶ
 
-| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | estWait | 備考 |
+| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | residual | 備考 |
 |----------|--------|----------|------------|-------|-------------------|----------|----------|--------------|----------|---------|------|
 | 通常（正座・良好姿勢） | | | | | | | | | | | |
 | 暗転モード | | | | | | | | | | | |
@@ -64,7 +64,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 ### 設定 B: 15 FPS 制限（現行暫定デフォルト）
 > `FrameThrottle.defaultMaxFPS = 15.0` のままビルド
 
-| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | estWait | 備考 |
+| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | residual | 備考 |
 |----------|--------|----------|------------|-------|-------------------|----------|----------|--------------|----------|---------|------|
 | 通常（正座・良好姿勢） | | | | | | | | | | | |
 | 暗転モード | | | | | | | | | | | |
@@ -76,7 +76,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 ### 設定 C: 10 FPS 制限
 > `setLimit(10.0)` を呼ぶ、または `FrameThrottle.defaultMaxFPS = 10.0` に変更してビルド
 
-| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | estWait | 備考 |
+| シナリオ | 経過秒 | arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | residual | 備考 |
 |----------|--------|----------|------------|-------|-------------------|----------|----------|--------------|----------|---------|------|
 | 通常（正座・良好姿勢） | | | | | | | | | | | |
 | 暗転モード | | | | | | | | | | | |
@@ -118,9 +118,9 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 | 15 FPS | | | | | | |
 | 10 FPS | | | | | | |
 
-### 推論時間・待ち時間の比較
+### 推論時間・残余時間の比較
 
-| 設定 | 平均推論時間 (ms) | 推定待ち時間 (ms) | ドロップ率 |
+| 設定 | 平均推論時間 (ms) | 推論間の残余時間 (ms) | ドロップ率 |
 |------|------------------|------------------|-----------|
 | 現状（無制限） | | | |
 | 15 FPS | | | |
@@ -157,7 +157,7 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 1. **3秒確定判定への影響**: 間引き下でも 3 秒連続猫背検知で確定判定が出ること（タスク 3.2 で確認済み）
 2. **推論 FPS の実測値**: 
 3. **CPU 使用率の削減効果**: 
-4. **待ち時間・ドロップ率の許容度**: 
+4. **残余時間・ドロップ率の許容度**: 
 5. **バッテリー持続時間への推定貢献**: (未計測・推定記載禁止)
 
 ---
@@ -168,6 +168,7 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 
 | 項目 | 未計測理由 | 今後の計測予定 |
 |------|------------|----------------|
+| 真のキュー待ち時間 | 待機列を持たない破棄設計のため計測不可（`residual` は推論間の残余時間を記録） | N/A |
 | 実際のバッテリー持続時間の延長 | 長時間（数時間）の実測には時間と環境制御が必要 | 別途実機での長時間運用テストで検証 |
 | 発熱抑制効果 | サーマルセンサー読み取りが必要 |  |
 | メモリ使用量の変化 | 間引きによるメモリ圧迫変化は軽微と判断 |  |
