@@ -496,7 +496,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         guard metricsLogTimer == nil else { return }
         metricsStartTime = CACurrentMediaTime()
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.logMetricsSnapshot()
+            Task { @MainActor [weak self] in
+                self?.logMetricsSnapshot()
+            }
         }
         RunLoop.current.add(metricsLogTimer!, forMode: .common)
     }
