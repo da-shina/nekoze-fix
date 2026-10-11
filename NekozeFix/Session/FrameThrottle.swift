@@ -1,12 +1,11 @@
 import Foundation
 
-/// 時刻間隔によるVision推論の間引き判定器。
+/// 時刻間隔によるVision推論の間引き判定器（同期型・錠なし）。
 ///
 /// 前回推論時刻との間隔が上限間隔以上の場合のみ推論対象とする。
 /// 無効時刻（NaN・負・無限大）のフレームは推論対象として扱い、検出機会を保つ。
-/// 判定経路は検出キュー直列実行のため錠不要。プロセス内メモリのみ。
-/// 上限切替え（`setLimit(_:)`）と初期化（`reset()`）は検出キュー経由で
-/// 直列適用すること。判定途中での割込みは呼出側の直列配送で防ぐ。
+/// 複数キューからの利用時は `LockedFrameThrottle` を経由し単一の錠で直列化する。
+/// 上限切替え（`setLimit(_:)`）と初期化（`reset()`）の割込みは呼出側の直列配送で防ぐ。
 ///
 /// 計数は受動的な加算のみであり、検出結果と呼出順序を変えない。
 /// 読出しは値複写であり、永続化と外部送出は行わない。
@@ -124,6 +123,13 @@ struct FrameThrottle {
         counters = Metrics()
     }
 
+    /// 計数のみを初期化する（前回推論時刻と上限は維持）。
+    /// 計測区間の開始時に時刻と計数を同一区間にそろえるための受口
+    /// （レビュー指摘 4241621573 対応）。判定動作には影響しない。
+    mutating func resetCounts() {
+        counters = Metrics()
+    }
+
     /// 到達数に1、判定結果に応じて推論実行数・破棄数のいずれかに1を加算する。
     private mutating func noteArrival(inferred: Bool) {
         counters = Metrics(
@@ -132,5 +138,57 @@ struct FrameThrottle {
             drops: counters.drops + (inferred ? 0 : 1),
             totalInferenceTime: counters.totalInferenceTime
         )
+    }
+}
+
+/// `FrameThrottle` の錠付き保持器（Session 所有）。
+///
+/// 判定（検出キュー）・初期化（専用直列キュー）・計測読出し（Main/Timer）の
+/// 全アクセスを単一の錠で直列化する（レビュー指摘 4241621567 対応）。
+/// ADR 0021（PoseDetector の錠付き計測器）と同一則。
+/// 構造体側は同期型のまま（単体テストは構造体を直接検証する）。
+/// 錠で全状態を保護するため `@unchecked Sendable` とする
+///（PoseDetector・CameraSessionManager と同一則）。
+final class LockedFrameThrottle: @unchecked Sendable {
+    private let lock = NSLock()
+    private var throttle: FrameThrottle
+
+    init(maxFPS: Double = FrameThrottle.defaultMaxFPS) {
+        throttle = FrameThrottle(maxFPS: maxFPS)
+    }
+
+    /// 提示時刻が推論対象かを判定する（全キューから呼べる）。
+    func shouldInfer(at timestamp: TimeInterval) -> Bool {
+        lock.withLock { throttle.shouldInfer(at: timestamp) }
+    }
+
+    /// 推論所要時間を累積する（判定動作には影響しない）。
+    func recordInference(duration: TimeInterval) {
+        lock.withLock { throttle.recordInference(duration: duration) }
+    }
+
+    /// 計測値を値複写で読み出す。
+    func snapshot() -> FrameThrottle.Metrics {
+        lock.withLock { throttle.snapshot() }
+    }
+
+    /// 推論FPSの上限（読出しのみ）。
+    var maxFPS: Double {
+        lock.withLock { throttle.maxFPS }
+    }
+
+    /// 推論FPSの上限を切り替える。前回推論時刻と計数は維持する。
+    func setLimit(_ fps: Double) {
+        lock.withLock { throttle.setLimit(fps) }
+    }
+
+    /// 判定状態と計数を初期化する（ゲートを開放方向へ倒す冪等操作）。
+    func reset() {
+        lock.withLock { throttle.reset() }
+    }
+
+    /// 計数のみを初期化する（ゲート状態は維持。計測区間の開始専用）。
+    func resetCounts() {
+        lock.withLock { throttle.resetCounts() }
     }
 }

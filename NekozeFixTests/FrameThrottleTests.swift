@@ -161,6 +161,27 @@ final class FrameThrottleTests: XCTestCase {
         XCTAssertTrue(throttle.shouldInfer(at: 100.05))
     }
 
+    func test_resetCounts_clearsCountersButPreservesGate() {
+        // 前提: 10FPS、計数と前回時刻が進んだ状態
+        var throttle = FrameThrottle(maxFPS: 10.0)
+        XCTAssertTrue(throttle.shouldInfer(at: 100.0))
+        XCTAssertFalse(throttle.shouldInfer(at: 100.05))
+        throttle.recordInference(duration: 0.02)
+
+        // 手順: 計数のみ初期化（計測区間の開始。レビュー指摘 4241621573 対応）
+        throttle.resetCounts()
+
+        // 検証: 計数が全て零に戻る
+        let snapshot = throttle.snapshot()
+        XCTAssertEqual(snapshot.arrivals, 0)
+        XCTAssertEqual(snapshot.inferences, 0)
+        XCTAssertEqual(snapshot.drops, 0)
+        XCTAssertEqual(snapshot.totalInferenceTime, 0.0, accuracy: 1e-9)
+
+        // 検証: ゲート状態は維持され同一時刻は推論対象外のまま
+        XCTAssertFalse(throttle.shouldInfer(at: 100.05))
+    }
+
     func test_snapshot_isValueCopy() {
         // 前提: 計数が進んだ状態
         var throttle = FrameThrottle(maxFPS: 10.0)

@@ -52,8 +52,8 @@
   - _Depends: 2.2_
   - _Boundary: PostureSessionManagerTests_
   - _Requirements: 2.4, 3.1, 3.3, 4.1, 4.2, 4.3, 4.4, 6.2, 6.3, 6.4_
-- [x] 3.3 実機計測シナリオの記録と比較
-  - 通常・暗転・不在・復帰・猫背・長時間の各シナリオで入力FPS・推論FPS・推論時間・待ち時間・CPU使用率を記録する
+- [ ] 3.3 実機計測シナリオの記録と比較（未計測のため未完了。レビュー指摘対応で[x]→[ ]へ戻す）
+  - 通常・暗転・不在・復帰・猫背・長時間の各シナリオで入力FPS・推論FPS・推論時間・残余時間・CPU使用率を記録する
   - 現状・15・10の比較に基づき制限値を選定しNFR 8.1との整合を確認する
   - 未計測項目を明記し実測していない効果を記載しない
   - 記録が残り制限値の選定根拠が追跡できる
@@ -65,5 +65,5 @@
 - 時刻間隔の境界比較には `- 1e-9` のイプシロンを用いる（TimedConditionGateと同一。100.1-100.0=0.0999…のようなDouble誤差で境界が崩れる実バグ対策）。
 - NekozeFixTestsはPBXFileSystemSynchronizedRootGroupで自動検出されるためテスト新規ファイルのpbxproj登録は不要。Session側の新規ファイルのみPBX登録が必要。
 - `init(maxFPS:)` の不正値クランプは未テスト（1.1時点）。タスク3.1で不正init値のテスト追加を検討する。
-- 2.2への申送り: `frameThrottle` は検出キュー閉じ込め（nonisolated(unsafe)）のため、reset配送は同一検出キュー経由で直列化すること。将来的なMainActor側からの計測読出し経路との競合整理も2.2/3.3で確認する。
+- 2.2への申送り: ~~`frameThrottle` は検出キュー閉じ込め（nonisolated(unsafe)）のため、reset配送は同一検出キュー経由で直列化すること。将来的なMainActor側からの計測読出し経路との競合整理も2.2/3.3で確認する。~~ → `LockedFrameThrottle`（単一の錠）で解決済み。レビュー指摘 4241621567 対応。
 - 親spec（nekoze-fix側）の「10fps固定」記述と本specの `defaultMaxFPS=15.0` 暫定値に数値差あり（pre-existing）。タスク3.3の実測選定時に同期する。
