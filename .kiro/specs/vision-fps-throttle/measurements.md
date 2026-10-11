@@ -5,12 +5,12 @@
 | 項目 | 値 |
 |------|-----|
 | デバイス | iPad (9th generation) / iPhone 13 mini |
-| iOS バージョン | |
-| アプリバージョン | NekozeFix (vision-fps-throttle ブランチ) |
+| iOS バージョン | iPad: 18.7.8 (22H352、計測時取得） |
+| アプリバージョン | NekozeFix (vision-fps-throttle ブランチ @84f36b6、Debug-iphoneos) |
 | カメラ位置 | 前面カメラ (フロント) |
 | セッションプリセット | VGA 640×480 (4:3) |
 | 計測日時 | 2026-10-11 |
-| 計測者 | |
+| 計測者 | 自律計測（エージェント） |
 
 ## 計測手順
 
@@ -27,6 +27,10 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 ```
 
 または Xcode の Devices and Simulators ウィンドウからコンソールを開く。
+
+> 注意: 本環境（Xcode 付属の devicectl）には `device log` サブコマンドがなく、
+> 上記コマンドはそのままでは動かない。自律計測では `device process launch
+> --terminate-existing --console <bundleID>` の標準出力中継で取得した。
 
 ### ログ形式
 ```
@@ -97,6 +101,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 | 15 FPS | 長時間 | | | | |
 | 10 FPS | 通常 | | | | |
 | 10 FPS | 長時間 | | | | |
+| 15 FPS | stagingなし（自律・参考） | — | — | 約45秒 | 未計測（本環境の devicectl にCPU取得手段なし） |
 
 **計測方法の例:**
 ```bash
@@ -105,6 +110,38 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 
 # または Instruments の Time Profiler / Activity Monitor で記録
 ```
+
+---
+
+## 自律計測記録（参考・stagingなし・2026-10-11）
+
+> 対話式stagingなしで取得した参考値。シナリオ別表・制限値選定には用いない。
+
+### 取得条件
+
+| 項目 | 値 |
+|------|-----|
+| デバイス | iPad (9th generation)、iOS 18.7.8 |
+| ビルド | vision-fps-throttle @84f36b6（Debug-iphoneos） |
+| 設定 | 15 FPS既定（`limitFPS=15.0` をログで確認） |
+| 操作 | 導入後の起動のみ。タップ・stagingなし |
+| 取得方法 | `process launch --console` の標準出力中継 |
+| 取得区間 | 起動後約5秒〜約45秒の9点（5秒間隔）。約50秒以降は出力停止（原因未確認）。75秒時点で終了 |
+
+### 指標サマリ（最終連続点・約35秒経過）
+
+| arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | residual |
+|----------|------------|-------|-------------------|----------|----------|--------------|----------|----------|
+| 834 | 418 | 416 | 18.6147s | 23.83 | 11.94 | 0.0445s | 49.88% | 0.0392s |
+
+- `inferFPS=11.94` は上限15を下回る（入力23.83fps・間隔1/15秒の間引きとして整合）。
+- 約35〜40秒付近で計数区間が再開始している（arrivals 834→120。原因未確認）。
+
+### 制約・未確認事項
+
+- 被写体の有無・姿勢、アプリのフェーズ（校正中／監視中）は未確認（UI非観測）。
+- CPU使用率は未計測（本環境の devicectl にCPU取得手段なし）。
+- 現状（無制限）・10 FPS・長時間・シナリオ別の値は未計測。制限値の選定は行わない。
 
 ---
 
@@ -168,6 +205,7 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 
 | 項目 | 未計測理由 | 今後の計測予定 |
 |------|------------|----------------|
+| CPU使用率の自律計測分 | 本環境の devicectl にCPU取得手段なし（`device process list --include-cpu` も不在） | Instruments または別 toolchain で検証 |
 | 真のキュー待ち時間 | 待機列を持たない破棄設計のため計測不可（`residual` は推論間の残余時間を記録） | N/A |
 | 実際のバッテリー持続時間の延長 | 長時間（数時間）の実測には時間と環境制御が必要 | 別途実機での長時間運用テストで検証 |
 | 発熱抑制効果 | サーマルセンサー読み取りが必要 |  |
@@ -186,7 +224,15 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 
 ### 設定 B: 15 FPS
 ```
-[ここにコンソールログを貼り付け]
+[NekozeFix Metrics] arrivals=114 inferences=58 drops=56 totalInferenceTime=3.0407s inputFPS=22.79 inferFPS=11.60 avgInferTime=0.0524s dropRate=49.12% residual=0.0338s limitFPS=15.0
+[NekozeFix Metrics] arrivals=234 inferences=118 drops=116 totalInferenceTime=5.7974s inputFPS=23.40 inferFPS=11.80 avgInferTime=0.0491s dropRate=49.57% residual=0.0356s limitFPS=15.0
+[NekozeFix Metrics] arrivals=354 inferences=178 drops=176 totalInferenceTime=8.7268s inputFPS=23.60 inferFPS=11.87 avgInferTime=0.0490s dropRate=49.72% residual=0.0352s limitFPS=15.0
+[NekozeFix Metrics] arrivals=474 inferences=238 drops=236 totalInferenceTime=11.5641s inputFPS=23.70 inferFPS=11.90 avgInferTime=0.0486s dropRate=49.79% residual=0.0354s limitFPS=15.0
+[NekozeFix Metrics] arrivals=594 inferences=298 drops=296 totalInferenceTime=13.8788s inputFPS=23.76 inferFPS=11.92 avgInferTime=0.0466s dropRate=49.83% residual=0.0373s limitFPS=15.0
+[NekozeFix Metrics] arrivals=714 inferences=358 drops=356 totalInferenceTime=15.9220s inputFPS=23.80 inferFPS=11.93 avgInferTime=0.0445s dropRate=49.86% residual=0.0393s limitFPS=15.0
+[NekozeFix Metrics] arrivals=834 inferences=418 drops=416 totalInferenceTime=18.6147s inputFPS=23.83 inferFPS=11.94 avgInferTime=0.0445s dropRate=49.88% residual=0.0392s limitFPS=15.0
+[NekozeFix Metrics] arrivals=120 inferences=60 drops=60 totalInferenceTime=3.0939s inputFPS=23.99 inferFPS=12.00 avgInferTime=0.0516s dropRate=50.00% residual=0.0318s limitFPS=15.0
+[NekozeFix Metrics] arrivals=241 inferences=120 drops=121 totalInferenceTime=5.2095s inputFPS=24.09 inferFPS=12.00 avgInferTime=0.0434s dropRate=50.21% residual=0.0399s limitFPS=15.0
 ```
 
 ### 設定 C: 10 FPS
@@ -201,3 +247,4 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 | 日付 | 変更内容 | 記録者 |
 |------|----------|--------|
 | 2026-10-11 | テンプレート作成 | |
+| 2026-10-11 | 自律計測（stagingなし・15FPS既定・9点）を記録。選定は未実施 | 自律計測（エージェント） |
