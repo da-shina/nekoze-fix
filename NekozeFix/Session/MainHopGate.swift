@@ -36,11 +36,15 @@ struct MainHopGate {
         let delivers: Int
         /// 集約（単一スロット保持）と判定された回数。
         let coalesced: Int
+        /// 直近の排出待ち時間（秒）。集約後の初回配送時に、
+        /// 最終集約から排出までの間隔を記録する。集約未発生時は 0。
+        let lastDrainWait: TimeInterval
 
-        init(submits: Int = 0, delivers: Int = 0, coalesced: Int = 0) {
+        init(submits: Int = 0, delivers: Int = 0, coalesced: Int = 0, lastDrainWait: TimeInterval = 0) {
             self.submits = submits
             self.delivers = delivers
             self.coalesced = coalesced
+            self.lastDrainWait = lastDrainWait
         }
     }
 
@@ -55,6 +59,8 @@ struct MainHopGate {
     private var lastKind: DetectionKind?
     private var lastAspectRatio: CGFloat?
     private var counters = Metrics()
+    /// 最終集約の時刻（排出待ち時間の起点）。配送時に消費し nil に戻す。
+    private var pendingSince: TimeInterval?
 
     init(displayInterval: TimeInterval = MainHopGate.defaultDisplayInterval) {
         if displayInterval.isFinite, displayInterval > 0 {
@@ -64,14 +70,53 @@ struct MainHopGate {
         }
     }
 
-    /// 配送可否を判定する（骨格段階: 初回は配送、以後の詳細則はタスク2.1で実装）。
+    /// 配送可否を判定する。三条件ゲート（タスク2.1）:
+    /// - 校正フェーズ中は全量配送し、校正蓄積の到達を欠落させない
+    /// - 検出種別の遷移と非 pose 結果は表示更新間隔にかかわらず配送する
+    /// - 画面比率の変化時は表示更新間隔にかかわらず配送する
+    /// - 定常 pose 連続のみ表示更新間隔で間引きする
+    /// - 無効時刻（NaN・負・無限大）の申請は配送側に倒し、基準時刻を進めない
+    ///
+    /// 配送時は前回配送時刻・前回検出種別・前回画面比率を更新する。
+    /// 集約時は計数のみ進め、判定基準（時刻・種別・比率）は変えない。
+    /// 計数は判定点で取りこぼしなく進む（タスク2.2）。
     mutating func submit(
         kind: DetectionKind,
         phase: GatePhase,
         aspectRatio: CGFloat,
         at now: TimeInterval
     ) -> HopDecision {
-        .deliver
+        guard now.isFinite, now >= 0 else {
+            noteDecision(delivered: true)
+            return .deliver
+        }
+        if phase == .calibrating {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        if kind != .pose {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        if let last = lastKind, last != kind {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        if let lastAR = lastAspectRatio, abs(lastAR - aspectRatio) > Self.aspectTolerance {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        guard let lastTime = lastDeliverTime else {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        if now - lastTime >= displayInterval - 1e-9 {
+            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
+            return .deliver
+        }
+        pendingSince = now
+        noteDecision(delivered: false)
+        return .coalesce
     }
 
     /// 計測値を値複写で読み出す。永続化と外部送出は行わない。
@@ -79,11 +124,37 @@ struct MainHopGate {
         counters
     }
 
+    /// 配送時の判定基準の更新と計数の進行を一本化する。
+    /// 集約を経た配送では、最終集約から排出までの待ち時間を記録する。
+    private mutating func deliver(kind: DetectionKind, aspectRatio: CGFloat, at now: TimeInterval) {
+        lastDeliverTime = now
+        lastKind = kind
+        lastAspectRatio = aspectRatio
+        var wait = counters.lastDrainWait
+        if let since = pendingSince {
+            wait = max(0, now - since)
+            pendingSince = nil
+        }
+        noteDecision(delivered: true, lastDrainWait: wait)
+    }
+
+    /// 判定結果に応じて申請数・配送数・集約破棄数のいずれかを1加算する。
+    /// 計数は判定結果に影響しない。
+    private mutating func noteDecision(delivered: Bool, lastDrainWait: TimeInterval? = nil) {
+        counters = Metrics(
+            submits: counters.submits + 1,
+            delivers: counters.delivers + (delivered ? 1 : 0),
+            coalesced: counters.coalesced + (delivered ? 0 : 1),
+            lastDrainWait: lastDrainWait ?? counters.lastDrainWait
+        )
+    }
+
     /// 判定状態と計数を初期化する（停止・再開経路から検出キューへ配送される）。
     mutating func reset() {
         lastDeliverTime = nil
         lastKind = nil
         lastAspectRatio = nil
+        pendingSince = nil
         counters = Metrics()
     }
 }
