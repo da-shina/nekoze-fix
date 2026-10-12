@@ -19,16 +19,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
     /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
-    /// 錠付き保持器のため全キュー（検出・初期化・計測読出し）から呼べる。
-    /// 同期境界は保持器内の単一の錠に一本化する（レビュー指摘 4241621567 対応）。
+    /// 全アクセスを `throttleLock` で直列化する（レビュー指摘 4241621567 対応）。
     /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
     /// 停止・再開時の初期化配送は `resetDetectionPipeline()` が担う（タスク 2.2）。
-    /// 参照自体は不変であり、指し先が内部同期（Sendable）のため
-    /// nonisolated からの参照を許可する（`var` のため冗長警告の対象外）。
-    nonisolated(unsafe) private(set) var frameThrottle = LockedFrameThrottle()
+    /// 検出キューからの参照のため nonisolated とする（`var` のため冗長警告の対象外）。
+    /// テストは @testable で直接操作する（単体テストが構造体を直接検証する）。
+    nonisolated(unsafe) var frameThrottle = FrameThrottle()
+    /// 判定器アクセスの単一の同期境界。検出・初期化・計測読出しの全経路で取得する。
+    private let throttleLock = NSLock()
     /// Main受け渡し前段の三条件ゲートと単一スロットの錠付き保持器 (mainactor-throttle 3.1)。
     /// 申請（検出キュー）・初期化（`throttleResetQueue`）・フェーズ反映（Main の `setPhase`）・
-    /// 計測読出し（Main）の全アクセスを単一の錠で直列化する（`LockedFrameThrottle` と同一則）。
+    /// 計測読出し（Main）の全アクセスを単一の錠で直列化する（`throttleLock` と同一則）。
     /// 配送判定則自体は値型 `MainHopGate` に寄せ、本保持器は結線（軽量 view への変換・
     /// 単一スロットの最新保持・排出）に専念する。`PoseDetector` と同一則で
     /// `@unchecked Sendable` とする。参照自体は不変であり、
@@ -38,8 +39,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// CameraSessionManager の検出キュー（sampleBuffer delegate queue）は同クラス内で
     /// private のため Session 側から直接配送できない。CameraSessionManager に手を入れず
     /// MainActor を block しないよう、Session 側で専用の直列キューを所有し async 配送する。
-    /// 検出キュー・本キュー・計測読出し（Main）の三者間の競合は `LockedFrameThrottle`
-    /// 内の単一の錠で直列化するため、配送先キューが検出キューと別でも安全である。
+    /// 検出キュー・本キュー・計測読出し（Main）の三者間の競合は `throttleLock`
+    /// で直列化するため、配送先キューが検出キューと別でも安全である。
     /// 将来 CameraSessionManager が検出キューを公開すれば本キューを置き換え、
     /// 飛行中判定との同一キュー直列化に格上げする。
     let throttleResetQueue = DispatchQueue(label: "com.nekozefix.session.throttleReset")
@@ -447,7 +448,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.visualizationPoints = []
         smoothedPoints = []
         await startCameraPipeline()
-        restartMetricsLogging() // 計数初期化と対になる区間再開（4241621573 対応）
+        stopMetricsLogging()
+        startMetricsLogging() // 計数初期化と対になる区間再開（4241621573 対応）
     }
 
     private func startCameraPipeline() async {
@@ -465,19 +467,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
-    /// 間引き判定のシーム。提示時刻（秒）に対する推論可否を返す。
-    /// captureOutput 先頭から呼ばれ、順序「間引き→条件化」の検証点をここに隔離する。
-    /// 検出キュー confinement を前提とする（錠なし）。
-    nonisolated func shouldInferFrame(at timestamp: TimeInterval) -> Bool {
-        frameThrottle.shouldInfer(at: timestamp)
-    }
-
     /// 判定パイプラインの同期初期化コア (vision-fps-throttle 2.2, requirements 6.1)。
-    /// 検出キュー confinement を前提とする（呼ぶのは検出キュー上またはテストのみ）。
+    /// 呼ぶのは初期化キュー上またはテストのみ。全アクセスは錠で直列化する。
     /// 順序の正本は「FrameThrottle.reset() → MainHopGate.reset()」であり、
     /// 本シーケンスの第二段でゲートの判定状態・スロット・計数を初期化する。
     nonisolated func resetDetectionPipelineState() {
-        frameThrottle.reset()
+        throttleLock.withLock { frameThrottle.reset() }
         hopGate.reset()
     }
 
@@ -502,28 +497,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
     /// Timer 稼働中は何もしない（区間の二重開始を防ぐ）。
+    /// 開始時刻と計数を同一区間にそろえる（レビュー指摘 4241621573 対応）。
     func startMetricsLogging() {
         guard metricsLogTimer == nil else { return }
-        beginMetricsWindow()
+        metricsStartTime = CACurrentMediaTime()
+        throttleLock.withLock { frameThrottle.resetCounts() }
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.logMetricsSnapshot()
             }
         }
         RunLoop.current.add(metricsLogTimer!, forMode: .common)
-    }
-
-    /// 計測区間を開始する（開始時刻と計数を同一区間にそろえる。レビュー指摘 4241621573 対応）。
-    private func beginMetricsWindow() {
-        metricsStartTime = CACurrentMediaTime()
-        frameThrottle.resetCounts()
-    }
-
-    /// 定期ログを再開する。カメラ再起動等、Timer 稼働中の再開点から呼ぶ。
-    /// 停止中の Timer に対する呼出しは開始と等価である。
-    func restartMetricsLogging() {
-        stopMetricsLogging()
-        startMetricsLogging()
     }
 
     /// 定期ログを停止する。監視停止・背景移行・暗転突入等の停止点から呼ぶ。
@@ -537,7 +521,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 受け渡し計測（申請・配送・集約破棄・排出待ち）も同時に出力する。停止・再開で計数が
     /// 初期化されるため、長期記録（Req 7.1 の実測シナリオ用）は本定期ログの系列で追う。
     private func logMetricsSnapshot() {
-        let metrics = frameThrottle.snapshot()
+        let (metrics, limit) = throttleLock.withLock { (frameThrottle.snapshot(), frameThrottle.maxFPS) }
         let hop = hopGate.snapshot()
         let elapsed = CACurrentMediaTime() - metricsStartTime
         let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
@@ -547,9 +531,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         let frameInterval = inferFPS > 0 ? 1.0 / inferFPS : 0
         // 推論間の残余時間。キュー待ち時間ではない（待機列を持たない破棄設計のため
         // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
-        let inferenceResidual = frameInterval > avgInferenceTime ? frameInterval - avgInferenceTime : 0
+        let inferenceResidual = max(0, frameInterval - avgInferenceTime)
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(frameThrottle.maxFPS) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -558,7 +542,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // （順序「間引き→条件化」）。破棄時は snapshot 書込み・UI 更新を行わない。
         // 新規キュー・バッファ・蓄積は作らず、遅延破棄運用は AVFoundation 側のまま。
         let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
-        guard shouldInferFrame(at: timestamp) else { return }
+        let passed = throttleLock.withLock { frameThrottle.shouldInfer(at: timestamp) }
+        guard passed else { return }
 
         // バッファ実寸から画像アスペクト比を算出（可視化のクロップ補正に使用）
         let imageAR: CGFloat
@@ -581,7 +566,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
         let inferenceStart = CACurrentMediaTime()
         let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
-        frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
+        throttleLock.withLock {
+            frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
+        }
 
         // Main受け渡し前段の三条件ゲート (mainactor-throttle 3.1)。
         // 配送分のみ Main へ渡し、集約分は新規 Task を生成せず単一スロットに最新のみ保持する。
@@ -964,7 +951,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 ///
 /// `PostureSessionManager` が所有し、検出キュー（申請）・`throttleResetQueue`（初期化）・
 /// Main（フェーズ反映・計測読出し）の全アクセスを単一の錠で直列化する
-/// （`LockedFrameThrottle` と同一則）。配送判定則自体は値型 `MainHopGate` に寄せる。
+/// （`throttleLock` と同一則）。配送判定則自体は値型 `MainHopGate` に寄せる。
 /// 構造体側は同期型のまま（単体テストは構造体を直接検証する）。
 /// 錠で全状態を保護するため `@unchecked Sendable` とする
 /// （`PoseDetector`・`CameraSessionManager` と同一則）。

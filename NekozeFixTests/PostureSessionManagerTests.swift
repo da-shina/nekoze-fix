@@ -414,33 +414,33 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 初回フレームは推論対象（ゲート開放）。
     func testThrottleGate_firstFrame_passes() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
     }
 
     /// 上限間隔未満の後続フレームは破棄対象（detect に到達させない）。
     func testThrottleGate_rapidSuccessor_drops() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.01))
     }
 
     /// 通過フレームのみが条件化へ渡る順序を保つ（破棄は前回推論時刻を進めない）。
     func testThrottleGate_droppedFrame_doesNotAdvanceBaseline() {
         let interval = 1.0 / FrameThrottle.defaultMaxFPS
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.0 + interval / 2))
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0 + interval))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.0 + interval / 2))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0 + interval))
     }
 
     /// 無効時刻は実行側に倒す（検出欠落を起こさない）。
     func testThrottleGate_invalidTimestamp_failsOpen() {
-        XCTAssertTrue(sut.shouldInferFrame(at: Double.nan))
-        XCTAssertTrue(sut.shouldInferFrame(at: -1.0))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: Double.nan))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: -1.0))
     }
 
     /// 計数がゲート判定を反映する（到達・推論・破棄の区別）。
     func testThrottleGate_metrics_reflectGateDecisions() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.01))
         let metrics = sut.frameThrottle.snapshot()
         XCTAssertEqual(metrics.arrivals, 2)
         XCTAssertEqual(metrics.inferences, 1)
@@ -451,63 +451,53 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 同期コア: 判定状態と計数をクリアし、次フレームが推論対象になる（再開直後の過剰破棄なし）。
     func testResetDetectionPipelineState_clearsGateAndCounters() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.01))
         sut.resetDetectionPipelineState()
         let metrics = sut.frameThrottle.snapshot()
         XCTAssertEqual(metrics.arrivals, 0)
         XCTAssertEqual(metrics.inferences, 0)
         XCTAssertEqual(metrics.drops, 0)
         XCTAssertEqual(metrics.totalInferenceTime, 0.0, accuracy: 1e-9)
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "初期化直後は同一時刻でも推論対象になる")
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.01), "初期化直後は同一時刻でも推論対象になる")
     }
 
     /// 同期コア: 初期化は上限設定を変えない（再開後に制限値が維持される）。
     func testResetDetectionPipelineState_preservesMaxFPS() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
         let before = sut.frameThrottle.maxFPS
         sut.resetDetectionPipelineState()
         XCTAssertEqual(sut.frameThrottle.maxFPS, before)
     }
 
-    /// 停止経路: stopMonitoring が検出キューへ初期化を配送する。
-    func testStopMonitoring_dispatchesThrottleReset() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
-        sut.stopMonitoring()
+    /// 初期化配送の共通検証（seed→操作→配送完了待ち→計数零→ゲート開放）。
+    func assertThrottleResetDispatched(after action: () -> Void, message: String) {
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.01))
+        action()
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "停止で初期化され再開直後の過剰破棄がない")
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.01), message)
+    }
+
+    /// 停止経路: stopMonitoring が検出キューへ初期化を配送する。
+    func testStopMonitoring_dispatchesThrottleReset() {
+        assertThrottleResetDispatched(after: { sut.stopMonitoring() }, message: "停止で初期化され再開直後の過剰破棄がない")
     }
 
     /// 停止経路: 背景移行が検出キューへ初期化を配送する。
     func testDidEnterBackground_dispatchesThrottleReset() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
-        sut.handleDidEnterBackground()
-        sut.throttleResetQueue.sync {}
-        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "背景停止で初期化され復帰直後の過剰破棄がない")
+        assertThrottleResetDispatched(after: { sut.handleDidEnterBackground() }, message: "背景停止で初期化され復帰直後の過剰破棄がない")
     }
 
     /// 再開経路: startMonitoring が検出キューへ初期化を配送する。
     func testStartMonitoring_dispatchesThrottleReset() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
-        sut.startMonitoring()
-        sut.throttleResetQueue.sync {}
-        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "開始で初期化され古い状態による判定の乱れがない")
+        assertThrottleResetDispatched(after: { sut.startMonitoring() }, message: "開始で初期化され古い状態による判定の乱れがない")
     }
 
     /// 再開経路: startCalibration が検出キューへ初期化を配送する。
     func testStartCalibration_dispatchesThrottleReset() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
-        sut.startCalibration()
-        sut.throttleResetQueue.sync {}
-        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0)
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "校正開始で初期化され古い状態による判定の乱れがない")
+        assertThrottleResetDispatched(after: { sut.startCalibration() }, message: "校正開始で初期化され古い状態による判定の乱れがない")
     }
 
     // MARK: - 結線と判定非回帰の結合検証 (vision-fps-throttle 3.2)
@@ -528,20 +518,15 @@ final class PostureSessionManagerTests: XCTestCase {
     /// ゲート判定はセッション状態を変えない（破棄フレームは snapshot 書込みなし。requirements 2.4/6.4）。
     func testThrottleOrder_gateDecisionDoesNotMutateSnapshot() {
         let before = sut.snapshot
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
+        XCTAssertTrue(sut.frameThrottle.shouldInfer(at: 100.0))
+        XCTAssertFalse(sut.frameThrottle.shouldInfer(at: 100.01))
         XCTAssertEqual(sut.snapshot, before, "間引き判定はセッション状態へ副作用を持たない")
     }
 
     /// 背面移行は非監視時も判定状態を初期化する（停止経路の無条件初期化。requirements 6.1）。
     func testDidEnterBackground_whenIdle_stillResetsThrottle() {
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.0))
-        XCTAssertFalse(sut.shouldInferFrame(at: 100.01))
         XCTAssertEqual(sut.snapshot.phase, .idle)
-        sut.handleDidEnterBackground()
-        sut.throttleResetQueue.sync {}
-        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "idle 時の背景移行でも初期化する")
-        XCTAssertTrue(sut.shouldInferFrame(at: 100.01), "初期化直後は同一時刻でも推論対象になる")
+        assertThrottleResetDispatched(after: { sut.handleDidEnterBackground() }, message: "初期化直後は同一時刻でも推論対象になる")
     }
 
     /// 間引き下でも猫背3秒連続で確定し、回復で即改善する（時刻駆動の証明。requirements 4.1/4.2）。
