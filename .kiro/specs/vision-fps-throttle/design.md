@@ -206,8 +206,8 @@ struct FrameThrottle {
 ##### State Management
 
 - State model: 前回推論時刻、上限間隔（`setLimit(_:)` による切替え可）
-- Persistence & consistency: プロセス内メモリのみ。`LockedFrameThrottle` 内の単一の錠で一貫性を保つ
-- Concurrency strategy: 構造体は同期型のまま、Session 所有の錠付き保持器を経由して判定（検出キュー）・初期化（専用直列キュー）・計測読出し（Main）を直列化する（レビュー指摘 4241621567 対応）
+- Persistence & consistency: プロセス内メモリのみ。Session 所有の単一の錠で一貫性を保つ
+- Concurrency strategy: 構造体は同期型のまま、Session 所有の単一の錠で判定（検出キュー）・初期化（専用直列キュー）・計測読出し（Main）を直列化する（レビュー指摘 4241621567 対応）
 
 **Implementation Notes**
 
