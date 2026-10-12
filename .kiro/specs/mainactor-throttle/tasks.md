@@ -54,3 +54,11 @@
   - 確定から再生が0.5秒以内であることが実測で確認されることを確認する
   - 実測していない効果の記載がなく未計測項目が明記されることを確認する
   - _Requirements: 5.2, 7.1, 7.2, 7.3_
+
+## Implementation Notes
+
+- レビュー対応（code-review 2軸）：`submit` の4分岐重複は `shouldDeliver` 純粋判定への抽出で解消。`submit` 4引数は design Service Interface 準拠のため `Submission` 型化は見送り
+- レビュー対応（Spec c）：排出待ちは初回集約起点（最長待ち）に修正。無効時刻の配送は起点を残さない。定期ログに受け渡し計数を同梱し Req 7.1 の長期記録をログ系列で追えるようにした
+- レビュー対応（Spec a）：削減下の猶予・ホールド・背景初期化・校正復帰・Motion/暗転/間引き計数不変の非回帰テストを追加。通知音・遅延破棄運用は実機／設定由来のため対象外
+- レビュー対応（Spec b）：フェーズ鏡像・数値既定・排出方針・計測寿命の判断は `docs/adr/0022-hop-gate-wiring.md` に記録。能動排出なし・`校正` 表記維持の根拠を含む
+- 実機計測（4.3）の記録源：5秒定期ログの `hopSubmits/hopDelivers/hopCoalesced/hopLastWait` 系列を用いる
