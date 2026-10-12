@@ -34,7 +34,7 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 
 ### ログ形式
 ```
-[NekozeFix Metrics] arrivals=150 inferences=75 drops=75 totalInferenceTime=1.2345s inputFPS=30.00 inferFPS=15.00 avgInferTime=0.0165s dropRate=50.00% residual=0.0500s limitFPS=15.0
+[NekozeFix Metrics] arrivals=150 inferences=75 drops=75 totalInferenceTime=1.2345s inputFPS=30.00 inferFPS=15.00 avgInferTime=0.0165s dropRate=50.00% residual=0.0500s limitFPS=15.0 hopSubmits=75 hopDelivers=70 hopCoalesced=5 hopLastWait=0.1000s
 ```
 
 各フィールド:
@@ -48,6 +48,8 @@ xcrun devicectl device log --device 1B98037F-C505-52F4-A04A-57027D130BD7 --proce
 - `dropRate`: ドロップ率 = drops / arrivals
 - `residual`: 推論間の残余時間 = (1/inferFPS) - avgInferTime（キュー待ち時間ではない。待機列を持たない破棄設計のため真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）
 - `limitFPS`: 現在の推論 FPS 上限設定値
+- `hopSubmits` / `hopDelivers` / `hopCoalesced`: Main受け渡し前段ゲートの申請・配送・集約数（mainactor-throttle 結合後のビルドのみ出力）
+- `hopLastWait`: 集約後の初回配送における初回集約〜排出の待ち時間（秒。集約未発生時は 0）
 
 ---
 
@@ -145,6 +147,42 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 
 ---
 
+## 自律計測記録その2（参考・stagingなし・2026-10-12）
+
+> 対話式stagingなしで取得した参考値。シナリオ別表・制限値選定には用いない。
+> vision-fps-throttle の保持器廃止 refactor と mainactor-throttle 結合後のビルドであり、
+> hop系フィールド（`hopSubmits` 等）が追加されている。
+
+### 取得条件
+
+| 項目 | 値 |
+|------|-----|
+| デバイス | iPad (9th generation)（`9th`） |
+| iOS バージョン | 未確認（前回計測時 18.7.8 と同一端末） |
+| ビルド | feature/mainactor-throttle @b5863b3（Debug-iphoneos、9th向けビルド→devicectlでインストール） |
+| 設定 | 15 FPS既定（`limitFPS=15.0` をログで確認） |
+| 操作 | `process launch --console` による起動のみ。タップ・stagingなし |
+| 取得方法 | `devicectl device process launch --terminate-existing --console` の標準出力中継 |
+| 取得区間 | 起動後約5秒〜約85秒の16点（5秒間隔）。終了は手動kill（signal 15） |
+
+### 指標サマリ（最終点・第二区間の累積）
+
+| arrivals | inferences | drops | totalInferenceTime | inputFPS | inferFPS | avgInferTime | dropRate | residual | hopSubmits | hopDelivers | hopCoalesced | hopLastWait |
+|----------|------------|-------|-------------------|----------|----------|--------------|----------|----------|------------|-------------|--------------|-------------|
+| 1330 | 667 | 663 | 29.1750s | 16.62 | 8.34 | 0.0437s | 49.85% | 0.0762s | 666 | 619 | 47 | 0.1017s |
+
+- 第一区間（起動〜約25秒）は `inputFPS≈23.5`・`inferFPS≈11.8`・`avgInferTime≈0.046s` で、前回計測（23.83 / 11.94 / 0.0445s）と整合。
+- 約25〜30秒付近で計数区間が再開始している（arrivals 589→44。前回計測の 834→120 と同一現象。原因未確認）。
+- hop系は大半が配送（`hopDelivers`）で、定常時に集約が発生している（`hopCoalesced=47`、`hopLastWait≈0.10s`＝表示更新間隔と一致）。Main受け渡し削減ゲートが動作している。
+- 被写体の有無・姿勢、アプリのフェーズは未確認（UI非観測）。CPU使用率は未計測。現状（無制限）・10 FPS・シナリオ別の値は未計測。制限値の選定は行わない。
+
+### 制約・未確認事項
+
+- 計数区間の再開始の発生条件は未特定（カメラ再起動・計測窓再開のいずれか。ログのみでは判別不可）。
+- 第二区間の `inputFPS`（16.62）は区間再開始後の経過秒基準のため、第一区間（23.5）との単純比較はできない。
+
+---
+
 ## 比較・選定分析
 
 ### 入力 FPS・推論 FPS の比較サマリ
@@ -235,6 +273,26 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 [NekozeFix Metrics] arrivals=241 inferences=120 drops=121 totalInferenceTime=5.2095s inputFPS=24.09 inferFPS=12.00 avgInferTime=0.0434s dropRate=50.21% residual=0.0399s limitFPS=15.0
 ```
 
+### 設定 B: 15 FPS（2026-10-12・結合後ビルド・stagingなし参考）
+```
+[NekozeFix Metrics] arrivals=109 inferences=55 drops=54 totalInferenceTime=3.3327s inputFPS=21.79 inferFPS=11.00 avgInferTime=0.0606s dropRate=49.54% residual=0.0303s limitFPS=15.0 hopSubmits=55 hopDelivers=55 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=229 inferences=115 drops=114 totalInferenceTime=6.2845s inputFPS=22.90 inferFPS=11.50 avgInferTime=0.0546s dropRate=49.78% residual=0.0323s limitFPS=15.0 hopSubmits=115 hopDelivers=115 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=349 inferences=175 drops=174 totalInferenceTime=9.0231s inputFPS=23.26 inferFPS=11.67 avgInferTime=0.0516s dropRate=49.86% residual=0.0342s limitFPS=15.0 hopSubmits=175 hopDelivers=175 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=471 inferences=236 drops=235 totalInferenceTime=10.9794s inputFPS=23.48 inferFPS=11.76 avgInferTime=0.0465s dropRate=49.89% residual=0.0385s limitFPS=15.0 hopSubmits=236 hopDelivers=235 hopCoalesced=1 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=589 inferences=295 drops=294 totalInferenceTime=13.5142s inputFPS=23.56 inferFPS=11.80 avgInferTime=0.0458s dropRate=49.92% residual=0.0389s limitFPS=15.0 hopSubmits=295 hopDelivers=287 hopCoalesced=8 hopLastWait=0.1011s
+[NekozeFix Metrics] arrivals=44 inferences=23 drops=21 totalInferenceTime=1.2285s inputFPS=1.47 inferFPS=0.77 avgInferTime=0.0534s dropRate=47.73% residual=1.2510s limitFPS=15.0 hopSubmits=23 hopDelivers=23 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=164 inferences=83 drops=81 totalInferenceTime=4.1265s inputFPS=4.69 inferFPS=2.37 avgInferTime=0.0497s dropRate=49.39% residual=0.3720s limitFPS=15.0 hopSubmits=83 hopDelivers=83 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=285 inferences=144 drops=141 totalInferenceTime=7.3254s inputFPS=7.12 inferFPS=3.60 avgInferTime=0.0509s dropRate=49.47% residual=0.2269s limitFPS=15.0 hopSubmits=143 hopDelivers=143 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=405 inferences=204 drops=201 totalInferenceTime=10.0961s inputFPS=9.00 inferFPS=4.53 avgInferTime=0.0495s dropRate=49.63% residual=0.1711s limitFPS=15.0 hopSubmits=203 hopDelivers=203 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=525 inferences=264 drops=261 totalInferenceTime=13.2104s inputFPS=10.50 inferFPS=5.28 avgInferTime=0.0500s dropRate=49.71% residual=0.1394s limitFPS=15.0 hopSubmits=263 hopDelivers=263 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=645 inferences=324 drops=321 totalInferenceTime=15.6895s inputFPS=11.73 inferFPS=5.89 avgInferTime=0.0484s dropRate=49.77% residual=0.1213s limitFPS=15.0 hopSubmits=323 hopDelivers=323 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=765 inferences=384 drops=381 totalInferenceTime=18.7043s inputFPS=12.75 inferFPS=6.40 avgInferTime=0.0487s dropRate=49.80% residual=0.1075s limitFPS=15.0 hopSubmits=383 hopDelivers=383 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=885 inferences=444 drops=441 totalInferenceTime=21.6072s inputFPS=13.62 inferFPS=6.83 avgInferTime=0.0487s dropRate=49.83% residual=0.0977s limitFPS=15.0 hopSubmits=443 hopDelivers=443 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=1031 inferences=517 drops=514 totalInferenceTime=24.4047s inputFPS=14.73 inferFPS=7.39 avgInferTime=0.0472s dropRate=49.85% residual=0.0882s limitFPS=15.0 hopSubmits=517 hopDelivers=517 hopCoalesced=0 hopLastWait=0.0000s
+[NekozeFix Metrics] arrivals=1181 inferences=592 drops=589 totalInferenceTime=26.9239s inputFPS=15.75 inferFPS=7.89 avgInferTime=0.0455s dropRate=49.87% residual=0.0812s limitFPS=15.0 hopSubmits=592 hopDelivers=580 hopCoalesced=12 hopLastWait=0.0739s
+[NekozeFix Metrics] arrivals=1330 inferences=667 drops=663 totalInferenceTime=29.1750s inputFPS=16.62 inferFPS=8.34 avgInferTime=0.0437s dropRate=49.85% residual=0.0762s limitFPS=15.0 hopSubmits=666 hopDelivers=619 hopCoalesced=47 hopLastWait=0.1017s
+```
+
 ### 設定 C: 10 FPS
 ```
 [ここにコンソールログを貼り付け]
@@ -248,3 +306,4 @@ xcrun devicectl device process list --device 1B98037F-C505-52F4-A04A-57027D130BD
 |------|----------|--------|
 | 2026-10-11 | テンプレート作成 | |
 | 2026-10-11 | 自律計測（stagingなし・15FPS既定・9点）を記録。選定は未実施 | 自律計測（エージェント） |
+| 2026-10-12 | 自律計測その2（stagingなし・15FPS既定・16点・結合後ビルド@b5863b3・hop系付き）を記録。選定は未実施 | 自律計測（エージェント） |
