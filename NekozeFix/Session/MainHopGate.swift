@@ -37,7 +37,7 @@ struct MainHopGate {
         /// 集約（単一スロット保持）と判定された回数。
         let coalesced: Int
         /// 直近の排出待ち時間（秒）。集約後の初回配送時に、
-        /// 最終集約から排出までの間隔を記録する。集約未発生時は 0。
+        /// 初回集約から排出までの間隔を記録する。集約未発生時は 0。
         let lastDrainWait: TimeInterval
 
         init(submits: Int = 0, delivers: Int = 0, coalesced: Int = 0, lastDrainWait: TimeInterval = 0) {
@@ -54,12 +54,18 @@ struct MainHopGate {
     /// 画面比率の変化判定の許容誤差。微小差は不変とみなす。
     static let aspectTolerance: CGFloat = 1e-3
 
+    /// 画面比率が変化したかを判定する（許容誤差付き等価）。
+    /// ゲート内の配送判定と Main 側の書込み省略判定で単一化する。
+    static func aspectChanged(_ old: CGFloat, _ new: CGFloat) -> Bool {
+        abs(old - new) > Self.aspectTolerance
+    }
+
     private let displayInterval: TimeInterval
     private var lastDeliverTime: TimeInterval?
     private var lastKind: DetectionKind?
     private var lastAspectRatio: CGFloat?
     private var counters = Metrics()
-    /// 最終集約の時刻（排出待ち時間の起点）。配送時に消費し nil に戻す。
+    /// 初回集約の時刻（排出待ち時間の起点）。配送時に消費し nil に戻す。
     private var pendingSince: TimeInterval?
 
     init(displayInterval: TimeInterval = MainHopGate.defaultDisplayInterval) {
@@ -87,36 +93,37 @@ struct MainHopGate {
         at now: TimeInterval
     ) -> HopDecision {
         guard now.isFinite, now >= 0 else {
+            // 無効時刻はスロット排出済みとみなし、待ち時間の起点を残さない。
+            pendingSince = nil
             noteDecision(delivered: true)
             return .deliver
         }
-        if phase == .calibrating {
+        if shouldDeliver(kind: kind, phase: phase, aspectRatio: aspectRatio, now: now) {
             deliver(kind: kind, aspectRatio: aspectRatio, at: now)
             return .deliver
         }
-        if kind != .pose {
-            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
-            return .deliver
+        // 待ち時間は初回集約を起点とする（最長待ちの記録）。
+        if pendingSince == nil {
+            pendingSince = now
         }
-        if let last = lastKind, last != kind {
-            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
-            return .deliver
-        }
-        if let lastAR = lastAspectRatio, abs(lastAR - aspectRatio) > Self.aspectTolerance {
-            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
-            return .deliver
-        }
-        guard let lastTime = lastDeliverTime else {
-            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
-            return .deliver
-        }
-        if now - lastTime >= displayInterval - 1e-9 {
-            deliver(kind: kind, aspectRatio: aspectRatio, at: now)
-            return .deliver
-        }
-        pendingSince = now
         noteDecision(delivered: false)
         return .coalesce
+    }
+
+    /// 配送条件の純粋判定（状態を変えない）。
+    /// 校正中全量・非 pose・種別遷移・比率変化・初回・間隔経過のいずれかで配送する。
+    private func shouldDeliver(
+        kind: DetectionKind,
+        phase: GatePhase,
+        aspectRatio: CGFloat,
+        now: TimeInterval
+    ) -> Bool {
+        if phase == .calibrating { return true }
+        if kind != .pose { return true }
+        if let last = lastKind, last != kind { return true }
+        if let lastAR = lastAspectRatio, Self.aspectChanged(lastAR, aspectRatio) { return true }
+        guard let lastTime = lastDeliverTime else { return true }
+        return now - lastTime >= displayInterval - 1e-9
     }
 
     /// 計測値を値複写で読み出す。永続化と外部送出は行わない。
@@ -125,7 +132,7 @@ struct MainHopGate {
     }
 
     /// 配送時の判定基準の更新と計数の進行を一本化する。
-    /// 集約を経た配送では、最終集約から排出までの待ち時間を記録する。
+    /// 集約を経た配送では、初回集約から排出までの待ち時間を記録する。
     private mutating func deliver(kind: DetectionKind, aspectRatio: CGFloat, at now: TimeInterval) {
         lastDeliverTime = now
         lastKind = kind

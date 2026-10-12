@@ -746,6 +746,113 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(metrics.drops, 0, "受け渡し選定は破棄計数へ触れない")
     }
 
+    /// 削減下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
+    func testHopGatedRate_personMissingGraceSurvivesReduction() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        func feed(_ detection: PoseDetector.Detection) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+                sut.processDetection(pending.detection)
+            }
+        }
+        feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        XCTAssertTrue(sut.snapshot.isPersonDetected)
+
+        // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
+        for _ in 0..<3 {
+            usleep(100_000)
+            feed(.absent)
+        }
+        XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
+
+        // 計0.7秒 → 不在確定
+        for _ in 0..<4 {
+            usleep(100_000)
+            feed(.absent)
+        }
+        XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
+    }
+
+    /// 削減下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
+    func testHopGatedRate_keypointHoldGraceSurvivesReduction() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        func feed(_ detection: PoseDetector.Detection) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+                sut.processDetection(pending.detection)
+            }
+        }
+        feed(.pose(testFrame(shoulderConfidence: 0.9)))
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
+
+        // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
+        for _ in 0..<3 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            feed(.pose(dropped))
+        }
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は削減下でも直近の肩を保持する")
+
+        // 計0.7秒 → 破棄
+        for _ in 0..<4 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            feed(.pose(dropped))
+        }
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は削減下でも破棄する")
+    }
+
+    /// 背景移行がゲートの判定状態・スロット・計数を初期化する（requirements 5.4）。
+    func testDidEnterBackground_dispatchesHopReset() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        sut.handleDidEnterBackground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.hopGate.pendingCount, 0, "背景停止でスロットを破棄する")
+        XCTAssertEqual(sut.hopGate.snapshot().submits, 0, "背景停止で計数を初期化する")
+    }
+
+    /// 校正再開がゲート初期化を配送し、フェーズ鏡像を校正中に戻す。
+    func testStartCalibration_resetsHopGateAndRestoresCalibratingMirror() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        sut.startCalibration()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.hopGate.snapshot().submits, 0)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertNotNil(
+            sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.02),
+            "校正中は間隔にかかわらず全量配送する"
+        )
+    }
+
+    /// 受け渡し選定は Motion 起停・暗転表示・推論間引き計数に触れない（requirements 6.3）。
+    func testHopOrder_gateDoesNotTouchMotionDimOrThrottle() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertTrue(sut.motionService.isRunning)
+        let frame = testFrame(shoulderConfidence: 0.9)
+        for i in 0..<5 {
+            _ = sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0 + Double(i) * 0.01)
+        }
+        XCTAssertTrue(sut.motionService.isRunning, "受け渡し選定は Motion 起停に触れない")
+        XCTAssertFalse(sut.snapshot.isDimmed, "受け渡し選定は暗転表示に触れない")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "受け渡し選定は保持重力に触れない")
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "受け渡し選定は推論間引き計数に触れない")
+    }
+    /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
     /// 削減下でも猫背3秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
     /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
     func testHopGatedRate_slouchStillConfirmsAfter3SecondsAndRecovers() {

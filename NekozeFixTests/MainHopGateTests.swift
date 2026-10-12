@@ -139,7 +139,7 @@ final class MainHopGateTests: XCTestCase {
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.05), .deliver)
     }
 
-    /// 集約を経た配送では、最終集約から排出までの待ち時間が記録される。
+    /// 集約を経た配送では、初回集約から排出までの待ち時間（最長待ち）が記録される。
     func testDrainWait_recordsCoalesceToDeliverGap() {
         var gate = MainHopGate(displayInterval: 0.1)
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.0), .deliver)
@@ -147,7 +147,17 @@ final class MainHopGateTests: XCTestCase {
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.05), .coalesce)
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.08), .coalesce)
         XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.2), .deliver)
-        XCTAssertEqual(gate.snapshot().lastDrainWait, 0.12, accuracy: 1e-9)
+        XCTAssertEqual(gate.snapshot().lastDrainWait, 0.15, accuracy: 1e-9)
+    }
+
+    /// 無効時刻の配送はスロット排出済みとみなし、待ち時間の起点を残さない。
+    func testInvalidTimeDeliver_clearsPendingWait() {
+        var gate = MainHopGate(displayInterval: 0.1)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.0), .deliver)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.05), .coalesce)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: Double.nan), .deliver)
+        XCTAssertEqual(gate.submit(kind: .pose, phase: .monitoring, aspectRatio: 4.0 / 3.0, at: 100.2), .deliver)
+        XCTAssertEqual(gate.snapshot().lastDrainWait, 0.0, accuracy: 1e-9)
     }
 
     /// 表示更新間隔は注入時に定まる（異なる間隔で境界が変わる）。

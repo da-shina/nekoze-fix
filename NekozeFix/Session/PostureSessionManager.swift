@@ -534,8 +534,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 現在の FrameThrottle スナップショットと導出 FPS を os_log へ出力する。
     /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 残余時間(推論間隔-推論時間).
+    /// 受け渡し計測（申請・配送・集約破棄・排出待ち）も同時に出力する。停止・再開で計数が
+    /// 初期化されるため、長期記録（Req 7.1 の実測シナリオ用）は本定期ログの系列で追う。
     private func logMetricsSnapshot() {
         let metrics = frameThrottle.snapshot()
+        let hop = hopGate.snapshot()
         let elapsed = CACurrentMediaTime() - metricsStartTime
         let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
         let inferFPS = elapsed > 0 ? Double(metrics.inferences) / elapsed : 0
@@ -546,7 +549,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
         let inferenceResidual = frameInterval > avgInferenceTime ? frameInterval - avgInferenceTime : 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(frameThrottle.maxFPS)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(frameThrottle.maxFPS) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -607,9 +610,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }
 
     /// 表示専用値の不変書込み省略の判定 (mainactor-throttle 3.2)。
-    /// 許容誤差の定義は受け渡し集約器と単一化する（`MainHopGate.aspectTolerance`）。
+    /// 許容誤差の定義と比較は受け渡し集約器と単一化する（`MainHopGate.aspectChanged`）。
     func shouldUpdateAspectRatio(_ newValue: CGFloat) -> Bool {
-        abs(snapshot.videoAspectRatio - newValue) > MainHopGate.aspectTolerance
+        MainHopGate.aspectChanged(snapshot.videoAspectRatio, newValue)
     }
 
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
