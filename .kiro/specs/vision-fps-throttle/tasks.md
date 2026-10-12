@@ -65,5 +65,5 @@
 - 時刻間隔の境界比較には `- 1e-9` のイプシロンを用いる（TimedConditionGateと同一。100.1-100.0=0.0999…のようなDouble誤差で境界が崩れる実バグ対策）。
 - NekozeFixTestsはPBXFileSystemSynchronizedRootGroupで自動検出されるためテスト新規ファイルのpbxproj登録は不要。Session側の新規ファイルのみPBX登録が必要。
 - `init(maxFPS:)` の不正値クランプは未テスト（1.1時点）。タスク3.1で不正init値のテスト追加を検討する。
-- 2.2への申送り: ~~`frameThrottle` は検出キュー閉じ込め（nonisolated(unsafe)）のため、reset配送は同一検出キュー経由で直列化すること。将来的なMainActor側からの計測読出し経路との競合整理も2.2/3.3で確認する。~~ → `LockedFrameThrottle`（単一の錠）で解決済み。レビュー指摘 4241621567 対応。
+- 2.2への申送り: ~~`frameThrottle` は検出キュー閉じ込め（nonisolated(unsafe)）のため、reset配送は同一検出キュー経由で直列化すること。将来的なMainActor側からの計測読出し経路との競合整理も2.2/3.3で確認する。~~ → Session 所有の単一の錠（`throttleLock`）で解決済み。レビュー指摘 4241621567 対応。
 - 親spec（nekoze-fix側）の「10fps固定」記述と本specの `defaultMaxFPS=15.0` 暫定値に数値差あり（pre-existing）。タスク3.3の実測選定時に同期する。
