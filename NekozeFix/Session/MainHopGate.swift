@@ -31,21 +31,14 @@ struct MainHopGate {
     /// 計測値の値複写。読出し専用の不変スナップショット。
     struct Metrics: Equatable {
         /// `submit` の呼出回数。
-        let submits: Int
+        var submits: Int = 0
         /// 配送と判定された回数。
-        let delivers: Int
+        var delivers: Int = 0
         /// 集約（単一スロット保持）と判定された回数。
-        let coalesced: Int
+        var coalesced: Int = 0
         /// 直近の排出待ち時間（秒）。集約後の初回配送時に、
         /// 初回集約から排出までの間隔を記録する。集約未発生時は 0。
-        let lastDrainWait: TimeInterval
-
-        init(submits: Int = 0, delivers: Int = 0, coalesced: Int = 0, lastDrainWait: TimeInterval = 0) {
-            self.submits = submits
-            self.delivers = delivers
-            self.coalesced = coalesced
-            self.lastDrainWait = lastDrainWait
-        }
+        var lastDrainWait: TimeInterval = 0
     }
 
     /// 表示更新間隔（秒）。注入時に定まり、判定中に変わらない。
@@ -148,12 +141,15 @@ struct MainHopGate {
     /// 判定結果に応じて申請数・配送数・集約破棄数のいずれかを1加算する。
     /// 計数は判定結果に影響しない。
     private mutating func noteDecision(delivered: Bool, lastDrainWait: TimeInterval? = nil) {
-        counters = Metrics(
-            submits: counters.submits + 1,
-            delivers: counters.delivers + (delivered ? 1 : 0),
-            coalesced: counters.coalesced + (delivered ? 0 : 1),
-            lastDrainWait: lastDrainWait ?? counters.lastDrainWait
-        )
+        counters.submits += 1
+        if delivered {
+            counters.delivers += 1
+        } else {
+            counters.coalesced += 1
+        }
+        if let lastDrainWait {
+            counters.lastDrainWait = lastDrainWait
+        }
     }
 
     /// 判定状態と計数を初期化する（停止・再開経路から検出キューへ配送される）。

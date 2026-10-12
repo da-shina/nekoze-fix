@@ -17,20 +17,13 @@ struct FrameThrottle {
     /// 計測値の値複写。読出し専用の不変スナップショット。
     struct Metrics: Equatable {
         /// `shouldInfer(at:)` の呼出回数。
-        let arrivals: Int
+        var arrivals: Int = 0
         /// 推論対象と判定された回数。
-        let inferences: Int
+        var inferences: Int = 0
         /// 推論対象外として破棄された回数。
-        let drops: Int
+        var drops: Int = 0
         /// `recordInference(duration:)` で記録された推論所要時間の累積（秒）。
-        let totalInferenceTime: TimeInterval
-
-        init(arrivals: Int = 0, inferences: Int = 0, drops: Int = 0, totalInferenceTime: TimeInterval = 0) {
-            self.arrivals = arrivals
-            self.inferences = inferences
-            self.drops = drops
-            self.totalInferenceTime = totalInferenceTime
-        }
+        var totalInferenceTime: TimeInterval = 0
     }
     /// 暫定の既定上限FPS。最終選定はタスク3.3の実測比較で行う。
     static let defaultMaxFPS: Double = 15.0
@@ -48,11 +41,12 @@ struct FrameThrottle {
 
     /// - Parameter maxFPS: 推論FPSの上限（正の有限値）。不正値は既定値に倒す。
     init(maxFPS: Double = FrameThrottle.defaultMaxFPS) {
-        if maxFPS.isFinite, maxFPS > 0 {
-            self.maxFPS = maxFPS
-        } else {
-            self.maxFPS = FrameThrottle.defaultMaxFPS
-        }
+        self.maxFPS = Self.normalizeFPS(maxFPS)
+    }
+
+    /// 正の有限値のみ採用し、不正値は既定値に倒す。
+    private static func normalizeFPS(_ fps: Double) -> Double {
+        fps.isFinite && fps > 0 ? fps : FrameThrottle.defaultMaxFPS
     }
 
     /// 提示時刻が推論対象かを判定する。呼出ごとに1回のみ判定する。
@@ -88,12 +82,7 @@ struct FrameThrottle {
     /// - Parameter duration: 推論所要時間（秒単位）。
     mutating func recordInference(duration: TimeInterval) {
         guard duration.isFinite, duration >= 0 else { return }
-        counters = Metrics(
-            arrivals: counters.arrivals,
-            inferences: counters.inferences,
-            drops: counters.drops,
-            totalInferenceTime: counters.totalInferenceTime + duration
-        )
+        counters.totalInferenceTime += duration
     }
 
     /// 計測値を値複写で読み出す。永続化と外部送出は行わない。
@@ -110,11 +99,7 @@ struct FrameThrottle {
     /// dim-mode-saving からの判定中切替え受口。
     /// - Parameter fps: 新しい推論FPS上限（正の有限値）。不正値は既定値に倒す。
     mutating func setLimit(_ fps: Double) {
-        if fps.isFinite, fps > 0 {
-            maxFPS = fps
-        } else {
-            maxFPS = FrameThrottle.defaultMaxFPS
-        }
+        maxFPS = Self.normalizeFPS(fps)
     }
 
     /// 判定状態と計数を初期化する（前回推論時刻と全計数をクリア）。
@@ -132,12 +117,12 @@ struct FrameThrottle {
 
     /// 到達数に1、判定結果に応じて推論実行数・破棄数のいずれかに1を加算する。
     private mutating func noteArrival(inferred: Bool) {
-        counters = Metrics(
-            arrivals: counters.arrivals + 1,
-            inferences: counters.inferences + (inferred ? 1 : 0),
-            drops: counters.drops + (inferred ? 0 : 1),
-            totalInferenceTime: counters.totalInferenceTime
-        )
+        counters.arrivals += 1
+        if inferred {
+            counters.inferences += 1
+        } else {
+            counters.drops += 1
+        }
     }
 }
 
