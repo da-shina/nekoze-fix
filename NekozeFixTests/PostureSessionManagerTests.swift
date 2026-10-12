@@ -837,7 +837,6 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "受け渡し選定は保持重力に触れない")
         XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "受け渡し選定は推論間引き計数に触れない")
     }
-    /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
     /// 削減下でも猫背3秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
     /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
     func testHopGatedRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
