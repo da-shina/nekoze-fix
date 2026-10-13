@@ -18,6 +18,24 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private var cancellables = Set<AnyCancellable>()
     let cameraManager = CameraSessionManager()
     private let poseDetector = PoseDetector()
+    /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
+    /// 全アクセスを `throttleLock` で直列化する（レビュー指摘 4241621567 対応）。
+    /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
+    /// 停止・再開時の初期化配送は `resetDetectionPipeline()` が担う（タスク 2.2）。
+    /// 検出キューからの参照のため nonisolated とする（`var` のため冗長警告の対象外）。
+    /// テストは @testable で直接操作する（単体テストが構造体を直接検証する）。
+    nonisolated(unsafe) var frameThrottle = FrameThrottle()
+    /// 判定器アクセスの単一の同期境界。検出・初期化・計測読出しの全経路で取得する。
+    private let throttleLock = NSLock()
+    /// 判定パイプライン初期化の配送先 (vision-fps-throttle 2.2, requirements 6.1)。
+    /// CameraSessionManager の検出キュー（sampleBuffer delegate queue）は同クラス内で
+    /// private のため Session 側から直接配送できない。CameraSessionManager に手を入れず
+    /// MainActor を block しないよう、Session 側で専用の直列キューを所有し async 配送する。
+    /// 検出キュー・本キュー・計測読出し（Main）の三者間の競合は `throttleLock`
+    /// で直列化するため、配送先キューが検出キューと別でも安全である。
+    /// 将来 CameraSessionManager が検出キューを公開すれば本キューを置き換え、
+    /// 飛行中判定との同一キュー直列化に格上げする。
+    let throttleResetQueue = DispatchQueue(label: "com.nekozefix.session.throttleReset")
     private let postureAnalyzer = PostureAnalyzer()
     /// 重力の取得・変換・保持を所有する（タスク13.1）。
     /// 起停は Session が駆動する（開始系で start、停止・背景移行で stop、暗転中は継続）。
@@ -304,6 +322,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             setPhase(.calibrating)
             setMotionRotationRunning(true)
             await startCameraPipeline()
+            startMetricsLogging()
         case .denied:
             setPhase(.permissionDenied)
         case .notDetermined:
@@ -316,12 +335,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         setPhase(.calibrating)
         setMotionRotationRunning(true)
         calibrationLogic.start()
+        resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         smoothedPoints = []
         lastShoulderSeenTime = nil
         lastHeldKeypoints = [nil, nil, nil, nil]
         lastJointSeenTime = [nil, nil, nil, nil]
         Task {
             await startCameraPipeline()
+            startMetricsLogging()
         }
     }
 
@@ -332,10 +353,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
+        resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         lastGateTickTime = nil
         setMotionRotationRunning(true)
         Task {
             await startCameraPipeline()
+            startMetricsLogging()
         }
     }
 
@@ -345,7 +368,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         exitDimMode()
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
+        resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
+        stopMetricsLogging()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
     }
@@ -358,7 +383,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleDidEnterBackground() {
         alertPlayer?.stop()
         cameraManager.stop()
+        resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
+        stopMetricsLogging()
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             setPhase(.idle)
         }
@@ -374,6 +401,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         guard snapshot.phase == .idle else { return } // 校正中等进行中フェーズは触らない
         startMonitoring()
+        // startMonitoring 内で startMetricsLogging が呼ばれる
     }
 
     // MARK: - 暗転モード（design.md Q2/Q24、ADR 0013）
@@ -387,6 +415,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         savedBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = 0.0
         snapshot.isDimmed = true
+        stopMetricsLogging()
     }
 
     /// ディムモードを終了する（輝度復元のみ。暗転解除後も自動スリープは復活しない — 要求 8.4）
@@ -397,15 +426,22 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         savedBrightness = nil
         snapshot.isDimmed = false
+        // 監視中ならログ再開（idle 時は startMonitoring で再開される）
+        if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
+            startMetricsLogging()
+        }
     }
 
     // MARK: - プライベートメソッド
 
     private func restartCameraPipeline() async {
         cameraManager.stop()
+        resetDetectionPipeline() // 切替え時の古い判定状態を初期化する（2.2, requirements 6.1）
         snapshot.visualizationPoints = []
         smoothedPoints = []
         await startCameraPipeline()
+        stopMetricsLogging()
+        startMetricsLogging() // 計数初期化と対になる区間再開（4241621573 対応）
     }
 
     private func startCameraPipeline() async {
@@ -423,7 +459,83 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
 
+    /// 判定パイプラインの同期初期化コア (vision-fps-throttle 2.2, requirements 6.1)。
+    /// 呼ぶのは初期化キュー上またはテストのみ。全アクセスは錠で直列化する。
+    /// 順序の正本は「FrameThrottle.reset() → MainHopGate.reset()」であり本タスクが所有する
+    /// （mainactor-throttle 側の二重リセット順序は本タスクを参照する）。
+    /// MainHopGate は mainactor-throttle 側が所有するため本タスクでは生成せず、
+    /// 予約枠として本シーケンスの第二段に置く。
+    nonisolated func resetDetectionPipelineState() {
+        throttleLock.withLock { frameThrottle.reset() }
+        // ── 予約枠: MainHopGate.reset() はここ（FrameThrottle.reset() の直後）に置く ──
+    }
+
+    /// 判定パイプライン初期化の非同期配送ラッパ (vision-fps-throttle 2.2)。
+    /// 停止・再開経路から呼び、`throttleResetQueue` へ async 配送して直列実行する。
+    /// MainActor を block しないよう sync 配送は行わない。ラッパ自体は最小限に保ち、
+    /// 振る舞いの検証点は `resetDetectionPipelineState()` に寄せる。
+    func resetDetectionPipeline() {
+        throttleResetQueue.async { [weak self] in
+            self?.resetDetectionPipelineState()
+        }
+    }
+
+    // MARK: - 計測用定期ログ (vision-fps-throttle 3.3)
+
+    /// 計測用の定期ログタイマー。5秒ごとに FrameThrottle のスナップショットと導出 FPS を出力する。
+    /// 本番ビルドでも有効（負荷は struct 複写と整数除算のみ）。プロセス内メモリのみ・永続化・外部送出なし。
+    private var metricsLogTimer: Timer?
+
+    /// 計測開始時刻（単調時計）。ログ開始時に記録し、経過秒の基準とする。
+    private var metricsStartTime: TimeInterval = 0
+
+    /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
+    /// Timer 稼働中は何もしない（区間の二重開始を防ぐ）。
+    /// 開始時刻と計数を同一区間にそろえる（レビュー指摘 4241621573 対応）。
+    func startMetricsLogging() {
+        guard metricsLogTimer == nil else { return }
+        metricsStartTime = CACurrentMediaTime()
+        throttleLock.withLock { frameThrottle.resetCounts() }
+        metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.logMetricsSnapshot()
+            }
+        }
+        RunLoop.current.add(metricsLogTimer!, forMode: .common)
+    }
+
+    /// 定期ログを停止する。監視停止・背景移行・暗転突入等の停止点から呼ぶ。
+    func stopMetricsLogging() {
+        metricsLogTimer?.invalidate()
+        metricsLogTimer = nil
+    }
+
+    /// 現在の FrameThrottle スナップショットと導出 FPS を os_log へ出力する。
+    /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 残余時間(推論間隔-推論時間).
+    private func logMetricsSnapshot() {
+        let (metrics, limit) = throttleLock.withLock { (frameThrottle.snapshot(), frameThrottle.maxFPS) }
+        let elapsed = CACurrentMediaTime() - metricsStartTime
+        let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
+        let inferFPS = elapsed > 0 ? Double(metrics.inferences) / elapsed : 0
+        let avgInferenceTime = metrics.inferences > 0 ? metrics.totalInferenceTime / Double(metrics.inferences) : 0
+        let dropRate = metrics.arrivals > 0 ? Double(metrics.drops) / Double(metrics.arrivals) : 0
+        let frameInterval = inferFPS > 0 ? 1.0 / inferFPS : 0
+        // 推論間の残余時間。キュー待ち時間ではない（待機列を持たない破棄設計のため
+        // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
+        let inferenceResidual = max(0, frameInterval - avgInferenceTime)
+
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit)")
+    }
+
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // 間引きゲート (vision-fps-throttle 2.1): 提示時刻の間隔基準で判定し、
+        // 対象外フレームは検出実行前に破棄する。通過分のみ顔条件付き実行へ渡す
+        // （順序「間引き→条件化」）。破棄時は snapshot 書込み・UI 更新を行わない。
+        // 新規キュー・バッファ・蓄積は作らず、遅延破棄運用は AVFoundation 側のまま。
+        let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+        let passed = throttleLock.withLock { frameThrottle.shouldInfer(at: timestamp) }
+        guard passed else { return }
+
         // バッファ実寸から画像アスペクト比を算出（可視化のクロップ補正に使用）
         let imageAR: CGFloat
         if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
@@ -442,7 +554,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // メインスレッドで呼ぶと Vision 完了までの間 UI が固まり、
         // タップ応答の遅延・取りこぼしを引き起こす。
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
+        // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
+        let inferenceStart = CACurrentMediaTime()
         let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+        throttleLock.withLock {
+            frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
+        }
 
         Task { @MainActor in
             self.snapshot.videoAspectRatio = imageAR
