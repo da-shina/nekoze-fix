@@ -18,6 +18,8 @@
 		20DBBC03304EEE9B00B43650 /* DeviceRotationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC02304EEE2E00B43650 /* DeviceRotationService.swift */; };
 		20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */; };
 		20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */; };
+		20DBBC11304EEE2E00B43650 /* FrameThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */; };
+		20DBBC13304EEE2E00B43650 /* MainHopGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC12304EEE2E00B43650 /* MainHopGate.swift */; };
 		20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */; };
 		20DBBB2C304EEFCE00B43650 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB01304EEE2E00B43650 /* CalibrationView.swift */; };
 		20DBBB2D304EEFCE00B43650 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */; };
@@ -55,6 +57,8 @@
 		20DBBC02304EEE2E00B43650 /* DeviceRotationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRotationService.swift; sourceTree = "<group>"; };
 		20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureSessionManager.swift; sourceTree = "<group>"; };
 		20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameThrottle.swift; sourceTree = "<group>"; };
+		20DBBC12304EEE2E00B43650 /* MainHopGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainHopGate.swift; sourceTree = "<group>"; };
 		20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureTypes.swift; sourceTree = "<group>"; };
 		20DBBB01304EEE2E00B43650 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
 		20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
@@ -135,6 +139,8 @@
 			children = (
 				20DBBAFA304EEE2E00B43650 /* PostureSessionManager.swift */,
 				20DBBAFB304EEE2E00B43650 /* SettingsStore.swift */,
+				20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */,
+				20DBBC12304EEE2E00B43650 /* MainHopGate.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
@@ -324,6 +330,8 @@
 				20DBBB24304EEE9B00B43650 /* CameraSessionManager.swift in Sources */,
 				20DBBB28304EEFBF00B43650 /* PostureSessionManager.swift in Sources */,
 				20DBBB29304EEFBF00B43650 /* SettingsStore.swift in Sources */,
+				20DBBC11304EEE2E00B43650 /* FrameThrottle.swift in Sources */,
+				20DBBC13304EEE2E00B43650 /* MainHopGate.swift in Sources */,
 				20DBBB373054D59D00B43650 /* PostureOverlayView.swift in Sources */,
 				20DBBB393054D59D00B43650 /* SplashView.swift in Sources */,
 				20DBBB3B3054D59D00B43650 /* DebugConfidenceView.swift in Sources */,

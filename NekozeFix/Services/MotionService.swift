@@ -18,9 +18,9 @@ import Foundation
 @MainActor
 final class MotionService {
     /// モーション取得間隔（1/30秒）。電池制約 9.1 のため最小限の頻度に抑制。
-    nonisolated(unsafe) static let updateInterval = 1.0 / 30.0
+    static let updateInterval = 1.0 / 30.0
     /// 無効時の直前有効値ホールド秒数（単一タイマ、設計値・実装内に閉じる）。
-    nonisolated(unsafe) static let holdDuration = 0.5
+    static let holdDuration = 0.5
 
     /// キーポイント空間に変換済みの最新重力（単位化済み）または nil。
     /// nil は代替解決への合図。テストは @testable で直接代入する。
