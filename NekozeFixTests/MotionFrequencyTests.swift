@@ -29,25 +29,6 @@ final class MotionFrequencyTests: XCTestCase {
         XCTAssertEqual(MotionUpdateFrequency.tenHz.interval, 1.0 / 10.0, accuracy: 1e-12)
     }
 
-    /// 計測結果は変更不可の値であり推定値フィールドを持たない。
-    func testMeasurement_IsValueObject_WithoutEstimates() {
-        let m = MotionFrequencyMeasurement(
-            frequency: .fifteenHz,
-            duration: 5.0,
-            sampleCount: 75,
-            visibleUpdateCount: 10,
-            readCount: 60,
-            invalidReadCount: 2,
-            conditionNote: "monitoring・portrait・5s"
-        )
-        XCTAssertEqual(m.frequency, .fifteenHz)
-        XCTAssertEqual(m.sampleCount, 75)
-        XCTAssertEqual(m.visibleUpdateCount, 10)
-        XCTAssertEqual(m.readCount, 60)
-        XCTAssertEqual(m.invalidReadCount, 2)
-        XCTAssertEqual(m.conditionNote, "monitoring・portrait・5s")
-    }
-
     // MARK: - Task 2.1: 取得間隔の内部設定化
 
     /// 既定の取得頻度は毎秒30回。

@@ -196,17 +196,13 @@ func keypointConfidenceThreshold(isLandscape: Bool) -> Double {
 
 /// 重力取得頻度の候補（motion-frequency Task 1・ADR-0023）。
 /// 許可値は比較候補の3値に閉じる。既定は毎秒30回（現状維持）。
-enum MotionUpdateFrequency: Equatable {
-    case thirtyHz
-    case fifteenHz
-    case tenHz
+enum MotionUpdateFrequency: Double, Equatable {
+    case thirtyHz = 30
+    case fifteenHz = 15
+    case tenHz = 10
     /// 取得間隔（秒）。次回開始時または即時再開時に `deviceMotionUpdateInterval` へ反映する。
     var interval: TimeInterval {
-        switch self {
-        case .thirtyHz: 1.0 / 30.0
-        case .fifteenHz: 1.0 / 15.0
-        case .tenHz: 1.0 / 10.0
-        }
+        1.0 / rawValue
     }
 }
 

@@ -19,9 +19,6 @@ import Foundation
 /// プレビュー/出力接続の向き同期）は別系統であり、本サービスは向きを持たない。
 @MainActor
 final class MotionService {
-    /// モーション取得間隔（1/30秒）。電池制約 9.1 のため最小限の頻度に抑制。
-    /// 既定頻度（thirtyHz）の間隔と同値。後方互換のために残す。
-    static let updateInterval = 1.0 / 30.0
     /// 無効時の直前有効値ホールド秒数（単一タイマ、設計値・実装内に閉じる）。
     static let holdDuration = 0.5
     /// 実質同一判定の許容差（単位ベクトルのユークリッド距離）。
@@ -105,7 +102,6 @@ final class MotionService {
         guard motionManager.isDeviceMotionAvailable else { return }
         motionManager.deviceMotionUpdateInterval = updateFrequency.interval
         let box = shared
-        let tolerance = Self.equalityTolerance
         motionManager.startDeviceMotionUpdates(to: motionQueue) { motion, _ in
             // background（直列）一段目：変換＋比較し、実質同一の有効値はhop自体を起こさない。
             // 無効（nil・平置き）は全てhopする（Q14）。初回・破棄後は無条件hopする（Q15）。
@@ -124,20 +120,12 @@ final class MotionService {
                 guard let value = converted else {
                     return true
                 }
-                if let last = box.lastSent {
-                    let dx = value.x - last.x
-                    let dy = value.y - last.y
-                    let distance = (dx * dx + dy * dy).squareRoot()
-                    if distance < tolerance {
-                        return false
-                    }
-                    box.lastSent = value
-                    return true
-                } else {
-                    box.lastSent = value
-                    return true
+                if let last = box.lastSent, Self.isEffectivelySame(value, last) {
+                    return false
                 }
-            } as Bool
+                box.lastSent = value
+                return true
+            }
             guard shouldHop else { return }
             Task { @MainActor [weak self] in
                 self?.ingest(converted: converted, now: Date())
@@ -258,15 +246,14 @@ final class MotionService {
         guard let last = lastValidVector,
               let lastTime = lastValidTime,
               now.timeIntervalSince(lastTime) <= Self.holdDuration else {
-            if latestGravityInKeypointSpace != nil {
-                latestGravityInKeypointSpace = nil
+            let hadValue = latestGravityInKeypointSpace != nil
+            latestGravityInKeypointSpace = nil
+            if hadValue {
                 shared.lock.withLock {
                     if shared.measuring {
                         shared.visibleCount += 1
                     }
                 }
-            } else {
-                latestGravityInKeypointSpace = nil
             }
             return
         }
