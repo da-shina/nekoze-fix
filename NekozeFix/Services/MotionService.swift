@@ -117,14 +117,9 @@ final class MotionService {
                 converted = nil
             }
             let shouldHop: Bool = box.lock.withLock {
-                guard let value = converted else {
-                    return true
-                }
-                if let last = box.lastSent, Self.isEffectivelySame(value, last) {
-                    return false
-                }
-                box.lastSent = value
-                return true
+                let decision = Self.hopDecision(converted: converted, lastSent: box.lastSent)
+                box.lastSent = decision.newLastSent
+                return decision.shouldHop
             }
             guard shouldHop else { return }
             Task { @MainActor [weak self] in
@@ -212,6 +207,20 @@ final class MotionService {
         let dy = a.y - b.y
         let distance = (dx * dx + dy * dy).squareRoot()
         return distance < Self.equalityTolerance
+    }
+
+    /// background一段目のhop要否判定（純関数・現行則の抽出）。
+    /// 無効は全てhopし、比較基準（最終hop済み値）を破棄する。無効区間後の初回有効値を
+    /// 無条件hopさせるためであり、Q15破棄則の無効hopへの拡張（PR #25 指摘2対応）。
+    /// 実質同一の有効値はhopせず基準を維持する。初回・基準なしは無条件hopする。
+    nonisolated static func hopDecision(converted: SIMD2<Double>?, lastSent: SIMD2<Double>?) -> (shouldHop: Bool, newLastSent: SIMD2<Double>?) {
+        guard let value = converted else {
+            return (true, nil)
+        }
+        if let last = lastSent, isEffectivelySame(value, last) {
+            return (false, last)
+        }
+        return (true, value)
     }
 
     // MARK: - 取得と単一ホールド

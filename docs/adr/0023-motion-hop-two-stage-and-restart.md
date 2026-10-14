@@ -17,7 +17,7 @@
 - 二段比較（Q2=C・Q9一本化）：`motionQueue`（直列）側で `convert`（純関数のためスレッド安全）→最終hop済み値とのユークリッド距離比較→実質同一ならhop自体を起こさない。単一許容差に一本化し二重閾値を作らない。許容差は暫定 `1e-4` とし、事前分布計測（`00-gravity-noise`：机置き・手持ち静止各5分＋動作、`|Δu|` p50/p95/max、`ノイズp99 < ε < 動作p5`）で確定する。空なら暫定のまま tasks 5.1 で事後検証する
 - Main側抑制（Q10=A）：Main側は既存ホールド則のみ残す。`lastSent` はbackground所有（送信成否のみ）、`lastValidVector/lastValidTime/公開値` はMain所有のまま。受渡しは値渡しのみで二重状態の意味を分ける
 - 無効則（Q14）：無効（`convert==nil`・生値なし含む）の到着は全てhopする。無効継続の公開値変化はMain側時刻依存でbackgroundから見えず、無効連続は平置き等の稀経路のため削減効果が薄い。単純化で状態変化漏れを消す
-- 破棄則（Q15）：`stop()` 時に `lastSent` もnilクリアし、次回 `start` 初回は無条件hopとする。再開直後の偶然一致による誤抑制を防ぐ
+- 破棄則（Q15・PR #25 指摘2で拡張）：`stop()` 時の `lastSent` nilクリアに加え、無効hop時も `lastSent` を破棄し、無効区間後の初回有効値を無条件hopとする。ホールド超過で公開値がnil化した後に同一向きへ戻っても一段目で抑制されず、公開値がnilのまま残る事象を防ぐ
 - 即時再開則（Q5=A・Q11）：`setUpdateFrequency` は `isRunning==true` のみ `stop→新interval→start` を原子的に行い、`false` 時は次回 `start` まで遅延反映する。`setMotionRotationRunning` の契約・順序は変えない。暗転継続中は即時再開扱い、背景停止後は遅延反映扱いになる
 - 頻度候補（Q4）：`thirtyHz/fifteenHz/tenHz` の3値enumに閉じ、許可外は既定維持とする。将来拡張は本ADRの再検証を要する
 - 保持則（Q7）：0.5秒単一ホールド・変換・代替鎖は不変。低頻度時の期限評価遅延（最大0.1秒）を受容し全頻度で回帰する

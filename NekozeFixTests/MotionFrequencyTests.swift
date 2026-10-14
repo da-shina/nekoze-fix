@@ -101,6 +101,38 @@ final class MotionFrequencyTests: XCTestCase {
         XCTAssertFalse(MotionService.isEffectivelySame(a, far))
     }
 
+    /// background一段目のhop要否則（初回・変化・同一・無効）。
+    func testHopDecision_BasicRules() {
+        let v = SIMD2<Double>(0.6, 0.8)
+        var d = MotionService.hopDecision(converted: v, lastSent: nil)
+        XCTAssertTrue(d.shouldHop)
+        XCTAssertTrue(d.newLastSent == v)
+        d = MotionService.hopDecision(converted: v, lastSent: v)
+        XCTAssertFalse(d.shouldHop)
+        XCTAssertTrue(d.newLastSent == v)
+        let w = SIMD2<Double>(-0.6, 0.8)
+        d = MotionService.hopDecision(converted: w, lastSent: v)
+        XCTAssertTrue(d.shouldHop)
+        XCTAssertTrue(d.newLastSent == w)
+    }
+
+    /// 無効区間（ホールド超過で公開値nil）の後に同一向きへ戻ると無条件hopする。
+    /// 一段目で抑制されるとMainへ値が届かず公開値がnilのまま残る（PR #25 指摘2）。
+    func testHopDecision_AfterInvalid_SameValueHops() {
+        let v = SIMD2<Double>(0.6, 0.8)
+        var last: SIMD2<Double>? = nil
+        var d = MotionService.hopDecision(converted: v, lastSent: last)
+        last = d.newLastSent
+        XCTAssertTrue(d.shouldHop)
+        d = MotionService.hopDecision(converted: nil, lastSent: last)
+        last = d.newLastSent
+        XCTAssertTrue(d.shouldHop)
+        // 無効hop後は比較基準が破棄されるため、同一値でもhopする。
+        d = MotionService.hopDecision(converted: v, lastSent: last)
+        XCTAssertTrue(d.shouldHop)
+        XCTAssertTrue(d.newLastSent == v)
+    }
+
     // MARK: - Task 2.3 / Task 3: 区間計測と参照記録
 
     /// 受信・公開値更新・読取り・無効読取りを区間ごとに数え、条件注記を付す。
