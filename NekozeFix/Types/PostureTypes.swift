@@ -204,6 +204,10 @@ enum MotionUpdateFrequency: Double, Equatable {
     var interval: TimeInterval {
         1.0 / rawValue
     }
+    /// 計測条件の付記用の短縮表記（例: "30Hz"）。
+    var shortLabel: String {
+        "\(Int(rawValue))Hz"
+    }
 }
 
 /// 区間計測の結果（motion-frequency Task 1・ADR-0023）。

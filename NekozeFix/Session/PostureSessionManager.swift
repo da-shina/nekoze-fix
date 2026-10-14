@@ -502,6 +502,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         guard metricsLogTimer == nil else { return }
         metricsStartTime = CACurrentMediaTime()
         throttleLock.withLock { frameThrottle.resetCounts() }
+        motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.logMetricsSnapshot()
@@ -532,8 +533,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 推論間の残余時間。キュー待ち時間ではない（待機列を持たない破棄設計のため
         // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
         let inferenceResidual = max(0, frameInterval - avgInferenceTime)
+        // motion-frequency区間計測（ADR-0023）: 本5秒窓の受信・公開値更新・読取りを同梱し、
+        // 次窓の計測を直ちに再開する（計測は取得・判定に影響しない）。
+        let motion = motionService.stopMeasuring()
+        motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.visibleUpdateCount) motionReads=\(motion.readCount) motionInvalid=\(motion.invalidReadCount) motionNote=\(motion.conditionNote)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
