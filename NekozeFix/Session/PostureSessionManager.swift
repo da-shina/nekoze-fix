@@ -27,6 +27,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     nonisolated(unsafe) var frameThrottle = FrameThrottle()
     /// 判定器アクセスの単一の同期境界。検出・初期化・計測読出しの全経路で取得する。
     private let throttleLock = NSLock()
+    /// Main受け渡し前段の三条件ゲートと単一スロットの錠付き保持器 (mainactor-throttle 3.1)。
+    /// 申請（検出キュー）・初期化（`throttleResetQueue`）・フェーズ反映（Main の `setPhase`）・
+    /// 計測読出し（Main）の全アクセスを単一の錠で直列化する（`throttleLock` と同一則）。
+    /// 配送判定則自体は値型 `MainHopGate` に寄せ、本保持器は結線（軽量 view への変換・
+    /// 単一スロットの最新保持・排出）に専念する。`PoseDetector` と同一則で
+    /// `@unchecked Sendable` とする。参照自体は不変であり、
+    /// nonisolated からの参照を許可する。
+    nonisolated(unsafe) private(set) var hopGate = LockedMainHopGate()
     /// 判定パイプライン初期化の配送先 (vision-fps-throttle 2.2, requirements 6.1)。
     /// CameraSessionManager の検出キュー（sampleBuffer delegate queue）は同クラス内で
     /// private のため Session 側から直接配送できない。CameraSessionManager に手を入れず
@@ -461,13 +469,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 判定パイプラインの同期初期化コア (vision-fps-throttle 2.2, requirements 6.1)。
     /// 呼ぶのは初期化キュー上またはテストのみ。全アクセスは錠で直列化する。
-    /// 順序の正本は「FrameThrottle.reset() → MainHopGate.reset()」であり本タスクが所有する
-    /// （mainactor-throttle 側の二重リセット順序は本タスクを参照する）。
-    /// MainHopGate は mainactor-throttle 側が所有するため本タスクでは生成せず、
-    /// 予約枠として本シーケンスの第二段に置く。
+    /// 順序の正本は「FrameThrottle.reset() → MainHopGate.reset()」であり、
+    /// 本シーケンスの第二段でゲートの判定状態・スロット・計数を初期化する。
     nonisolated func resetDetectionPipelineState() {
         throttleLock.withLock { frameThrottle.reset() }
-        // ── 予約枠: MainHopGate.reset() はここ（FrameThrottle.reset() の直後）に置く ──
+        hopGate.reset()
     }
 
     /// 判定パイプライン初期化の非同期配送ラッパ (vision-fps-throttle 2.2)。
@@ -512,8 +518,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 現在の FrameThrottle スナップショットと導出 FPS を os_log へ出力する。
     /// 計測項目: 入力FPS(到達数/経過秒), 推論FPS(推論数/経過秒), 平均推論時間(累積/推論数), ドロップ率(破棄/到達), 残余時間(推論間隔-推論時間).
+    /// 受け渡し計測（申請・配送・集約破棄・排出待ち）も同時に出力する。停止・再開で計数が
+    /// 初期化されるため、長期記録（Req 7.1 の実測シナリオ用）は本定期ログの系列で追う。
     private func logMetricsSnapshot() {
         let (metrics, limit) = throttleLock.withLock { (frameThrottle.snapshot(), frameThrottle.maxFPS) }
+        let hop = hopGate.snapshot()
         let elapsed = CACurrentMediaTime() - metricsStartTime
         let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
         let inferFPS = elapsed > 0 ? Double(metrics.inferences) / elapsed : 0
@@ -524,7 +533,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
         let inferenceResidual = max(0, frameInterval - avgInferenceTime)
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -561,10 +570,36 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
         }
 
+        // Main受け渡し前段の三条件ゲート (mainactor-throttle 3.1)。
+        // 配送分のみ Main へ渡し、集約分は新規 Task を生成せず単一スロットに最新のみ保持する。
+        // 排出時はスロットの最新（＝今回の検出結果）で判定継続と表示反映を一括で行い、
+        // 古い中間結果の遅延反映を起こさない。事象駆動の受け渡し（回転角・カメラ確定・
+        // 設定変更）は本ゲートを通さず現行のまま保つ。
+        guard let pending = hopGate.submit(
+            detection: detection,
+            aspectRatio: imageAR,
+            now: CACurrentMediaTime()
+        ) else { return }
+
         Task { @MainActor in
-            self.snapshot.videoAspectRatio = imageAR
-            self.processDetection(detection)
+            self.applyDeliveredAspectRatio(pending.aspectRatio)
+            self.processDetection(pending.detection)
         }
+    }
+
+    /// 排出時の画面比率の反映 (mainactor-throttle 3.2)。
+    /// 前回表示値から変化した場合のみ書き込み、不変時は省略して再描画 churn を抑える。
+    /// 判定が参照する値（基準角・距離・近側・ゲート）には触れない。
+    func applyDeliveredAspectRatio(_ newValue: CGFloat) {
+        if shouldUpdateAspectRatio(newValue) {
+            snapshot.videoAspectRatio = newValue
+        }
+    }
+
+    /// 表示専用値の不変書込み省略の判定 (mainactor-throttle 3.2)。
+    /// 許容誤差の定義と比較は受け渡し集約器と単一化する（`MainHopGate.aspectChanged`）。
+    func shouldUpdateAspectRatio(_ newValue: CGFloat) -> Bool {
+        MainHopGate.aspectChanged(snapshot.videoAspectRatio, newValue)
     }
 
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
@@ -903,9 +938,91 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// セッションのフェーズの唯一の書き込み経路。
     /// wake lock 不変条件 `isIdleTimerDisabled == (phase == .monitoring)` を全遷移で強制する（要求 8.3/8.4、ADR 0016）。
+    /// 受け渡しゲート用の軽量フェーズの鏡像もここで反映する（検出キューは snapshot に触れず鏡像のみ読む）。
     private func setPhase(_ phase: SessionPhase) {
         snapshot.phase = phase
+        hopGate.setGatePhase(LockedMainHopGate.phase(of: phase))
         UIApplication.shared.isIdleTimerDisabled = (phase == .monitoring)
     }
 
+}
+
+/// Main受け渡し前段の三条件ゲートと単一スロットの錠付き保持器 (mainactor-throttle 3.1)。
+///
+/// `PostureSessionManager` が所有し、検出キュー（申請）・`throttleResetQueue`（初期化）・
+/// Main（フェーズ反映・計測読出し）の全アクセスを単一の錠で直列化する
+/// （`throttleLock` と同一則）。配送判定則自体は値型 `MainHopGate` に寄せる。
+/// 構造体側は同期型のまま（単体テストは構造体を直接検証する）。
+/// 錠で全状態を保護するため `@unchecked Sendable` とする
+/// （`PoseDetector`・`CameraSessionManager` と同一則）。
+final class LockedMainHopGate: @unchecked Sendable {
+    /// 排出単位。配送時にスロットから取り出す最新の検出結果と画面比率。
+    struct Pending {
+        let detection: PoseDetector.Detection
+        let aspectRatio: CGFloat
+    }
+
+    private let lock = NSLock()
+    private var gate = MainHopGate()
+    /// `setPhase` 経路が反映する軽量フェーズの鏡像。検出キューは snapshot に触れず本値を読む。
+    /// 初期値は fail-open の `.calibrating`（初回反映前の判定機会を保つ）。
+    private var gatePhase: GatePhase = .calibrating
+    /// 単一スロット。集約分は最新のみ保持し、待機蓄積を作らない。
+    private var slot: Pending?
+
+    /// 検出結果をゲート用の軽量種別へ写像する（`PoseFrame` の中身は捨て、種別遷移の検出のみに用いる）。
+    /// 判定継続に必要な検出内容自体はスロット側でそのまま保持する。
+    static func kind(of detection: PoseDetector.Detection) -> DetectionKind {
+        switch detection {
+        case .pose: return .pose
+        case .personOnly: return .personOnly
+        case .absent: return .absent
+        }
+    }
+
+    /// snapshot フェーズをゲート用の軽量フェーズへ写像する（校正中のみ全量配送対象）。
+    static func phase(of phase: SessionPhase) -> GatePhase {
+        phase == .calibrating ? .calibrating : .monitoring
+    }
+
+    /// 配送可否を判定する。申請は常にスロットへ最新として保持した上で判定し、
+    /// 配送時はスロットの最新（＝今回申請）を排出して返す。集約時は nil を返す。
+    func submit(detection: PoseDetector.Detection, aspectRatio: CGFloat, now: TimeInterval) -> Pending? {
+        lock.withLock {
+            slot = Pending(detection: detection, aspectRatio: aspectRatio)
+            let decision = gate.submit(
+                kind: Self.kind(of: detection),
+                phase: gatePhase,
+                aspectRatio: aspectRatio,
+                at: now
+            )
+            guard decision == .deliver else { return nil }
+            let pending = slot
+            slot = nil
+            return pending
+        }
+    }
+
+    /// Main の `setPhase` 経路から軽量フェーズを反映する。
+    func setGatePhase(_ phase: GatePhase) {
+        lock.withLock { gatePhase = phase }
+    }
+
+    /// ゲートの判定状態・スロット・計数を初期化する（停止・再開経路から配送される）。
+    func reset() {
+        lock.withLock {
+            gate.reset()
+            slot = nil
+        }
+    }
+
+    /// 計測値を値複写で読み出す。検出結果には影響しない。
+    func snapshot() -> MainHopGate.Metrics {
+        lock.withLock { gate.snapshot() }
+    }
+
+    /// スロットの占有数（0/1）。待機蓄積を作らないことの検証点。
+    var pendingCount: Int {
+        lock.withLock { slot == nil ? 0 : 1 }
+    }
 }

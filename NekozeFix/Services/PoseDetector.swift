@@ -108,15 +108,7 @@ final class PoseDetector: @unchecked Sendable {
             poseResult = .pose(frame)
         }
 
-        let poseStart = CACurrentMediaTime()
-        do {
-            defer {
-                let poseElapsed = CACurrentMediaTime() - poseStart
-                metricsLock.withLock { _metrics.poseTotalTime += poseElapsed }
-            }
-            try handler.perform([poseRequest])
-        } catch {
-            print("Vision Handler Error: \(error)")
+        guard perform(handler, poseRequest, timed: { elapsed in metricsLock.withLock { _metrics.poseTotalTime += elapsed } }) else {
             return .absent
         }
 
@@ -137,22 +129,29 @@ final class PoseDetector: @unchecked Sendable {
                 .boundingBox
         }
 
-        let faceStart = CACurrentMediaTime()
-        do {
-            defer {
-                let faceElapsed = CACurrentMediaTime() - faceStart
-                metricsLock.withLock {
-                    _metrics.faceExecutedCount += 1
-                    _metrics.faceTotalTime += faceElapsed
-                }
+        guard perform(handler, faceRequest, timed: { elapsed in
+            metricsLock.withLock {
+                _metrics.faceExecutedCount += 1
+                _metrics.faceTotalTime += elapsed
             }
-            try handler.perform([faceRequest])
-        } catch {
-            print("Vision Handler Error: \(error)")
+        }) else {
             return .absent
         }
 
         return Self.synthesize(pose: nil, faceBounds: faceBounds)
+    }
+
+    /// Vision要求を1件実行し、所要時間を計測クロージャへ渡す。失敗時は false。
+    private func perform(_ handler: VNImageRequestHandler, _ request: VNRequest, timed: (Double) -> Void) -> Bool {
+        let start = CACurrentMediaTime()
+        defer { timed(CACurrentMediaTime() - start) }
+        do {
+            try handler.perform([request])
+            return true
+        } catch {
+            print("Vision Handler Error: \(error)")
+            return false
+        }
     }
 
     // MARK: - プライベートメソッド

@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import NekozeFix
 
 @MainActor
@@ -616,6 +617,305 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
         sut.processDetection(.absent)
         XCTAssertEqual(sut.snapshot.videoAspectRatio, defaultAR, "条件化は解像度由来の状態を変えない")
+    }
+
+    // MARK: - Main受け渡しゲート結線 (mainactor-throttle 3.1)
+
+    /// 監視フェーズでは定常 pose 連続が間引かれる（配送分のみ Main へ渡る）。
+    func testHopGate_monitoringPhase_throttlesSteadyPose() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(
+            sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01),
+            "定常連続は表示更新間隔で間引く"
+        )
+    }
+
+    /// 校正フェーズ中は全量配送する（校正蓄積の到達を欠落させない）。
+    func testHopGate_calibratingPhase_deliversAll() {
+        sut.startCalibration()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNotNil(
+            sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01),
+            "校正中は間隔にかかわらず配送する"
+        )
+    }
+
+    /// 集約分は単一スロットに最新のみ保持し、蓄積を作らない。
+    func testHopGate_coalescedFrames_holdSingleLatestSlot() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertEqual(sut.hopGate.pendingCount, 1)
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.02))
+        XCTAssertEqual(sut.hopGate.pendingCount, 1, "集約分は単一スロットに最新のみ保持する")
+    }
+
+    /// 排出時はスロットを空にし、最新の結果を返す。
+    func testHopGate_deliver_drainsLatestAndClearsSlot() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertEqual(sut.hopGate.pendingCount, 1)
+        let pending = sut.hopGate.submit(detection: .absent, aspectRatio: 4.0 / 3.0, now: 300.02)
+        XCTAssertNotNil(pending)
+        if case .absent = pending?.detection {} else {
+            XCTFail("排出時は常に最新の結果を返す")
+        }
+        XCTAssertEqual(pending?.aspectRatio, 4.0 / 3.0)
+        XCTAssertEqual(sut.hopGate.pendingCount, 0, "排出後はスロットを空にする")
+    }
+
+    /// 停止経路: stopMonitoring がゲートの判定状態・スロット・計数を初期化する。
+    func testStopMonitoring_dispatchesHopReset() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertEqual(sut.hopGate.pendingCount, 1)
+        sut.stopMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.hopGate.pendingCount, 0, "停止でスロットを破棄する")
+        XCTAssertEqual(sut.hopGate.snapshot().submits, 0, "停止で計数を初期化する")
+        XCTAssertNotNil(
+            sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01),
+            "初期化直後は同一時刻でも配送対象になる"
+        )
+    }
+
+    /// 同期コア: 初期化がゲートの判定状態とスロットをクリアする。
+    func testResetDetectionPipelineState_clearsHopGateAndSlot() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        sut.resetDetectionPipelineState()
+        XCTAssertEqual(sut.hopGate.pendingCount, 0)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+    }
+
+    // MARK: - 削減下の判定・体験の非回帰 (mainactor-throttle 4.2)
+
+    /// ゲート判定はセッション状態を変えない（集約・配送の選定自体に副作用なし）。
+    func testHopOrder_gateDecisionDoesNotMutateSnapshot() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let before = sut.snapshot
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertNotNil(sut.hopGate.submit(detection: .absent, aspectRatio: 4.0 / 3.0, now: 300.02))
+        XCTAssertEqual(sut.snapshot, before, "受け渡し選定はセッション状態へ副作用を持たない")
+    }
+
+    /// 受け渡し選定は推論間引き計数へ逆流しない（上流計数の独立性）。
+    func testHopOrder_gateDoesNotTouchThrottleCounters() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        let metrics = sut.frameThrottle.snapshot()
+        XCTAssertEqual(metrics.arrivals, 0, "受け渡し選定は到達計数へ触れない")
+        XCTAssertEqual(metrics.inferences, 0, "受け渡し選定は推論計数へ触れない")
+        XCTAssertEqual(metrics.drops, 0, "受け渡し選定は破棄計数へ触れない")
+    }
+
+    /// 削減下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
+    func testHopGatedRate_personMissingGraceSurvivesReduction() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        func feed(_ detection: PoseDetector.Detection) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+                sut.processDetection(pending.detection)
+            }
+        }
+        feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        XCTAssertTrue(sut.snapshot.isPersonDetected)
+
+        // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
+        for _ in 0..<3 {
+            usleep(100_000)
+            feed(.absent)
+        }
+        XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
+
+        // 計0.7秒 → 不在確定
+        for _ in 0..<4 {
+            usleep(100_000)
+            feed(.absent)
+        }
+        XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .personMissing)
+    }
+
+    /// 削減下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
+    func testHopGatedRate_keypointHoldGraceSurvivesReduction() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        func feed(_ detection: PoseDetector.Detection) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+                sut.processDetection(pending.detection)
+            }
+        }
+        feed(.pose(testFrame(shoulderConfidence: 0.9)))
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
+
+        // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
+        for _ in 0..<3 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            feed(.pose(dropped))
+        }
+        XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は削減下でも直近の肩を保持する")
+
+        // 計0.7秒 → 破棄
+        for _ in 0..<4 {
+            usleep(100_000)
+            var dropped = testFrame(shoulderConfidence: 0.9)
+            dropped.leftShoulder = nil
+            feed(.pose(dropped))
+        }
+        XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は削減下でも破棄する")
+    }
+
+    /// 背景移行がゲートの判定状態・スロット・計数を初期化する（requirements 5.4）。
+    func testDidEnterBackground_dispatchesHopReset() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        sut.handleDidEnterBackground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.hopGate.pendingCount, 0, "背景停止でスロットを破棄する")
+        XCTAssertEqual(sut.hopGate.snapshot().submits, 0, "背景停止で計数を初期化する")
+    }
+
+    /// 校正再開がゲート初期化を配送し、フェーズ鏡像を校正中に戻す。
+    func testStartCalibration_resetsHopGateAndRestoresCalibratingMirror() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        let frame = testFrame(shoulderConfidence: 0.9)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
+        XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        sut.startCalibration()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.hopGate.snapshot().submits, 0)
+        XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
+        XCTAssertNotNil(
+            sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.02),
+            "校正中は間隔にかかわらず全量配送する"
+        )
+    }
+
+    /// 受け渡し選定は Motion 起停・暗転表示・推論間引き計数に触れない（requirements 6.3）。
+    func testHopOrder_gateDoesNotTouchMotionDimOrThrottle() {
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertTrue(sut.motionService.isRunning)
+        let frame = testFrame(shoulderConfidence: 0.9)
+        for i in 0..<5 {
+            _ = sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0 + Double(i) * 0.01)
+        }
+        XCTAssertTrue(sut.motionService.isRunning, "受け渡し選定は Motion 起停に触れない")
+        XCTAssertFalse(sut.snapshot.isDimmed, "受け渡し選定は暗転表示に触れない")
+        XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "受け渡し選定は保持重力に触れない")
+        XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "受け渡し選定は推論間引き計数に触れない")
+    }
+    /// 削減下でも猫背3秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
+    /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
+    func testHopGatedRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        for _ in 0..<3 {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+            }
+            usleep(16_666)
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は良好")
+
+        let deadline = Date().addingTimeInterval(15)
+        var processed = 0
+        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.21)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+                processed += 1
+            }
+            usleep(16_666) // 60fps到達の再現（ゲートが10Hzへ間引く）
+        }
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "削減下でも猫背3秒連続で確定する")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertLessThan(processed, 60, "確定は時刻駆動であり削減後の処理回数に依存しない")
+
+        for _ in 0..<5 {
+            if let pending = sut.hopGate.submit(
+                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
+                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
+            ) {
+                sut.processDetection(pending.detection)
+            }
+            usleep(16_666)
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
+        XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
+    }
+
+    // MARK: - 表示専用値の不変書込み省略 (mainactor-throttle 3.2)
+
+    /// 画面比率が不変の場合は書込み（publish）を省略する。
+    func testAspectSkip_unchangedValue_doesNotPublish() {
+        var events: [CGFloat] = []
+        let cancellable = sut.$snapshot.map(\.videoAspectRatio).sink { events.append($0) }
+        XCTAssertEqual(events.count, 1, "購読直後の初期値のみ")
+        sut.applyDeliveredAspectRatio(sut.snapshot.videoAspectRatio)
+        XCTAssertEqual(events.count, 1, "不変時は書込みを省略する")
+        cancellable.cancel()
+    }
+
+    /// 画面比率の変化時は変化後の値で更新する。
+    func testAspectSkip_changedValue_publishesNewValue() {
+        var events: [CGFloat] = []
+        let cancellable = sut.$snapshot.map(\.videoAspectRatio).sink { events.append($0) }
+        sut.applyDeliveredAspectRatio(16.0 / 9.0)
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(Double(events.last ?? 0), 16.0 / 9.0, accuracy: 1e-9)
+        XCTAssertEqual(Double(sut.snapshot.videoAspectRatio), 16.0 / 9.0, accuracy: 1e-9)
+        cancellable.cancel()
+    }
+
+    /// 微小差は不変とみなし、判定が参照する値には触れない。
+    func testAspectSkip_toleranceAndJudgmentUntouched() {
+        XCTAssertFalse(sut.shouldUpdateAspectRatio(sut.snapshot.videoAspectRatio))
+        XCTAssertFalse(sut.shouldUpdateAspectRatio(sut.snapshot.videoAspectRatio + MainHopGate.aspectTolerance / 2))
+        XCTAssertTrue(sut.shouldUpdateAspectRatio(16.0 / 9.0))
+        let before = sut.snapshot.referenceAngle
+        sut.applyDeliveredAspectRatio(16.0 / 9.0)
+        XCTAssertEqual(sut.snapshot.referenceAngle, before, "判定が参照する値には触れない")
     }
 
     /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
