@@ -675,6 +675,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric = nil
         }
 
+        // 最新公開値の読取りに参照記録を付随させる（motion-frequency Task 3・ADR-0023）。
+        // 読取り則は不変（その時点の最新値を使用）。通知漏れがあっても判定には影響しない。
+        let gravityForAnalysis = self.motionService.latestGravityInKeypointSpace
+        self.motionService.noteConsumption(hasValue: gravityForAnalysis != nil)
         let (sample, verdict, resolvedReference) = self.postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: refAngle,
@@ -682,7 +686,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric: distanceMetric,
             slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
             previousNearSide: snapshot.nearSide,
-            gravityInKeypointSpace: self.motionService.latestGravityInKeypointSpace,
+            gravityInKeypointSpace: gravityForAnalysis,
             // 重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため、
             // 直近capture角で重力由来の基準値のみバッファ座標系へ回転させる（未確定時は無回転）。
             captureAngleDegrees: lastKnownCaptureAngle.map { Double($0) },
