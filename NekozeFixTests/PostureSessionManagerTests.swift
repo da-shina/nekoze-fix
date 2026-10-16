@@ -918,6 +918,60 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.referenceAngle, before, "判定が参照する値には触れない")
     }
 
+    // MARK: - 暗転省電力の段階連動 (dim-mode-saving 3.1)
+
+    /// 暗転移行で推論上限・取得頻度の低下指示が適用される（通常15fps/30Hz→暗転10fps/15Hz）。
+    func testEnterDimMode_appliesDimmedStageLowering() {
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "暗転移行で推論上限を低下させる")
+        XCTAssertEqual(sut.motionService.updateFrequency, .fifteenHz, "暗転移行で取得頻度を低下させる")
+    }
+
+    /// 長時間不在段階への遷移で更なる低下指示が適用される（取得頻度15Hz→10Hz、推論上限10fps据置き）。
+    func testDimmedAbsentTick_appliesFurtherLowering() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        // デバウンス猶予（0.5秒）超過まで不在を送り続け、しきい値超過で長時間不在へ進める。
+        for _ in 0..<10 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "長時間不在は推論上限据置き（ADR-0024）")
+        XCTAssertEqual(sut.motionService.updateFrequency, .tenHz, "長時間不在で取得頻度を更に低下させる")
+    }
+
+    /// 暗転解除で推論上限・取得頻度が通常水準に戻る（暗転10fps/15Hz→通常15fps/30Hz）。
+    func testExitDimMode_restoresNormalStageLevels() {
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0)
+        sut.exitDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0, "暗転解除で推論上限を通常へ戻す")
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz, "暗転解除で取得頻度を通常へ戻す")
+    }
+
+    /// 非暗転の監視では不在・検出の入出力があっても上限・頻度に触れない（flag 不要の根拠）。
+    func testNonDimMonitoring_leavesLimitsUntouched() {
+        sut.startMonitoring()
+        sut.processDetection(.absent)
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+    }
+
     /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
     /// DistanceMetricIntegrationTests と同一則（角度0度・距離のみで猫背候補を作る）。
     private func throttledRateFrame(rightEarDistance: Double) -> PoseFrame {

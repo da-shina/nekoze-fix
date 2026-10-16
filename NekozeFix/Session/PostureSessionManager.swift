@@ -423,6 +423,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         savedBrightness = UIScreen.main.brightness
         UIScreen.main.brightness = 0.0
         snapshot.isDimmed = true
+        // 暗転段階へ進め、不在計測を起点からやり直した上で低下指示を適用する。
+        applyDimPowerStage(dimPowerPolicy.dimmed())
         stopMetricsLogging()
     }
 
@@ -434,10 +436,57 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
         savedBrightness = nil
         snapshot.isDimmed = false
+        // 復帰順序は輝度復元→通常段階→上限・頻度戻し（ADR-0024）。起停には触れない。
+        // 3.1 の結線は本経路に留め、全経路の一本化は 3.2 の範囲とする。
+        dimPowerPolicy.restored()
+        applyDimPowerStage(.normal)
         // 監視中ならログ再開（idle 時は startMonitoring で再開される）
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             startMetricsLogging()
         }
+    }
+
+    // MARK: - 暗転省電力の段階連動（dim-mode-saving 3.1）
+
+    /// 省電力段階方針。段階遷移則の所有は本値型に寄せ、
+    /// 推論上限・取得頻度の具体値マッピングは Session 側定数が持つ（ADR-0024）。
+    /// テストは @testable で段階の読取り・しきい値の注入を行う。
+    var dimPowerPolicy = DimPowerPolicy()
+
+    /// 段階別の推論上限マッピング（Session 所有・ADR-0024）。
+    /// 長時間不在は上限据置きで更なる低下は実効実行数に委ねるため暗転と同値。
+    private static func dimStageFPSLimit(for stage: DimPowerStage) -> Double {
+        switch stage {
+        case .normal: return 15.0
+        case .dimmed, .dimmedAbsent: return 10.0
+        }
+    }
+
+    /// 段階別の重力取得頻度マッピング（Session 所有・ADR-0024）。
+    private static func dimStageMotionFrequency(for stage: DimPowerStage) -> MotionUpdateFrequency {
+        switch stage {
+        case .normal: return .thirtyHz
+        case .dimmed: return .fifteenHz
+        case .dimmedAbsent: return .tenHz
+        }
+    }
+
+    /// 推論上限の同期適用コア。呼ぶのは検出キュー相当（`throttleResetQueue`）上のみ。
+    /// 全アクセスは錠で直列化する（`resetDetectionPipelineState` と同一則）。
+    private nonisolated func applyFPSLimitState(_ fps: Double) {
+        throttleLock.withLock { frameThrottle.setLimit(fps) }
+    }
+
+    /// 段階に応じた上限・頻度の切替え指示。
+    /// 推論上限は検出キュー相当へ async 配送し錠下で適用する（判定中の変更を起こさない）。
+    /// 取得頻度は Main から直接指示し、停止中は次回開始時から反映する既存則に従う。
+    /// 起停・開始停止状態には触れない。
+    private func applyDimPowerStage(_ stage: DimPowerStage) {
+        let fps = Self.dimStageFPSLimit(for: stage)
+        throttleResetQueue.async { [weak self] in
+            self?.applyFPSLimitState(fps)
+        }
+        motionService.setUpdateFrequency(Self.dimStageMotionFrequency(for: stage))
     }
 
     // MARK: - プライベートメソッド
@@ -812,6 +861,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
         self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
+
+        // dim-mode-saving 3.1: 不在駆動はデバウンス確定後の人物検出状態のみを入力する
+        // （生検出は使わない）。監視フェーズ以外では不在計測を進めない
+        // （policy 自体はフェーズ非依存）。段階遷移時のみ切替えを指示する。
+        if self.snapshot.phase == .monitoring {
+            let previousStage = dimPowerPolicy.stage
+            let newStage = dimPowerPolicy.tick(isPersonDetected: self.snapshot.isPersonDetected, now: now)
+            if newStage != previousStage {
+                applyDimPowerStage(newStage)
+            }
+        }
 
         if self.snapshot.phase == .calibrating {
             // キャリブレーションロジックに投入 (可視化ポイントも渡す)
