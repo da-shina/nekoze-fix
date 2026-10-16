@@ -358,6 +358,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func startMonitoring() {
         setPhase(.monitoring)
         exitDimMode()
+        restoreDimPowerToNormalIfNeeded() // 監視開始経路での通常戻し（3.2。非暗転時の段階乖離も正す）
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
@@ -374,6 +375,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func stopMonitoring() {
         setPhase(.idle)
         exitDimMode()
+        restoreDimPowerToNormalIfNeeded() // 監視停止経路での通常戻し（3.2。非暗転時の段階乖離も正す）
         settingsStore.isMonitoringEnabled = false
         cameraManager.stop()
         resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
@@ -404,6 +406,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func handleWillEnterForeground() {
         // 復帰後は暗転解除（輝度復元）。監視再開の有無に関わらず行う
         exitDimMode()
+        restoreDimPowerToNormalIfNeeded() // 復帰経路での通常戻し（3.2。再開しない場合も戻す）
         guard settingsStore.isMonitoringEnabled, snapshot.referenceAngle != nil else {
             return // 非監視のまま。不変条件は背面遷移時の setPhase(.idle) で OFF 済み
         }
@@ -437,9 +440,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         savedBrightness = nil
         snapshot.isDimmed = false
         // 復帰順序は輝度復元→通常段階→上限・頻度戻し（ADR-0024）。起停には触れない。
-        // 3.1 の結線は本経路に留め、全経路の一本化は 3.2 の範囲とする。
-        dimPowerPolicy.restored()
-        applyDimPowerStage(.normal)
+        // 全経路の一本化は restoreDimPowerToNormalIfNeeded に寄せる（3.2）。
+        restoreDimPowerToNormalIfNeeded()
         // 監視中ならログ再開（idle 時は startMonitoring で再開される）
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             startMetricsLogging()
@@ -487,6 +489,17 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             self?.applyFPSLimitState(fps)
         }
         motionService.setUpdateFrequency(Self.dimStageMotionFrequency(for: stage))
+    }
+
+    /// 復帰時戻しの一本化（dim-mode-saving 3.2）。
+    /// 暗転解除・監視開始・監視停止・フォアグラウンド復帰の各経路から呼び、
+    /// 段階が通常でなければ通常へ戻して上限・頻度を通常水準へ戻す。
+    /// 輝度・暗転フラグ・センサー起停・フェーズには触れない（輝度復元は exitDimMode が先行して行う）。
+    /// 既に通常なら何もしない（通常経路での Motion 再開などの副作用を起こさない）。
+    private func restoreDimPowerToNormalIfNeeded() {
+        guard dimPowerPolicy.stage != .normal else { return }
+        dimPowerPolicy.restored()
+        applyDimPowerStage(.normal)
     }
 
     // MARK: - プライベートメソッド
