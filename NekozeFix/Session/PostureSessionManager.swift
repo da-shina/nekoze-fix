@@ -495,6 +495,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 計測開始時刻（単調時計）。ログ開始時に記録し、経過秒の基準とする。
     private var metricsStartTime: TimeInterval = 0
 
+    /// 判定分布の窓内計数（motion-frequency 5.1・判定一致検証用）。
+    /// processDetection の確定分岐でのみ加算する（Main系列のみ・錠不要）。
+    /// good/slouchCandidate/insufficientKeypoints＝analyze結果、absent/personOnly＝早期復帰。
+    private var windowJudgeGood = 0
+    private var windowJudgeSlouch = 0
+    private var windowJudgeInsufficient = 0
+    private var windowJudgeAbsent = 0
+    private var windowJudgePersonOnly = 0
+
     /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
     /// Timer 稼働中は何もしない（区間の二重開始を防ぐ）。
     /// 開始時刻と計数を同一区間にそろえる（レビュー指摘 4241621573 対応）。
@@ -502,6 +511,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         guard metricsLogTimer == nil else { return }
         metricsStartTime = CACurrentMediaTime()
         throttleLock.withLock { frameThrottle.resetCounts() }
+        windowJudgeGood = 0
+        windowJudgeSlouch = 0
+        windowJudgeInsufficient = 0
+        windowJudgeAbsent = 0
+        windowJudgePersonOnly = 0
         motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -537,8 +551,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 次窓の計測を直ちに再開する（計測は取得・判定に影響しない）。
         let motion = motionService.stopMeasuring()
         motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
+        // 判定分布の窓内計数を読取り・初期化する（motion-frequency 5.1・判定一致検証用）。
+        let judge = "g\(windowJudgeGood)/s\(windowJudgeSlouch)/i\(windowJudgeInsufficient)/a\(windowJudgeAbsent)/p\(windowJudgePersonOnly)"
+        windowJudgeGood = 0
+        windowJudgeSlouch = 0
+        windowJudgeInsufficient = 0
+        windowJudgeAbsent = 0
+        windowJudgePersonOnly = 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.visibleUpdateCount) motionReads=\(motion.readCount) motionInvalid=\(motion.invalidReadCount) motionNote=\(motion.conditionNote)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.visibleUpdateCount) motionReads=\(motion.readCount) motionInvalid=\(motion.invalidReadCount) motionNote=\(motion.conditionNote) judge=\(judge)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -615,6 +636,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
+            windowJudgeAbsent += 1
             // ホールドも破棄する。不在前の点を直後の .pose に補完すると、
             // 別人物の耳と肩で判定してしまう。
             lastHeldKeypoints = [nil, nil, nil, nil]
@@ -627,6 +649,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 肩欠測デバウンス: 猶予期間内は前回の可視化ポイントを維持し
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(var frame) = detection else {
+            windowJudgePersonOnly += 1
             let now = CACurrentMediaTime()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false
@@ -699,6 +722,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 注入なしでは Analyzer 内の 0.3 既定がランドスケープ緩和を無効化する）。
             minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
         )
+        // 判定分布の窓内計数（motion-frequency 5.1）。
+        switch verdict {
+        case .good:
+            windowJudgeGood += 1
+        case .slouchCandidate:
+            windowJudgeSlouch += 1
+        case .insufficientKeypoints:
+            windowJudgeInsufficient += 1
+        }
         // 判定が返した基準線ベクトルを表示へ受渡しする（単一解決、二重解決なし）。
         // analyze 済みでバッファ座標系（y上向き）の方向であり、変換は Overlay 側で点列と同一係数にて行う。
         // monitoring中は校正完了時点の向きに凍結し、人物ありの毎フレーム上書きによる微振動を防ぐ。
@@ -866,6 +898,35 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referencePoints = referencePoints
         snapshot.calibrationReferenceSource = referenceSource
         updateGuideParameters()
+        startFreqCycleIfEnabled() // MEASURE-TEMP2: 同一run内周波数サイクル（計測後に撤去）
+    }
+
+    /// 同一run内周波数サイクル（motion-frequency 5.1再検証用・TEMP）。
+    /// `-measureFreqCycle` 付き起動でのみ動作する。校正完了を起点に
+    /// 30→15→10→15→30Hzへ70秒ごとに切替え、各切替えをログに刻む。
+    /// 同一校正基準・同一姿勢を3周波数で共有し、周波数効果を分離する。
+    /// 計測後に本体ごと撤去する（呼出し側1行を含む）。
+    private var freqCycleStarted = false
+    private func startFreqCycleIfEnabled() {
+        guard !freqCycleStarted else { return }
+        guard ProcessInfo.processInfo.arguments.contains(where: { $0.contains("measureFreqCycle") }) else { return }
+        freqCycleStarted = true
+        print("[NekozeFix FreqCycle] step=0 freq=30Hz")
+        let steps: [(TimeInterval, MotionUpdateFrequency)] = [(70, .fifteenHz), (70, .tenHz), (70, .fifteenHz), (70, .thirtyHz)]
+        var delay: TimeInterval = 70
+        for (index, step) in steps.enumerated() {
+            Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.motionService.setUpdateFrequency(step.1)
+                    print("[NekozeFix FreqCycle] step=\(index + 1) freq=\(step.1.shortLabel)")
+                }
+            }
+            delay += step.0
+        }
+        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
+            print("[NekozeFix FreqCycle] done")
+        }
     }
 
     /// 向き別の信頼度でキーポイントを落とす（ランドスケープは緩め。要件4.6）。
