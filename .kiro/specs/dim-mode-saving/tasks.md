@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 先行条件確認と検証基盤の準備
-- [ ] 1.1 上流受口の実装状態確認と合否記録
+- [x] 1.1 上流受口の実装状態確認と合否記録
   - 推論上限変更の受口（`FrameThrottle.setLimit(_:)`・fps側で追加）とセンサー頻度設定の受口（受動公開pull一本化・motion側で修正）が実装済みか確認する
   - motion-frequencyの完了を確認し、未完了の場合は本機能の実装に入らず先行完了を待つ旨を記録する
   - `PostureSessionManager.swift` の適用順（fps→mainactor→motion→dim）に従い、本specの編集が最後であることを確認する
