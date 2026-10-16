@@ -10,7 +10,7 @@
   - _Requirements: 2.1, 3.1_
 
 - [ ] 2. 段階管理と頻度連動の実装
-- [ ] 2.1 (P) 省電力段階方針の実装
+- [x] 2.1 (P) 省電力段階方針の実装
   - 通常・暗転・長時間不在の段階定義と遷移判定・復帰則・不在しきい値（単位: 秒・基準時計: 単調時刻系 `TimeInterval`）を実装する
   - `tick(isPersonDetected:now:)` の `now` は `TimeInterval`（`FrameThrottle`／MainHopGateと同一時計）とし、`Date` を用いない
   - 段階遷移の入力を暗転操作と検出結果のみに限定する
