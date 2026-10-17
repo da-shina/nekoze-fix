@@ -23,7 +23,7 @@ final class MotionService {
     static let holdDuration = 0.5
     /// 実質同一判定の許容差（単位ベクトルのユークリッド距離）。
     /// 暫定値。事前分布計測 `00-gravity-noise`（ノイズp99 < ε < 動作p5）で確定する（ADR-0023）。
-    static let equalityTolerance = 1e-4
+    nonisolated static let equalityTolerance = 1e-4
 
     /// キーポイント空間に変換済みの最新重力（単位化済み）または nil。
     /// 公開値（受動公開・pull）。nil は代替解決への合図。テストは @testable で直接代入する。

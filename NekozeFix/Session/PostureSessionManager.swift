@@ -498,7 +498,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 既に通常なら何もしない（通常経路での Motion 再開などの副作用を起こさない）。
     private func restoreDimPowerToNormalIfNeeded() {
         guard dimPowerPolicy.stage != .normal else { return }
-        dimPowerPolicy.restored()
+        _ = dimPowerPolicy.restored()
         applyDimPowerStage(.normal)
     }
 
