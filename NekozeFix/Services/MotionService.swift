@@ -29,8 +29,8 @@ final class MotionService {
     /// 公開値（受動公開・pull）。nil は代替解決への合図。テストは @testable で直接代入する。
     var latestGravityInKeypointSpace: SIMD2<Double>?
 
-    /// 重力取得頻度の設定（内部保持、既定は毎秒30回）。許可値は3値enumに閉じる。
-    private(set) var updateFrequency: MotionUpdateFrequency = .thirtyHz
+    /// 重力取得頻度の設定（内部保持、既定は毎秒15回）。許可値は3値enumに閉じる。
+    private(set) var updateFrequency: MotionUpdateFrequency = .fifteenHz
 
     private let motionManager = CMMotionManager()
     private let motionQueue: OperationQueue = {
@@ -52,13 +52,23 @@ final class MotionService {
         let lock = NSLock()
         var lastSent: SIMD2<Double>?
         var measuring = false
-        var measureFrequency: MotionUpdateFrequency = .thirtyHz
+        var measureFrequency: MotionUpdateFrequency = .fifteenHz
         var measureStart: Date?
         var measureNote = ""
         var sampleCount = 0
-        var visibleCount = 0
-        var readCount = 0
-        var invalidReadCount = 0
+        var dispatchCount = 0
+        var consumptionCount = 0
+        var invalidCount = 0
+
+        /// 計測中の公開値書換えを数える（ingest内3箇所の重複形の集約）。
+        /// 錠の取得まで含むため、呼出し側でlockを取ってはならない。
+        func bumpDispatchIfMeasuring() {
+            lock.withLock {
+                if measuring {
+                    dispatchCount += 1
+                }
+            }
+        }
     }
 
     private let shared = SharedState()
@@ -139,9 +149,9 @@ final class MotionService {
             shared.measureStart = Date()
             shared.measureNote = note
             shared.sampleCount = 0
-            shared.visibleCount = 0
-            shared.readCount = 0
-            shared.invalidReadCount = 0
+            shared.dispatchCount = 0
+            shared.consumptionCount = 0
+            shared.invalidCount = 0
         }
     }
 
@@ -159,9 +169,9 @@ final class MotionService {
                 frequency: shared.measureFrequency,
                 duration: duration,
                 sampleCount: shared.sampleCount,
-                visibleUpdateCount: shared.visibleCount,
-                readCount: shared.readCount,
-                invalidReadCount: shared.invalidReadCount,
+                dispatchCount: shared.dispatchCount,
+                consumptionCount: shared.consumptionCount,
+                invalidCount: shared.invalidCount,
                 conditionNote: shared.measureNote
             )
             shared.measuring = false
@@ -175,9 +185,9 @@ final class MotionService {
     func noteConsumption(hasValue: Bool) {
         shared.lock.withLock {
             guard shared.measuring else { return }
-            shared.readCount += 1
+            shared.consumptionCount += 1
             if !hasValue {
-                shared.invalidReadCount += 1
+                shared.invalidCount += 1
             }
         }
     }
@@ -245,11 +255,7 @@ final class MotionService {
                 return
             }
             latestGravityInKeypointSpace = converted
-            shared.lock.withLock {
-                if shared.measuring {
-                    shared.visibleCount += 1
-                }
-            }
+            shared.bumpDispatchIfMeasuring()
             return
         }
         guard let last = lastValidVector,
@@ -258,11 +264,7 @@ final class MotionService {
             let hadValue = latestGravityInKeypointSpace != nil
             latestGravityInKeypointSpace = nil
             if hadValue {
-                shared.lock.withLock {
-                    if shared.measuring {
-                        shared.visibleCount += 1
-                    }
-                }
+                shared.bumpDispatchIfMeasuring()
             }
             return
         }
@@ -272,10 +274,6 @@ final class MotionService {
             return
         }
         latestGravityInKeypointSpace = last
-        shared.lock.withLock {
-            if shared.measuring {
-                shared.visibleCount += 1
-            }
-        }
+        shared.bumpDispatchIfMeasuring()
     }
 }

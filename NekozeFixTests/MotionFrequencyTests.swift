@@ -1,4 +1,5 @@
 import XCTest
+import CoreMotion
 @testable import NekozeFix
 
 /// motion-frequency Task 4.1: 頻度設定・公開値更新抑制則・計測カウンタの新規検証。
@@ -22,7 +23,7 @@ final class MotionFrequencyTests: XCTestCase {
 
     // MARK: - Task 1: 値オブジェクト
 
-    /// 取得頻度候補と取得間隔の対応。既定は毎秒30回。
+    /// 取得頻度候補と取得間隔の対応。既定は毎秒15回。
     func testFrequency_Intervals_MatchCandidates() {
         XCTAssertEqual(MotionUpdateFrequency.thirtyHz.interval, 1.0 / 30.0, accuracy: 1e-12)
         XCTAssertEqual(MotionUpdateFrequency.fifteenHz.interval, 1.0 / 15.0, accuracy: 1e-12)
@@ -31,9 +32,9 @@ final class MotionFrequencyTests: XCTestCase {
 
     // MARK: - Task 2.1: 取得間隔の内部設定化
 
-    /// 既定の取得頻度は毎秒30回。
-    func testDefaultFrequency_IsThirtyHz() {
-        XCTAssertEqual(service.updateFrequency, .thirtyHz)
+    /// 既定の取得頻度は毎秒15回（暫定採用）。
+    func testDefaultFrequency_IsFifteenHz() {
+        XCTAssertEqual(service.updateFrequency, .fifteenHz)
     }
 
     /// 設定は保持され、停止中は次回開始時まで取得に影響しない（isRunning不変）。
@@ -66,7 +67,7 @@ final class MotionFrequencyTests: XCTestCase {
         service.ingest(converted: near, now: t0.addingTimeInterval(0.01))
         XCTAssertEqual(service.latestGravityInKeypointSpace, v)
         let m = service.stopMeasuring()
-        XCTAssertEqual(m.visibleUpdateCount, 1)
+        XCTAssertEqual(m.dispatchCount, 1)
     }
 
     /// 値の変化時は必ず公開値を更新する。
@@ -77,7 +78,7 @@ final class MotionFrequencyTests: XCTestCase {
         service.ingest(converted: SIMD2<Double>(-0.6, 0.8), now: t0.addingTimeInterval(0.01))
         XCTAssertEqual(service.latestGravityInKeypointSpace, SIMD2<Double>(-0.6, 0.8))
         let m = service.stopMeasuring()
-        XCTAssertEqual(m.visibleUpdateCount, 2)
+        XCTAssertEqual(m.dispatchCount, 2)
     }
 
     /// 有効→無効の状態変化時は必ず公開値を更新する（ホールド超過でnil）。
@@ -88,7 +89,7 @@ final class MotionFrequencyTests: XCTestCase {
         service.ingest(converted: nil, now: t0.addingTimeInterval(0.6))
         XCTAssertNil(service.latestGravityInKeypointSpace)
         let m = service.stopMeasuring()
-        XCTAssertEqual(m.visibleUpdateCount, 2)
+        XCTAssertEqual(m.dispatchCount, 2)
     }
 
     /// 実質同一判定の境界（許容差未満は同一、以上は変化）。
@@ -144,13 +145,13 @@ final class MotionFrequencyTests: XCTestCase {
         service.noteConsumption(hasValue: true)
         service.noteConsumption(hasValue: false)
         let m = service.stopMeasuring()
-        XCTAssertEqual(m.frequency, .thirtyHz)
+        XCTAssertEqual(m.frequency, .fifteenHz)
         XCTAssertGreaterThanOrEqual(m.duration, 0)
         // sampleCountは端末到着のみ数えるため直接ingestでは増えない。
         XCTAssertEqual(m.sampleCount, 0)
-        XCTAssertEqual(m.visibleUpdateCount, 1)
-        XCTAssertEqual(m.readCount, 3)
-        XCTAssertEqual(m.invalidReadCount, 1)
+        XCTAssertEqual(m.dispatchCount, 1)
+        XCTAssertEqual(m.consumptionCount, 3)
+        XCTAssertEqual(m.invalidCount, 1)
         XCTAssertEqual(m.conditionNote, "monitoring・portrait・5s")
     }
 
@@ -159,7 +160,7 @@ final class MotionFrequencyTests: XCTestCase {
         let t0 = Date(timeIntervalSince1970: 3_000_000)
         let m = service.stopMeasuring()
         XCTAssertEqual(m.sampleCount, 0)
-        XCTAssertEqual(m.visibleUpdateCount, 0)
+        XCTAssertEqual(m.dispatchCount, 0)
         service.ingest(converted: SIMD2<Double>(0, 1), now: t0)
         XCTAssertEqual(service.latestGravityInKeypointSpace, SIMD2<Double>(0, 1))
     }
@@ -172,7 +173,7 @@ final class MotionFrequencyTests: XCTestCase {
         service.startMeasuring(note: "second")
         let m = service.stopMeasuring()
         XCTAssertEqual(m.conditionNote, "second")
-        XCTAssertEqual(m.visibleUpdateCount, 0)
+        XCTAssertEqual(m.dispatchCount, 0)
     }
 
     /// 計測状態は取得・判定の動作に影響しない（停止後もingest解決は不変）。
@@ -185,5 +186,39 @@ final class MotionFrequencyTests: XCTestCase {
         _ = service.stopMeasuring()
         service.ingest(converted: nil, now: t0.addingTimeInterval(0.6))
         XCTAssertNil(service.latestGravityInKeypointSpace)
+    }
+
+    /// 許可外の生値は型で排除される（3値closed enum）。実行時の受付パスは存在せず、
+    /// 既定.fifteenHzの維持は型で保証される（design.md型排除則）。
+    func testFrequency_InvalidRawValue_IsUnrepresentable() {
+        XCTAssertNil(MotionUpdateFrequency(rawValue: 20))
+        XCTAssertNil(MotionUpdateFrequency(rawValue: 0))
+        XCTAssertEqual(service.updateFrequency, .fifteenHz)
+    }
+
+    /// 既存回帰の全頻度パラメタ化（Task 4.2のコード側証跡）。
+    /// 保持境界・変換・平置き無効・起停が30/15/10Hzの各設定で同一に振る舞う。
+    /// 動作中の設定変更は即時再開扱いでも起停状態を保つ（ADR-0023即時再開則）。
+    func testAllFrequencies_HoldConvertInvalidAndLifecycleBehaveIdentically() {
+        let vector = SIMD2<Double>(0.6, 0.8)
+        for frequency in [MotionUpdateFrequency.thirtyHz, .fifteenHz, .tenHz] {
+            service.start()
+            XCTAssertTrue(service.isRunning)
+            service.setUpdateFrequency(frequency)
+            XCTAssertEqual(service.updateFrequency, frequency)
+            XCTAssertTrue(service.isRunning)
+            XCTAssertEqual(frequency.interval, 1.0 / frequency.rawValue, accuracy: 1e-12)
+            let t0 = Date(timeIntervalSince1970: 4_000_000)
+            service.ingest(converted: vector, now: t0)
+            XCTAssertEqual(service.latestGravityInKeypointSpace, vector)
+            service.ingest(converted: nil, now: t0.addingTimeInterval(0.3))
+            XCTAssertEqual(service.latestGravityInKeypointSpace, vector)
+            service.ingest(converted: nil, now: t0.addingTimeInterval(0.6))
+            XCTAssertNil(service.latestGravityInKeypointSpace)
+            XCTAssertNil(MotionService.convert(gravity: CMAcceleration(x: 0, y: 0, z: 1)))
+            service.stop()
+            XCTAssertFalse(service.isRunning)
+            XCTAssertNil(service.latestGravityInKeypointSpace)
+        }
     }
 }

@@ -9,7 +9,7 @@
 
 ### Goals
 - 重力更新の取得回数と判定での利用回数を独立に計測できる
-- 取得間隔を比較候補（毎秒30回・15回・10回）の範囲で設定でき、既定は毎秒30回とする
+- 取得間隔を比較候補（毎秒30回・15回・10回）の範囲で設定でき、既定は毎秒15回とする（暫定採用。選定経緯はADR-0023選定結果）
 - 実質同一の受信値は読取り側可視値の更新を抑制し、変化時と状態変化時は必ず可視値を更新する（受動公開・pull）
 - 垂直補正・回転・鏡像・代替鎖・起停の既存振る舞いを維持し、回帰で確認する
 - 選定と比較の根拠を実測値のみで記録し、未計測項目を明記する
@@ -119,7 +119,7 @@ sequenceDiagram
     Analyzer -->> Session: 判定と基準線
 ```
 
-本specは受動公開（pull）に一本化する。MotionからSessionへの変化通知は行わない（Outboundなし）。省略とは通知抑制ではなく、読取り側可視値の更新抑制を指す。Sessionはフレーム処理ごとに最新可視値を読取り（poll）、同一可視値の場合は追加処理を起こさないことで鮮度維持と削減を両立する。無効値の扱いと代替鎖への退行は既存則のままとする。dim-mode-saving側の連動前提：頻度切替えは `setUpdateFrequency` による間隔設定のみで行い、可視値の更新タイミングや通知有無に依存しない。設定は次回開始時から反映される。
+本specは受動公開（pull）に一本化する。MotionからSessionへの変化通知は行わない（Outboundなし）。省略とは通知抑制ではなく、読取り側可視値の更新抑制を指す。Sessionはフレーム処理ごとに最新可視値を読取り（poll）、同一可視値の場合は重力由来の追加処理（background hop・公開値書換え・表示更新）を起こさないことで鮮度維持と削減を両立する（Req 3.3の「追加処理」は重力到着を契機とする処理を指し、映像フレーム駆動のanalyze自体は毎フレーム実行する）。無効値の扱いと代替鎖への退行は既存則のままとする。dim-mode-saving側の連動前提：頻度切替えは `setUpdateFrequency` による間隔設定のみで行い、可視値の更新タイミングや通知有無に依存しない。設定は停止中なら次回開始時から、動作中なら即時再開（stop→新間隔→start）で反映される（ADR-0023即時再開則）。
 
 ```mermaid
 stateDiagram-v2
@@ -191,7 +191,7 @@ stateDiagram-v2
 | Requirements | 1.1, 1.2, 1.3, 2.1, 2.3, 2.4, 3.1, 3.3, 3.4, 5.6, 6.5, 7.3, 7.4 |
 
 **Responsibilities & Constraints**
-- 取得間隔の内部保持と許可値検証（毎秒30回・15回・10回のみ、既定は毎秒30回）
+- 取得間隔の内部保持と許可値検証（毎秒30回・15回・10回のみ、既定は毎秒15回）
 - 受信値の許容差付き比較による可視値の更新抑制（変化時と有効無効の状態変化時は無条件で可視値を更新する。Sessionへの変化通知は行わない）
 - 受信・可視値更新・消費参照・無効参照の区間計測（メモリ内のみ、永続化なし）
 - 保持・変換・起停の既存契約の維持（本拡張は契約を追加するのみで既存則を変更しない）
@@ -229,8 +229,8 @@ final class MotionService {
     func noteConsumption(hasValue: Bool)
 }
 ```
-- Preconditions: 許可外の間隔値は受け付けず既定を維持する。計測は監視動作中に区切る
-- Postconditions: 設定後は次回開始時から新間隔で取得する。同一値の可視値更新抑制は判定結果を変えない
+- Preconditions: 許可値は3値enumに閉じるため許可外値は型で排除される（実行時の受付パスなし）。既定は毎秒15回（暫定採用）。計測は監視動作中に区切る
+- Postconditions: 停止中の設定は次回開始時から、動作中の設定は即時再開（stop→新間隔→start）で新間隔を取得に反映する。同一値の可視値更新抑制は判定結果を変えない
 - Invariants: 保持期間・変換式・nil 合図の意味は不変。計測値は実測のみを含み推定値を含まない
 
 **Implementation Notes**
@@ -276,7 +276,7 @@ final class MotionService {
 
 ### Logical Data Model
 **Structure Definition**:
-- 取得頻度：毎秒30回・15回・10回の列挙と取得間隔の対応（既定は毎秒30回）
+- 取得頻度：毎秒30回・15回・10回の列挙と取得間隔の対応（既定は毎秒15回）
 - 計測結果：頻度・計測期間・受信回数・可視値更新回数（dispatchCount）・消費参照回数・無効参照回数・計測条件の記録
 
 **Consistency & Integrity**:
@@ -288,6 +288,8 @@ final class MotionService {
 ### Data Contracts & Integration
 **API Data Transfer**
 - 計測結果の受渡しは Types の値オブジェクトにより行い、層方向（Services → Session の読取り、所有は Services）を守る
+- ログ行上のキー（`motionSamples`/`motionVisible`/`motionReads`/`motionInvalid`）はADR-0023定義のserialize形であり、`sampleCount`/`dispatchCount`/`consumptionCount`/`invalidCount`に対応する。キー名は計測記録（measurements.md）との連続性のため変更しない
+- 映像フレーム処理回数はFrameThrottleの`arrivals`/`inferences`/`drops`で独立に記録し、同一`[NekozeFix Metrics]`行に同梱する（Req 1.2の対応付け。重力系4数と同一窓・同一行で対照できる）
 
 ## Error Handling
 
@@ -296,7 +298,7 @@ final class MotionService {
 
 ### Error Categories and Responses
 - 取得不可（未対応端末・権限拒否・平置き・変換失敗）→ nil 継続と代替鎖への退行（既存則のまま）
-- 許可外の頻度指定 → 既定（毎秒30回）を維持し、頻度変更を追加しない
+- 許可外の頻度指定 → 3値enumで型排除されるため実行時の受付は発生せず、既定（毎秒15回）を維持する
 - 計測区間の不整合（未開始の終了・二重開始）→ 計測のみ無効とし、取得・判定には影響させない
 - 停止・背景移行 → 保持値破棄と nil 扱い（既存則のまま）
 

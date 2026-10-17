@@ -549,6 +549,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         let inferenceResidual = max(0, frameInterval - avgInferenceTime)
         // motion-frequency区間計測（ADR-0023）: 本5秒窓の受信・公開値更新・読取りを同梱し、
         // 次窓の計測を直ちに再開する（計測は取得・判定に影響しない）。
+        // ログキーはADR-0023定義のserialize形（motionSamples/motionVisible/motionReads/motionInvalid）
+        // であり、struct側 sampleCount/dispatchCount/consumptionCount/invalidCount に対応する。
+        // キー名は計測記録（measurements.md）との連続性のため変更しない。
         let motion = motionService.stopMeasuring()
         motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
         // 判定分布の窓内計数を読取り・初期化する（motion-frequency 5.1・判定一致検証用）。
@@ -559,7 +562,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         windowJudgeAbsent = 0
         windowJudgePersonOnly = 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.visibleUpdateCount) motionReads=\(motion.readCount) motionInvalid=\(motion.invalidReadCount) motionNote=\(motion.conditionNote) judge=\(judge)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -704,7 +707,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
 
         // 最新公開値の読取りに参照記録を付随させる（motion-frequency Task 3・ADR-0023）。
-        // 読取り則は不変（その時点の最新値を使用）。通知漏れがあっても判定には影響しない。
+        // 読取り則は不変（その時点の最新公開値を使用）。通知漏れがあっても判定には影響しない。
         let gravityForAnalysis = self.motionService.latestGravityInKeypointSpace
         self.motionService.noteConsumption(hasValue: gravityForAnalysis != nil)
         let (sample, verdict, resolvedReference) = self.postureAnalyzer.analyze(
@@ -898,35 +901,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referencePoints = referencePoints
         snapshot.calibrationReferenceSource = referenceSource
         updateGuideParameters()
-        startFreqCycleIfEnabled() // MEASURE-TEMP2: 同一run内周波数サイクル（計測後に撤去）
-    }
-
-    /// 同一run内周波数サイクル（motion-frequency 5.1再検証用・TEMP）。
-    /// `-measureFreqCycle` 付き起動でのみ動作する。校正完了を起点に
-    /// 30→15→10→15→30Hzへ70秒ごとに切替え、各切替えをログに刻む。
-    /// 同一校正基準・同一姿勢を3周波数で共有し、周波数効果を分離する。
-    /// 計測後に本体ごと撤去する（呼出し側1行を含む）。
-    private var freqCycleStarted = false
-    private func startFreqCycleIfEnabled() {
-        guard !freqCycleStarted else { return }
-        guard ProcessInfo.processInfo.arguments.contains(where: { $0.contains("measureFreqCycle") }) else { return }
-        freqCycleStarted = true
-        print("[NekozeFix FreqCycle] step=0 freq=30Hz")
-        let steps: [(TimeInterval, MotionUpdateFrequency)] = [(70, .fifteenHz), (70, .tenHz), (70, .fifteenHz), (70, .thirtyHz)]
-        var delay: TimeInterval = 70
-        for (index, step) in steps.enumerated() {
-            Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.motionService.setUpdateFrequency(step.1)
-                    print("[NekozeFix FreqCycle] step=\(index + 1) freq=\(step.1.shortLabel)")
-                }
-            }
-            delay += step.0
-        }
-        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in
-            print("[NekozeFix FreqCycle] done")
-        }
     }
 
     /// 向き別の信頼度でキーポイントを落とす（ランドスケープは緩め。要件4.6）。

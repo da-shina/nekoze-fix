@@ -195,7 +195,7 @@ func keypointConfidenceThreshold(isLandscape: Bool) -> Double {
 }
 
 /// 重力取得頻度の候補（motion-frequency Task 1・ADR-0023）。
-/// 許可値は比較候補の3値に閉じる。既定は毎秒30回（現状維持）。
+/// 許可値は比較候補の3値に閉じる。既定は毎秒15回（暫定採用。選定経緯はADR-0023選定結果）。
 enum MotionUpdateFrequency: Double, Equatable {
     case thirtyHz = 30
     case fifteenHz = 15
@@ -221,11 +221,14 @@ struct MotionFrequencyMeasurement: Equatable {
     /// 受信回数（端末計測機能からのサンプル到着）
     let sampleCount: Int
     /// 公開値更新回数（実質変化・状態変化による `latestGravityInKeypointSpace` の書替え）
-    let visibleUpdateCount: Int
+    /// ログ行上のキーは `motionVisible`（ADR-0023定義のserialize形）。
+    let dispatchCount: Int
     /// 読取り参照回数（Session の判定読取りに付随した参照記録）
-    let readCount: Int
+    /// ログ行上のキーは `motionReads`。
+    let consumptionCount: Int
     /// 無効参照回数（読取り時に公開値が nil だった回数）
-    let invalidReadCount: Int
+    /// ログ行上のキーは `motionInvalid`。
+    let invalidCount: Int
     /// 計測条件（監視状態・端末向き・計測期間の付記）
     let conditionNote: String
 }
