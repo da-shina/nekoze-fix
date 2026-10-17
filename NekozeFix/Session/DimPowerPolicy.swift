@@ -68,7 +68,6 @@ struct DimPowerPolicy: Equatable {
             }
             return stage
         }
-        guard stage == .dimmed || stage == .dimmedAbsent else { return stage }
         guard stage == .dimmed else { return stage }
         guard let start = absentStart else {
             absentStart = now
