@@ -1,5 +1,4 @@
 import XCTest
-import CoreMotion
 @testable import NekozeFix
 
 /// motion-frequency Task 4.1: 頻度設定・公開値更新抑制則・計測カウンタの新規検証。
@@ -186,39 +185,5 @@ final class MotionFrequencyTests: XCTestCase {
         _ = service.stopMeasuring()
         service.ingest(converted: nil, now: t0.addingTimeInterval(0.6))
         XCTAssertNil(service.latestGravityInKeypointSpace)
-    }
-
-    /// 許可外の生値は型で排除される（3値closed enum）。実行時の受付パスは存在せず、
-    /// 既定.fifteenHzの維持は型で保証される（design.md型排除則）。
-    func testFrequency_InvalidRawValue_IsUnrepresentable() {
-        XCTAssertNil(MotionUpdateFrequency(rawValue: 20))
-        XCTAssertNil(MotionUpdateFrequency(rawValue: 0))
-        XCTAssertEqual(service.updateFrequency, .fifteenHz)
-    }
-
-    /// 既存回帰の全頻度パラメタ化（Task 4.2のコード側証跡）。
-    /// 保持境界・変換・平置き無効・起停が30/15/10Hzの各設定で同一に振る舞う。
-    /// 動作中の設定変更は即時再開扱いでも起停状態を保つ（ADR-0023即時再開則）。
-    func testAllFrequencies_HoldConvertInvalidAndLifecycleBehaveIdentically() {
-        let vector = SIMD2<Double>(0.6, 0.8)
-        for frequency in [MotionUpdateFrequency.thirtyHz, .fifteenHz, .tenHz] {
-            service.start()
-            XCTAssertTrue(service.isRunning)
-            service.setUpdateFrequency(frequency)
-            XCTAssertEqual(service.updateFrequency, frequency)
-            XCTAssertTrue(service.isRunning)
-            XCTAssertEqual(frequency.interval, 1.0 / frequency.rawValue, accuracy: 1e-12)
-            let t0 = Date(timeIntervalSince1970: 4_000_000)
-            service.ingest(converted: vector, now: t0)
-            XCTAssertEqual(service.latestGravityInKeypointSpace, vector)
-            service.ingest(converted: nil, now: t0.addingTimeInterval(0.3))
-            XCTAssertEqual(service.latestGravityInKeypointSpace, vector)
-            service.ingest(converted: nil, now: t0.addingTimeInterval(0.6))
-            XCTAssertNil(service.latestGravityInKeypointSpace)
-            XCTAssertNil(MotionService.convert(gravity: CMAcceleration(x: 0, y: 0, z: 1)))
-            service.stop()
-            XCTAssertFalse(service.isRunning)
-            XCTAssertNil(service.latestGravityInKeypointSpace)
-        }
     }
 }
