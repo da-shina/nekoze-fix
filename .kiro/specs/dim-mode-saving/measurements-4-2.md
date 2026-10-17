@@ -149,3 +149,4 @@ Energy Impact の相対比較は同一端末・同一セッション内でのみ
 - `docs/adr/0025-energy-impact-as-power-measurement.md`（電力の実測手段：Energy Impact の採用と制約）
 - task 4.1 評価記録 `camera-stop-evaluation-4-1.md`（暗転中のカメラ取得継続・停止経路なしの根拠）
 - 実測ログ: `/tmp/nekoze-measure/08-dim-normal.log`（通常）、`/tmp/nekoze-measure/08-dim-dim.log`（暗転・長時間不在・復帰）
+- task 4.2 付随記録 `absent-vision-cost-4-2.md`（長時間不在時の Vision 負荷調査。別spec提案を含む）
