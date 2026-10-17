@@ -64,7 +64,7 @@
 - [ ] 4.2 条件別の実測記録と低減確認
   - 条件名は通常・暗転・長時間不在・復帰直後・長時間監視に固定し、各条件で電力・復帰時間・精度を実測記録する（4spec共通の正準雛形は本specのdesign Testing Strategyに集約し、将来参照用とする。現時点で他specからの参照はなく、後続で他specに参照1行追加が必要）
   - 記録雛形（条件／電力／復帰時間／精度／比較根拠。測定できない項目は未計測と明記）に従い記録する
-  - 実測値に基づき暗転時の低減を確認し、推定値を含めない（電力は Xcode 実機 Debug navigator の Energy Impact 指標を実測値として用いる。ADR-0025）
+  - 実測値に基づき暗転時の低減を確認し、推定値を含めない（電力は Xcode Energy Report の Average Energy Impact ゲージ評価＋Average Component Utilization の領域別%を実測値として用いる。ADR-0025）
   - 測定できない項目を未計測として明記した記録が残る
-  - 進捗: 実機（iPhone 13 mini / iOS 18.7.7）で通常・暗転・長時間不在・復帰の段階切替えと判定分布を観測し `measurements-4-2.md` へ記録済み（暗転中のログ停止回避のため計測専用の一時配線を使用し、計測後に復元・未コミット）。電力は Xcode 実機 Debug navigator の Energy Impact を実測手段として採用（ADR-0025）し、実機取得は未実施。復帰時間・検出精度・長時間監視は未計測。実測に基づく低減確認は未完了（Requirement 8.1/8.2 は未検証）。長時間不在では顔フォールバック（ADR-0021）により推論あたり Vision 時間が約2倍になり、Vision 負荷では「更なる低下」(Req 2.2) が成立しないことを実測（`absent-vision-cost-4-2.md`。対策は別spec提案）。
+  - 進捗: 実機（iPhone 13 mini / iOS 18.7.7）で通常・暗転・長時間不在・復帰の段階切替えと判定分布を観測し `measurements-4-2.md` へ記録済み（暗転中のログ停止回避のため計測専用の一時配線を使用し、計測後に復元・未コミット）。電力は Xcode Energy Report の Average Energy Impact ゲージ評価＋Average Component Utilization の領域別%を実測手段として採用（ADR-0025）。通常・暗転の電力は同一セッションで実測済み（通常: ゲージ Low／Overhead 0%・CPU 19〜21%・GPU 0.8%・Network 0%・Display 15% → 暗転: ゲージ Low／Overhead 0%・CPU 16〜19%・GPU 4.2〜4.4%・Network 0%・Display 2.6〜2.8%）。主要な消費領域 Display の大幅低下（15%→2.7%）と CPU 微減に基づき低減を確認（ゲージ評価は両者 Low、GPU は上昇）。長時間不在・復帰直後は CPU成分のみ実測（セッション1。37〜39%／19〜21%）、長時間監視の電力と全条件の復帰時間・検出精度は未計測。長時間不在では顔フォールバック（ADR-0021）により推論あたり Vision 時間が約2倍になり、Vision 負荷では「更なる低下」(Req 2.2) が成立しないことを実測（`absent-vision-cost-4-2.md`。対策は別spec提案）。
   - _Requirements: 7.1, 7.2, 7.3, 8.1, 8.2_

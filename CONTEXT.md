@@ -112,6 +112,6 @@ _Avoid_: タイムアウト、猶予期間
 省電力段階を通常に戻し頻度を通常水準に戻すこと。画面輝度の復元とは別物。
 _Avoid_: 暗転解除、再開
 
-**電力指標（Energy Impact）**:
-Xcode の実機 Run 時に Debug navigator が表示する消費電力の相対指標。校正された電力（W / mAh）ではなく、同一端末・同一セッション内の相対比較にのみ用いる。
+**電力指標（Energy Metrics）**:
+Xcode の Energy Report が表示する消費電力の相対指標。(a) Average Energy Impact ゲージの色評価（Low/High/Very High）と (b) Average Component Utilization の領域別%（Overhead/CPU/GPU/Network/Location/Display）からなる。校正された電力（W / mAh）ではなく、同一端末・同一セッション内の相対比較にのみ用いる。数値の Energy Impact スコアは Xcode 26 では表示されない。
 _Avoid_: 消費電力（絶対値の意）、電力消費量、省電力率

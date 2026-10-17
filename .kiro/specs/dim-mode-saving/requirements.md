@@ -64,7 +64,7 @@
 **Objective:** As a 効果を検証する開発者, I want 通常・暗転・不在・復帰・長時間の各条件で電力・復帰時間・精度が実測記録されること, so that 省電力効果を推定ではなく実測で判断できる
 
 #### Acceptance Criteria
-1. When 省電力効果を記録する, the NekozeFix shall 通常モード・暗転モード・長時間人物不在・復帰直後・長時間監視の各条件で電力消費・復帰時間・検出精度を実測値として記録する。電力は、対象機（iOS 18.7.7）で利用可能な実機計測ツール（Xcode の Debug navigator が表示する Energy Impact 指標）で取得した値を実測値として扱う（ADR-0025）
+1. When 省電力効果を記録する, the NekozeFix shall 通常モード・暗転モード・長時間人物不在・復帰直後・長時間監視の各条件で電力消費・復帰時間・検出精度を実測値として記録する。電力は、対象機（iOS 18.7.7）で利用可能な実機計測（Xcode の Energy Report が表示する Average Energy Impact ゲージの色評価と Average Component Utilization の領域別%）で取得した値を実測値として扱う（ADR-0025）
 2. The NekozeFix shall 実測していない省電力率・持続時間の推定値、および実測指標からの換算・外挿による推計値を記録に含めない
 3. Where 測定できない項目がある場合, the NekozeFix shall 当該項目を未計測として明記する
 
@@ -73,4 +73,4 @@
 
 #### Acceptance Criteria
 1. While 画面暗転モード中, the NekozeFix shall 通常モードよりもバッテリー消費を低減する
-2. When 暗転時と通常時の消費電力を比較する, the NekozeFix shall 同一端末・同一セッションで実機計測した相対指標（Energy Impact）を含む実測値に基づき低減を確認し、未計測値からの推定・換算による判定を行わない
+2. When 暗転時と通常時の消費電力を比較する, the NekozeFix shall 同一端末・同一セッションで実機計測した相対指標（Average Component Utilization の領域別%と Energy Impact ゲージ評価）を含む実測値に基づき低減を確認し、未計測値からの推定・換算による判定を行わない
