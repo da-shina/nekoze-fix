@@ -495,6 +495,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 計測開始時刻（単調時計）。ログ開始時に記録し、経過秒の基準とする。
     private var metricsStartTime: TimeInterval = 0
 
+    /// 判定分布の窓内計数（motion-frequency 5.1・判定一致検証用）。
+    /// processDetection の確定分岐でのみ加算する（Main系列のみ・錠不要）。
+    /// good/slouchCandidate/insufficientKeypoints＝analyze結果、absent/personOnly＝早期復帰。
+    private var windowJudgeGood = 0
+    private var windowJudgeSlouch = 0
+    private var windowJudgeInsufficient = 0
+    private var windowJudgeAbsent = 0
+    private var windowJudgePersonOnly = 0
+
     /// 定期ログを開始する。監視開始・校正開始・暗転解除等の再開点から呼ぶ。
     /// Timer 稼働中は何もしない（区間の二重開始を防ぐ）。
     /// 開始時刻と計数を同一区間にそろえる（レビュー指摘 4241621573 対応）。
@@ -502,6 +511,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         guard metricsLogTimer == nil else { return }
         metricsStartTime = CACurrentMediaTime()
         throttleLock.withLock { frameThrottle.resetCounts() }
+        windowJudgeGood = 0
+        windowJudgeSlouch = 0
+        windowJudgeInsufficient = 0
+        windowJudgeAbsent = 0
+        windowJudgePersonOnly = 0
+        motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.logMetricsSnapshot()
@@ -532,8 +547,22 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 推論間の残余時間。キュー待ち時間ではない（待機列を持たない破棄設計のため
         // 真の待ち時間は計測不可。レビュー指摘 4241621575 対応で `estWait` から改名）。
         let inferenceResidual = max(0, frameInterval - avgInferenceTime)
+        // motion-frequency区間計測（ADR-0023）: 本5秒窓の受信・公開値更新・読取りを同梱し、
+        // 次窓の計測を直ちに再開する（計測は取得・判定に影響しない）。
+        // ログキーはADR-0023定義のserialize形（motionSamples/motionVisible/motionReads/motionInvalid）
+        // であり、struct側 sampleCount/dispatchCount/consumptionCount/invalidCount に対応する。
+        // キー名は計測記録（measurements.md）との連続性のため変更しない。
+        let motion = motionService.stopMeasuring()
+        motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
+        // 判定分布の窓内計数を読取り・初期化する（motion-frequency 5.1・判定一致検証用）。
+        let judge = "g\(windowJudgeGood)/s\(windowJudgeSlouch)/i\(windowJudgeInsufficient)/a\(windowJudgeAbsent)/p\(windowJudgePersonOnly)"
+        windowJudgeGood = 0
+        windowJudgeSlouch = 0
+        windowJudgeInsufficient = 0
+        windowJudgeAbsent = 0
+        windowJudgePersonOnly = 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -610,6 +639,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
+            windowJudgeAbsent += 1
             // ホールドも破棄する。不在前の点を直後の .pose に補完すると、
             // 別人物の耳と肩で判定してしまう。
             lastHeldKeypoints = [nil, nil, nil, nil]
@@ -622,6 +652,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 肩欠測デバウンス: 猶予期間内は前回の可視化ポイントを維持し
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(var frame) = detection else {
+            windowJudgePersonOnly += 1
             let now = CACurrentMediaTime()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false
@@ -675,6 +706,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric = nil
         }
 
+        // 最新公開値の読取りに参照記録を付随させる（motion-frequency Task 3・ADR-0023）。
+        // 読取り則は不変（その時点の最新公開値を使用）。通知漏れがあっても判定には影響しない。
+        let gravityForAnalysis = self.motionService.latestGravityInKeypointSpace
+        self.motionService.noteConsumption(hasValue: gravityForAnalysis != nil)
         let (sample, verdict, resolvedReference) = self.postureAnalyzer.analyze(
             frame: frame,
             referenceNearAngleDegrees: refAngle,
@@ -682,7 +717,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             distanceMetric: distanceMetric,
             slouchDistanceThresholdPercent: self.settingsStore.slouchDistanceThresholdPercent,
             previousNearSide: snapshot.nearSide,
-            gravityInKeypointSpace: self.motionService.latestGravityInKeypointSpace,
+            gravityInKeypointSpace: gravityForAnalysis,
             // 重力はデバイス座標系・キーポイントは回転済みバッファ座標系のため、
             // 直近capture角で重力由来の基準値のみバッファ座標系へ回転させる（未確定時は無回転）。
             captureAngleDegrees: lastKnownCaptureAngle.map { Double($0) },
@@ -690,6 +725,15 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             // 注入なしでは Analyzer 内の 0.3 既定がランドスケープ緩和を無効化する）。
             minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
         )
+        // 判定分布の窓内計数（motion-frequency 5.1）。
+        switch verdict {
+        case .good:
+            windowJudgeGood += 1
+        case .slouchCandidate:
+            windowJudgeSlouch += 1
+        case .insufficientKeypoints:
+            windowJudgeInsufficient += 1
+        }
         // 判定が返した基準線ベクトルを表示へ受渡しする（単一解決、二重解決なし）。
         // analyze 済みでバッファ座標系（y上向き）の方向であり、変換は Overlay 側で点列と同一係数にて行う。
         // monitoring中は校正完了時点の向きに凍結し、人物ありの毎フレーム上書きによる微振動を防ぐ。

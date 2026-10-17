@@ -193,3 +193,42 @@ let landscapeMinimumKeypointConfidence: Double = 0.1
 func keypointConfidenceThreshold(isLandscape: Bool) -> Double {
     isLandscape ? landscapeMinimumKeypointConfidence : minimumKeypointConfidence
 }
+
+/// 重力取得頻度の候補（motion-frequency Task 1・ADR-0023）。
+/// 許可値は比較候補の3値に閉じる。既定は毎秒15回（暫定採用。選定経緯はADR-0023選定結果）。
+enum MotionUpdateFrequency: Double, Equatable {
+    case thirtyHz = 30
+    case fifteenHz = 15
+    case tenHz = 10
+    /// 取得間隔（秒）。次回開始時または即時再開時に `deviceMotionUpdateInterval` へ反映する。
+    var interval: TimeInterval {
+        1.0 / rawValue
+    }
+    /// 計測条件の付記用の短縮表記（例: "30Hz"）。
+    var shortLabel: String {
+        "\(Int(rawValue))Hz"
+    }
+}
+
+/// 区間計測の結果（motion-frequency Task 1・ADR-0023）。
+/// 実測値のみを含み推定値を含まない。生成後の変更を許さない値オブジェクト。
+/// 所有は MotionService、受渡しは Types の値渡し（層方向を守る）。
+struct MotionFrequencyMeasurement: Equatable {
+    /// 計測区間の取得頻度設定
+    let frequency: MotionUpdateFrequency
+    /// 計測期間（秒）
+    let duration: TimeInterval
+    /// 受信回数（端末計測機能からのサンプル到着）
+    let sampleCount: Int
+    /// 公開値更新回数（実質変化・状態変化による `latestGravityInKeypointSpace` の書替え）
+    /// ログ行上のキーは `motionVisible`（ADR-0023定義のserialize形）。
+    let dispatchCount: Int
+    /// 読取り参照回数（Session の判定読取りに付随した参照記録）
+    /// ログ行上のキーは `motionReads`。
+    let consumptionCount: Int
+    /// 無効参照回数（読取り時に公開値が nil だった回数）
+    /// ログ行上のキーは `motionInvalid`。
+    let invalidCount: Int
+    /// 計測条件（監視状態・端末向き・計測期間の付記）
+    let conditionNote: String
+}

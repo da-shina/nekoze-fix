@@ -87,3 +87,11 @@ _Avoid_: 向き（曖昧）、画像回転
 **プレビュー層（Preview Layer）**:
 カメラ映像を表示する `AVCaptureVideoPreviewLayer`。回転角の適用先であり、再生成に必要な実体。
 _Avoid_: 層（単独略称）
+
+**重力取得頻度（Motion Update Frequency）**:
+端末計測機能から重力を取得する頻度。毎秒30回・15回・10回の候補から選定し、既定は毎秒30回。映像処理頻度とは連動しない。
+_Avoid_: 更新頻度（単独略称）、Motion頻度
+
+**公開値（Visible Gravity Value）**:
+MotionServiceが保持するキーポイント空間に変換済みの最新重力（`latestGravityInKeypointSpace`）。判定は読取り時にその時点の最新公開値を使用する。実質同一の受信時は公開値の更新を抑制する。
+_Avoid_: 最新値（単独略称）、可視値、表示値

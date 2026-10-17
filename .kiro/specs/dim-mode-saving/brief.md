@@ -1,7 +1,7 @@
 # Brief: dim-mode-saving
 
 ## Problem
-暗転モードでは表示輝度低下에도かかわらずカメラ・Vision・Motion処理が継続する可能性があり、画面点灯抑止とセンサー稼働が別々に制御されていないため省電力余地が残る。
+暗転モードでは表示輝度低下にもかかわらずカメラ・Vision・Motion処理が継続する可能性があり、画面点灯抑止とセンサー稼働が別々に制御されていないため省電力余地が残る。
 
 ## Current State
 enterDimMode/exitDimModeはsavedBrightness保存→brightness=0.0＋snapshot.isDimmed=true（UI表現）で、監視・判定は継続する。wake lock（isIdleTimerDisabled）はsetPhaseがphase==.monitoringで強制し暗転解除操作と無関係に維持される。Motion/回転の起停はsetMotionRotationRunning経由で暗転は対象外とコメントされている。
