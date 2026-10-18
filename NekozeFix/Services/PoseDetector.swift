@@ -161,8 +161,10 @@ final class PoseDetector: @unchecked Sendable {
             return .absent
         }
 
-        // 顔検出実行後（.personOnly または .pose を返す直前）、ホールド用時刻を更新
-        prolongedAbsenceTracker.recordFaceDetected(now: now)
+        // 顔検出実行後（.personOnly を返す場合のみ）、ホールド用時刻を更新
+        if faceBounds != nil {
+            prolongedAbsenceTracker.recordFaceDetected(now: now)
+        }
 
         return Self.synthesize(pose: nil, faceBounds: faceBounds)
     }

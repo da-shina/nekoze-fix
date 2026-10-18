@@ -12,9 +12,9 @@
 
 ## Phase 2: Core Implementation
 
-- [ ] 2. `ProlongedAbsenceTracker` 実装 (Session層・スレッドセーフクラス)
+- [ ] 2. `ProlongedAbsenceTracker` 実装 (Session層・スレッドセーフ構造体)
   - `NekozeFix/Session/ProlongedAbsenceTracker.swift` を新規作成
-  - `NSLock` 内包、`@unchecked Sendable` クラスとして実装
+  - `NSLock` 内包、`@unchecked Sendable` 構造体として実装
   - プロパティ: `absentThreshold`、`faceFallbackThrottleInterval`、`isProlongedAbsence`、`absenceStart`、`lastFaceExecutionTime`、`lastFaceDetectedTime`
   - メソッド: `tick(isPersonDetected:now:)` → `Bool`、不在計測・遷移・ホールド時刻更新
   - メソッド: `shouldExecuteAndRecordFaceFallback(now:)` → `Bool`、間引き判定と実行時刻のアトミック更新
@@ -23,7 +23,7 @@
   - メソッド: `reset()`、全状態リセット
   - メソッド: `snapshot()` → `Snapshot`、テスト・ログ用
   - イニシャライザで不正値を既定値（60s / 5s）にフォールバック
-  - 完了条件: クラスがコンパイル通過し、`snapshot()` で状態が取得可能
+  - 完了条件: 構造体がコンパイル通過し、`snapshot()` で状態が取得可能
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.4, 3.2, 3.4_
   - _Boundary: ProlongedAbsenceTracker_
 
@@ -135,7 +135,7 @@
 
 - [ ] 12. ADR 作成とドキュメント同期
   - `docs/adr/XXXX-face-fallback-throttling.md` を作成（連番で次 ADR 番号割当）
-  - 記録内容: 間引き間隔 5s の決定根拠、`NSLock` スレッドセーフクラス採用理由、`shouldExecuteAndRecordFaceFallback` アトミック化、`faceDetectedHoldActive` ホールド機構、同一間隔（通常/暗転）の決定、チラつき防止ホールド機構
+  - 記録内容: 間引き間隔 5s の決定根拠、`NSLock` スレッドセーフ構造体採用理由、`shouldExecuteAndRecordFaceFallback` アトミック化、`faceDetectedHoldActive` ホールド機構、同一間隔（通常/暗転）の決定、チラつき防止ホールド機構
   - `CONTEXT.md` 用語（長時間不在・不在しきい値・顔フォールバック間引き・顔検出ホールド）が設計と整合しているか確認
   - `design.md` の Grilling Decisions と ADR 参照を同期
   - 完了条件: ADR ファイル作成、用語集・設計書が最新決定と整合

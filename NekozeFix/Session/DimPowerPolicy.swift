@@ -60,7 +60,7 @@ struct DimPowerPolicy: Equatable {
     ///     暦時刻・壁時計系は用いない。無効時刻（NaN・負・無限大）は遷移を見送る。
     /// - Returns: 判定後の段階（遷移なしの場合は現段階を維持）。
     mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> DimPowerStage {
-        guard now.isFinite, now >= 0 else { return stage }
+guard now.isFinite, now >= 0 else { return stage }
         if isPersonDetected {
             absentStart = nil
             if stage == .dimmedAbsent {
