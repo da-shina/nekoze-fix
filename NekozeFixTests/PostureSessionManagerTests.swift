@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import CoreMedia
 @testable import NekozeFix
 
 @MainActor
@@ -411,9 +412,9 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 肩が1フレーム欠測しても直近値を保持する（チラつき対策）。
     func testKeypointHold_holdsMissingShoulder() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
-        var dropped = testFrame(shoulderConfidence: 0.9)
+        var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
         dropped.leftShoulder = nil
         sut.processDetection(.pose(dropped))
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予内は直近の肩を保持する")
@@ -438,9 +439,9 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 人物不在ではホールドを破棄する（不在前の点を別人の判定に使わない）。
     func testAbsent_clearsKeypointHold() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         sut.processDetection(.absent)
-        var dropped = testFrame(shoulderConfidence: 0.9)
+        var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
         dropped.leftShoulder = nil
         sut.processDetection(.pose(dropped))
         XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "不在後は保持しない")
@@ -448,9 +449,9 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 猶予（0.5秒）超過後の欠測は破棄する（古い値を使い続けない）。
     func testKeypointHold_releasesAfterGracePeriod() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         Thread.sleep(forTimeInterval: 0.6)
-        var dropped = testFrame(shoulderConfidence: 0.9)
+        var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
         dropped.leftShoulder = nil
         sut.processDetection(.pose(dropped))
         XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は破棄する")
@@ -553,7 +554,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         sut.processDetection(.absent)
         let metrics = sut.frameThrottle.snapshot()
         XCTAssertEqual(metrics.arrivals, 0, "条件化は到達計数へ触れない")
@@ -631,13 +632,13 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 間引き下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
     func testThrottledRate_keypointHoldGraceSurvivesThinning() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
 
         // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
         for _ in 0..<3 {
             usleep(100_000)
-            var dropped = testFrame(shoulderConfidence: 0.9)
+            var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             sut.processDetection(.pose(dropped))
         }
@@ -646,7 +647,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // 計0.7秒 → 破棄
         for _ in 0..<4 {
             usleep(100_000)
-            var dropped = testFrame(shoulderConfidence: 0.9)
+            var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             sut.processDetection(.pose(dropped))
         }
@@ -660,7 +661,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         sut.processDetection(.absent)
         XCTAssertEqual(sut.snapshot.videoAspectRatio, defaultAR, "条件化は解像度由来の状態を変えない")
     }
@@ -671,7 +672,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testHopGate_monitoringPhase_throttlesSteadyPose() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(
             sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01),
@@ -683,7 +684,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testHopGate_calibratingPhase_deliversAll() {
         sut.startCalibration()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNotNil(
             sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01),
@@ -695,7 +696,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testHopGate_coalescedFrames_holdSingleLatestSlot() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         XCTAssertEqual(sut.hopGate.pendingCount, 1)
@@ -707,7 +708,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testHopGate_deliver_drainsLatestAndClearsSlot() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         XCTAssertEqual(sut.hopGate.pendingCount, 1)
@@ -724,7 +725,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testStopMonitoring_dispatchesHopReset() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         XCTAssertEqual(sut.hopGate.pendingCount, 1)
@@ -742,7 +743,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testResetDetectionPipelineState_clearsHopGateAndSlot() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         sut.resetDetectionPipelineState()
@@ -757,7 +758,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         let before = sut.snapshot
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         XCTAssertNotNil(sut.hopGate.submit(detection: .absent, aspectRatio: 4.0 / 3.0, now: 300.02))
@@ -768,7 +769,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testHopOrder_gateDoesNotTouchThrottleCounters() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         let metrics = sut.frameThrottle.snapshot()
@@ -817,13 +818,13 @@ final class PostureSessionManagerTests: XCTestCase {
                 sut.processDetection(pending.detection)
             }
         }
-        feed(.pose(testFrame(shoulderConfidence: 0.9)))
+        feed(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
 
         // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
         for _ in 0..<3 {
             usleep(100_000)
-            var dropped = testFrame(shoulderConfidence: 0.9)
+            var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             feed(.pose(dropped))
         }
@@ -832,7 +833,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // 計0.7秒 → 破棄
         for _ in 0..<4 {
             usleep(100_000)
-            var dropped = testFrame(shoulderConfidence: 0.9)
+            var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             feed(.pose(dropped))
         }
@@ -843,7 +844,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testDidEnterBackground_dispatchesHopReset() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         sut.handleDidEnterBackground()
@@ -856,7 +857,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testStartCalibration_resetsHopGateAndRestoresCalibratingMirror() {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         XCTAssertNotNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0))
         XCTAssertNil(sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.01))
         sut.startCalibration()
@@ -874,7 +875,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         XCTAssertTrue(sut.motionService.isRunning)
-        let frame = testFrame(shoulderConfidence: 0.9)
+        let frame = makeTestPoseFrame(shoulderConfidence: 0.9)
         for i in 0..<5 {
             _ = sut.hopGate.submit(detection: .pose(frame), aspectRatio: 4.0 / 3.0, now: 300.0 + Double(i) * 0.01)
         }
@@ -1011,7 +1012,7 @@ final class PostureSessionManagerTests: XCTestCase {
     func testNonDimMonitoring_leavesLimitsUntouched() {
         sut.startMonitoring()
         sut.processDetection(.absent)
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
         XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
@@ -1218,5 +1219,234 @@ final class PostureSessionManagerTests: XCTestCase {
             leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: shoulderConfidence),
             rightShoulder: nil
         )
+    }
+
+    /// テスト用の完全なキーポイントを持つ PoseFrame を生成。
+    private func makeTestPoseFrame(shoulderConfidence: Double = 0.9) -> PoseFrame {
+        PoseFrame(
+            timestamp: CACurrentMediaTime(),
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.4, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: shoulderConfidence),
+            rightShoulder: Keypoint(x: 0.6, y: 0.7, confidence: shoulderConfidence)
+        )
+    }
+}
+
+// MARK: - absent-vision-reduction 結合テスト
+
+@MainActor
+final class ProlongedAbsenceIntegrationTests: XCTestCase {
+    var sut: PostureSessionManager!
+    private var suite: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        suite = UserDefaults(suiteName: "ProlongedAbsenceIntegrationTests")!
+        suite.removePersistentDomain(forName: "ProlongedAbsenceIntegrationTests")
+        sut = PostureSessionManager(settingsStore: SettingsStore(defaults: suite))
+    }
+
+    override func tearDown() {
+        suite.removePersistentDomain(forName: "ProlongedAbsenceIntegrationTests")
+        suite = nil
+        sut = nil
+        super.tearDown()
+    }
+
+    /// テスト用の完全なキーポイントを持つ PoseFrame を生成。
+    private func makeTestPoseFrame(shoulderConfidence: Double = 0.9) -> PoseFrame {
+        PoseFrame(
+            timestamp: CACurrentMediaTime(),
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: Keypoint(x: 0.7, y: 0.4, confidence: 0.9),
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: shoulderConfidence),
+            rightShoulder: Keypoint(x: 0.6, y: 0.7, confidence: shoulderConfidence)
+        )
+    }
+
+    // MARK: - 通常モード長時間不在遷移・解除
+
+    /// 通常モードで不在がしきい値を超えると長時間不在へ遷移し、人物検出で解除・リセットされる。
+    func testNormalMode_ProlongedAbsenceTransitionAndRelease() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+
+        // 閾値 60s で長時間不在へ遷移（テスト用に閾値を短く設定）
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 不在継続で長時間不在へ
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+
+        // 人物検出で解除・リセット
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
+        XCTAssertFalse(sut.prolongedAbsenceTracker.isProlongedAbsence)
+        XCTAssertEqual(sut.prolongedAbsenceTracker.snapshot().lastFaceExecutionTime, -.infinity)
+    }
+
+    // MARK: - 暗転モード長時間不在遷移・解除
+
+    /// 暗転モードで不在がしきい値を超えると長時間不在へ遷移し、人物検出で解除される。
+    func testDimMode_ProlongedAbsenceTransitionAndRelease() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 不在継続で長時間不在へ（暗転段階とは独立に）
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+        // DimPowerPolicy も長時間不在段階へ進む
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
+
+        // 人物検出で両方解除
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
+        XCTAssertFalse(sut.prolongedAbsenceTracker.isProlongedAbsence)
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+    }
+
+    // MARK: - 暗転解除での通常復帰
+
+    /// 暗転解除で長時間不在トラッカーがリセットされ、通常水準に復帰する。
+    func testExitDimMode_ResetsProlongedAbsenceTracker() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 長時間不在へ遷移
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+
+        // 暗転解除でリセット
+        sut.exitDimMode()
+        XCTAssertFalse(sut.prolongedAbsenceTracker.isProlongedAbsence)
+        XCTAssertEqual(sut.prolongedAbsenceTracker.snapshot().lastFaceExecutionTime, -.infinity)
+    }
+
+    // MARK: - PoseDetector 間引き連携
+
+    /// 長時間不在中、PoseDetector が間引き実行し faceThrottledCount が計数される。
+    func testProlongedAbsence_PoseDetectorThrottlesAndCounts() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 長時間不在へ
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+
+        // 無効バッファで複数回 detect 経由（captureOutput 経路シミュレート）
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            XCTFail("バッファ作成失敗")
+            return
+        }
+
+        // 最初は実行される
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
+        var metrics = sut.poseDetector.snapshot()
+        XCTAssertEqual(metrics.faceExecutedCount, 1)
+        XCTAssertEqual(metrics.faceThrottledCount, 0)
+
+        // 間引き間隔内はスキップ
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
+        metrics = sut.poseDetector.snapshot()
+        XCTAssertEqual(metrics.faceExecutedCount, 1, "間引き間隔内は顔実行されない")
+        XCTAssertEqual(metrics.faceThrottledCount, 2, "間引きスキップが計数される")
+    }
+
+    // MARK: - DimPowerPolicy との併存確認
+
+    /// DimPowerPolicy と ProlongedAbsenceTracker が同一閾値を共有し、乖離しない。
+    func testDimPowerPolicyAndProlongedAbsenceTracker_ShareThreshold() {
+        // 両者が DimPowerPolicy.defaultAbsentThreshold を既定値として使用
+        let policy = DimPowerPolicy()
+        let tracker = ProlongedAbsenceTracker()
+        XCTAssertEqual(policy.absentThreshold, DimPowerPolicy.defaultAbsentThreshold)
+        XCTAssertEqual(tracker.absentThreshold, DimPowerPolicy.defaultAbsentThreshold)
+    }
+
+    /// 通常モードでは DimPowerPolicy は不在駆動を進めないが、ProlongedAbsenceTracker は進める（二重管理だが役割分離）。
+    func testNormalMode_DimPowerPolicyStaysNormal_ProlongedAbsenceAdvances() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 不在継続
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+
+        // ProlongedAbsenceTracker は長時間不在へ進む
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+        // DimPowerPolicy は通常のまま（暗転操作がないため）
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+    }
+
+    // MARK: - ホールド抑制
+
+    /// 顔検出実行後、間引き間隔内は faceDetectedHoldActive により personMissing 表示を抑制する。
+    func testFaceDetectedHoldActive_SuppressesPersonMissing() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+
+        sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+
+        // 長時間不在へ
+        for _ in 0..<5 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
+
+        // 顔検出実行を記録（シミュレート）
+        sut.prolongedAbsenceTracker.recordFaceDetected(now: CACurrentMediaTime())
+
+        // ホールド有効中は personMissing 表示を抑制（isPersonDetected = true 維持）
+        // 実際の updateState 呼び出しで抑制されることを確認
+        sut.processDetection(.absent)
+        // ホールド期間内なので isPersonDetected は true のまま
+        XCTAssertTrue(sut.snapshot.isPersonDetected, "顔検出ホールド中は personMissing を抑制")
     }
 }

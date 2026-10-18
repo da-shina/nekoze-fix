@@ -133,8 +133,8 @@ graph TB
 
 ### Modified Files
 
-- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `isProlongedAbsence: Bool` 引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
-- `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` 呼び出し、`captureOutput` で引数渡し、復帰時 `reset()`
+- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `isProlongedAbsence: Bool` と `inout ProlongedAbsenceTracker` 引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
+- `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で bool + `inout Tracker` 渡し、復帰時 `reset()`
 - `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
 - `docs/adr/XXXX-face-fallback-throttling.md` — 新規 ADR。間引き間隔・チラつき許容・同一間隔の決定根拠
@@ -227,7 +227,7 @@ stateDiagram-v2
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | ProlongedAbsenceTracker | Session / 値型 | 長時間不在の計測・遷移・間引き判定・閾値 | 1.1–1.4, 2.1, 2.4 | `DimPowerPolicy.defaultAbsentThreshold` (P0) | State [x] |
 | PoseDetector | Services | 姿勢検出・顔フォールバック間引き実行 | 2.1, 2.2, 2.4, 3.1–3.3 | ProlongedAbsenceTracker (P0), Vision (P0) | Service [x], State [x] |
-| PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への引数渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
+| PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への bool + inout Tracker 渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
 | Metrics 計測 | Session/Services | 視覚処理量・電力の実測記録 | 5.1–5.4 | 既存 5秒窓ログ (P0), Energy Report (P0) | State [x] |
 
 ---
@@ -261,24 +261,21 @@ stateDiagram-v2
 ##### Interface
 
 ```swift
-/// スレッドセーフな長時間不在トラッカー（Session層・@unchecked Sendable クラス）。
-/// MotionService.SharedState と同パターンで NSLock による内部同期を行う。
+/// スレッドセーフな長時間不在トラッカー（Session層・値型）。
+/// 内部状態はロックで保護し、単一の `tick(now:)` と `shouldExecuteFaceFallback(now:)` で
+/// 全状態更新をアトミックに行う。`MotionService.SharedState` と同パターンで
+/// NSLock による内部同期を行う。`@unchecked Sendable` 準拠。
 @unchecked Sendable
-final class ProlongedAbsenceTracker {
+struct ProlongedAbsenceTracker {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
     let faceFallbackThrottleInterval: TimeInterval
 
     private let lock = NSLock()
-
-    /// 現在長時間不在中か
-    private(set) var isProlongedAbsence: Bool = false
-    /// 不在計測開始時刻（単調時計）。人物検出中・非長時間不在時は nil。
+    private var _isProlongedAbsence: Bool = false
     private var absenceStart: TimeInterval?
-    /// 最後に顔フォールバックを実行した時刻（単調時計）。初期値は遠過去相当。
     private var lastFaceExecutionTime: TimeInterval = -.infinity
-    /// 最後に顔検出（.personOnly または .pose）した時刻。顔実行ホールド用。
     private var lastFaceDetectedTime: TimeInterval?
 
     /// - Parameters:
@@ -292,23 +289,28 @@ final class ProlongedAbsenceTracker {
         self.faceFallbackThrottleInterval = (faceFallbackThrottleInterval.isFinite && faceFallbackThrottleInterval > 0) ? faceFallbackThrottleInterval : 5.0
     }
 
+    /// 現在長時間不在中か（ロック保護付き読み取り）。
+    var isProlongedAbsence: Bool {
+        lock.withLock { _isProlongedAbsence }
+    }
+
     /// 検出結果による長時間不在判定・ホールド状態更新。
     /// - Parameters:
     ///   - isPersonDetected: デバウンス済み人物検出状態（`updateState` 確定後の値）
     ///   - now: 単調時刻系（`CACurrentMediaTime` 系）。無効時刻は遷移を見送る。
     /// - Returns: 更新後の `isProlongedAbsence`
-    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
+    mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
         return lock.withLock {
-            guard now.isFinite, now >= 0 else { return isProlongedAbsence }
+            guard now.isFinite, now >= 0 else { return _isProlongedAbsence }
             if isPersonDetected {
                 absenceStart = nil
                 lastFaceDetectedTime = now
-                if isProlongedAbsence {
-                    isProlongedAbsence = false
+                if _isProlongedAbsence {
+                    _isProlongedAbsence = false
                 }
-                return isProlongedAbsence
+                return _isProlongedAbsence
             }
-            guard isProlongedAbsence == false else { return true } // 既に長時間不在なら継続
+            guard _isProlongedAbsence == false else { return true } // 既に長時間不在なら継続
             guard let start = absenceStart else {
                 absenceStart = now
                 return false
@@ -318,9 +320,9 @@ final class ProlongedAbsenceTracker {
                 return false
             }
             if now - start > absentThreshold {
-                isProlongedAbsence = true
+                _isProlongedAbsence = true
             }
-            return isProlongedAbsence
+            return _isProlongedAbsence
         }
     }
 
@@ -328,22 +330,24 @@ final class ProlongedAbsenceTracker {
     /// 長時間不在中かつ前回実行から間引き間隔以上経過なら true を返し、内部で実行時刻を更新する。
     /// - Parameter now: 単調時刻系（`CACurrentMediaTime` 系）。
     /// - Returns: 実行すべきなら true。呼び出し側は true 時にのみ顔検出を実行する。
-    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
+    mutating func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
         return lock.withLock {
-            guard isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
+            guard _isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
             guard now.isFinite, now >= 0 else { return true }
-            if let last = lastFaceExecutionTime, now - last < faceFallbackThrottleInterval {
+            // lastFaceExecutionTime は非 Optional（初期値 -∞）
+            if now - lastFaceExecutionTime < faceFallbackThrottleInterval {
                 return false
             }
             lastFaceExecutionTime = now
-            lastFaceDetectedTime = now
+            // 注: ここでは顔検出結果を得る前のため lastFaceDetectedTime は更新しない
+            // 顔実行後に recordFaceDetected(now:) で更新する
             return true
         }
     }
 
     /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
-    func recordFaceDetected(now: TimeInterval) {
+    mutating func recordFaceDetected(now: TimeInterval) {
         lock.withLock {
             guard now.isFinite, now >= 0 else { return }
             lastFaceDetectedTime = now
@@ -351,19 +355,21 @@ final class ProlongedAbsenceTracker {
     }
 
     /// 顔検出ホールドが有効か（最後に顔検出してから間引き間隔未満か）。
-    /// `updateState` で `isPersonDetected` を `true` に維持するか判定するために使用。
-    var faceDetectedHoldActive: Bool {
+    /// `updateState` で表示用の `isPersonDetected` を `true` に維持するか判定するために使用。
+    /// 実検出状態とは分離し、表示ちらつき抑制のみに用いる。
+    func faceDetectedHoldActive(now: TimeInterval) -> Bool {
         lock.withLock {
+            guard _isProlongedAbsence else { return false }
             guard let last = lastFaceDetectedTime else { return false }
             // 長時間不在中かつホールド期間内なら true
-            return isProlongedAbsence && (CACurrentMediaTime() - last < faceFallbackThrottleInterval)
+            return now - last < faceFallbackThrottleInterval
         }
     }
 
     /// 長時間不在解除・監視開始・復帰時に状態をリセットする。
-    func reset() {
+    mutating func reset() {
         lock.withLock {
-            isProlongedAbsence = false
+            _isProlongedAbsence = false
             absenceStart = nil
             lastFaceExecutionTime = -.infinity
             lastFaceDetectedTime = nil
@@ -380,7 +386,7 @@ final class ProlongedAbsenceTracker {
     func snapshot() -> Snapshot {
         lock.withLock {
             Snapshot(
-                isProlongedAbsence: isProlongedAbsence,
+                isProlongedAbsence: _isProlongedAbsence,
                 absenceStart: absenceStart,
                 lastFaceExecutionTime: lastFaceExecutionTime,
                 lastFaceDetectedTime: lastFaceDetectedTime
@@ -419,15 +425,15 @@ final class ProlongedAbsenceTracker {
 
 **Responsibilities & Constraints**
 
-- `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` にて、長時間不在中かつ姿勢観測ゼロ件の場合、Tracker 内部で間引き判定を行い、実行可なら顔検出を実行、不可なら即 `.absent` を返す（`faceThrottledCount` インクリメント）
+- `detect(sampleBuffer:orientation:isProlongedAbsence:prolongedAbsenceTracker:)` にて、長時間不在中かつ姿勢観測ゼロ件の場合、Tracker 内部で間引き判定を行い、実行可なら顔検出を実行、不可なら即 `.absent` を返す（`faceThrottledCount` インクリメント）
 - 顔検出実行時は従来どおり `synthesize(pose: nil, faceBounds:)` を適用し、`.personOnly` / `.absent` を返す（ADR-0021 意味維持）
-- 長時間不在でない場合（Tracker `isProlongedAbsence == false`）は従来どおり毎回顔フォールバックを実行
+- 長時間不在でない場合（`isProlongedAbsence == false`）は従来どおり毎回顔フォールバックを実行
 - `Metrics` に `faceThrottledCount` を追加し、間引きでスキップした回数を計数する
 - 顔検出実行後（`.personOnly` または `.pose` を返す直前）、Tracker に `recordFaceDetected(now:)` を呼びホールド時刻更新
 
 **Dependencies**
 
-- Inbound: `PostureSessionManager.captureOutput` — 検出依頼＋`ProlongedAbsenceTracker` インスタンス渡し（P0）
+- Inbound: `PostureSessionManager.captureOutput` — 検出依頼＋`isProlongedAbsence: Bool` と `ProlongedAbsenceTracker` インスタンス渡し（P0）
 - Outbound: Vision Framework — `VNDetectHumanBodyPoseRequest` / `VNDetectFaceRectanglesRequest`（P0）
 
 **Contracts**: Service [x] / API [ ] / Event [ ] / Batch [ ] / State [x]
@@ -447,12 +453,13 @@ final class PoseDetector: @unchecked Sendable {
     func detect(
         sampleBuffer: CMSampleBuffer,
         orientation: CGImagePropertyOrientation,
-        prolongedAbsenceTracker: ProlongedAbsenceTracker  // 【新規引数】Tracker 渡しで内部完結
+        isProlongedAbsence: Bool,
+        prolongedAbsenceTracker: inout ProlongedAbsenceTracker
     ) -> Detection { ... }
 }
 ```
 
-- Preconditions: `prolongedAbsenceTracker.isProlongedAbsence == true` かつ姿勢観測ゼロ件の場合のみ間引き判定を行う。Tracker が内部で `shouldExecuteAndRecordFaceFallback` を実行し、実行可否と時刻記録をアトミックに行う
+- Preconditions: `isProlongedAbsence == true` かつ姿勢観測ゼロ件の場合のみ間引き判定を行う。Tracker 内部で `shouldExecuteAndRecordFaceFallback(now:)` を実行し、実行可否と実行時刻記録をアトミックに行う
 - Postconditions: 間引きスキップ時は `.absent` を返す（`faceThrottledCount++`）。顔実行時は従来合成則に従う。顔実行後（`.personOnly` または `.pose`）は内部で `prolongedAbsenceTracker.recordFaceDetected(now:)` を呼ぶ。`Metrics` が更新される
 - Invariants: `synthesize` の意味（`pose ?? (faceBounds != nil ? .personOnly : .absent)`）は不変
 
@@ -464,7 +471,7 @@ final class PoseDetector: @unchecked Sendable {
 
 **Implementation Notes**
 
-- Integration: `captureOutput` 内で `detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up, prolongedAbsenceTracker: tracker)` を呼ぶのみ。Tracker との連携は `detect()` 内部で完結
+- Integration: `captureOutput` 内で `detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up, isProlongedAbsence: isProlongedAbsence, prolongedAbsenceTracker: &tracker)` を呼ぶ。Tracker との連携は `detect()` 内部で完結
 - Validation: 間引き動作・Metrics 計数（`faceThrottledCount`）・復帰時毎回実行・非長時間不在時毎回実行・ホールドによる `personMissing` 抑制を単体・結合で検証
 - Risks: なし（Tracker 内部でアトミックに判定・記録するため脱調なし。ホールド機構で `personMissing` ちらつき防止済み）
 
@@ -476,15 +483,15 @@ final class PoseDetector: @unchecked Sendable {
 
 | Field | Detail |
 |-------|--------|
-| Intent | `ProlongedAbsenceTracker` を保持し、`updateState` で `tick` / `faceDetectedHoldActive` 参照、`captureOutput` で Tracker 渡し、`reset()` で復帰制御 |
+| Intent | `ProlongedAbsenceTracker` を保持し、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 参照、`captureOutput` で bool + Tracker 渡し、`reset()` で復帰制御 |
 | Requirements | 1.1–1.4, 2.1–2.4, 3.1–3.4 |
 
 **Responsibilities & Constraints**
 
 - `prolongedAbsenceTracker` をインスタンス変数として保持（イニシャライザで閾値・間隔注入）
 - `updateState(presence:...)` 内で `tracker.tick(isPersonDetected: snapshot.isPersonDetected, now:)` を呼び、`isProlongedAbsence` 変化時にログ等出力（任意）
-- **`faceDetectedHoldActive` による `personMissing` 抑制**: 長時間不在中かつホールド有効時、`snapshot.isPersonDetected` を `true` に維持（`personMissing` 表示を防ぐ）
-- `captureOutput` 内で Tracker インスタンスを `poseDetector.detect(..., prolongedAbsenceTracker: tracker)` に渡す。間引き判定・実行・ホールド更新は `detect()` 内部で完結
+- **ホールド抑制（表示のみ）**: 長時間不在中かつホールド有効時、表示用 `isPersonDetected` を `true` に維持（`personMissing` 表示を防ぐ）。**実検出状態（`DimPowerPolicy` への入力等）とは分離する**
+- `captureOutput` 内で `isProlongedAbsence` と `inout prolongedAbsenceTracker` を `poseDetector.detect(..., isProlongedAbsence:, prolongedAbsenceTracker:)` に渡す。間引き判定・実行・ホールド更新は `detect()` 内部で完結
 - 長時間不在解除（`tracker.tick` が `false` を返したとき）で `tracker.reset()` を呼び、通常頻度へ即座に復帰
 - 既存の `DimPowerPolicy` 結合（暗転段階遷移・FPS/頻度切替）は変更しない。二重管理だが責務分離を維持
 
@@ -508,25 +515,26 @@ final class PoseDetector: @unchecked Sendable {
   if !isNowProlonged && wasProlonged {
       prolongedAbsenceTracker.reset() // 復帰時リセット
   }
-  // 長時間不在中の顔検出ホールド: 間引き間隔内に顔検出があれば isPersonDetected を true 維持
-  if prolongedAbsenceTracker.faceDetectedHoldActive {
-      snapshot.isPersonDetected = true
-  }
+  // 長時間不在中の顔検出ホールド: 間引き間隔内に顔検出があれば 表示用 isPersonDetected を true 維持
+  // 実検出状態（DimPowerPolicy 入力等）は元の snapshot.isPersonDetected のまま保持
+  let displayIsPersonDetected = prolongedAbsenceTracker.faceDetectedHoldActive(now: now) || snapshot.isPersonDetected
   ```
 
 - `captureOutput` 追加ロジック（detectionQueue）:
   ```swift
+  let isProlonged = prolongedAbsenceTracker.isProlongedAbsence
   let detection = poseDetector.detect(
       sampleBuffer: sampleBuffer,
       orientation: .up,
-      prolongedAbsenceTracker: prolongedAbsenceTracker
+      isProlongedAbsence: isProlonged,
+      prolongedAbsenceTracker: &prolongedAbsenceTracker
   )
   // 間引き判定・顔実行・ホールド更新は detect() 内部で完結
   ```
 
 **Implementation Notes**
 
-- Integration: 既存 `DimPowerPolicy` 結合行（`dimPowerPolicy.tick` 呼び出し）の直前/直後に `prolongedAbsenceTracker.tick` を追加。順序依存なし。`faceDetectedHoldActive` 参照は `snapshot.isPersonDetected` 更新の直前
+- Integration: 既存 `DimPowerPolicy` 結合行（`dimPowerPolicy.tick` 呼び出し）の直前/直後に `prolongedAbsenceTracker.tick` を追加。順序依存なし。`faceDetectedHoldActive(now:)` 参照は表示用 `isPersonDetected` 計算時に使用
 - Validation: 通常/暗転それぞれで長時間不在遷移・解除・PoseDetector 間引き・ホールド抑制・復帰を結合検証
 - Risks: 二重の不在計測（DimPowerPolicy + ProlongedAbsenceTracker）が乖離しないよう、同一 `isPersonDetected`・同一 `now` で呼ぶこと
 
@@ -554,16 +562,16 @@ final class PoseDetector: @unchecked Sendable {
 
 本機能で新規に定義するデータモデル：
 
-### ProlongedAbsenceTracker (Session クラス・スレッドセーフ)
+### ProlongedAbsenceTracker (Session 値型・スレッドセーフ)
 
 ```swift
 @unchecked Sendable
-final class ProlongedAbsenceTracker {
+struct ProlongedAbsenceTracker {
     let absentThreshold: TimeInterval           // 既定 60s（DimPowerPolicy 共用）
     let faceFallbackThrottleInterval: TimeInterval // 既定 5s
 
     private let lock = NSLock()
-    private(set) var isProlongedAbsence: Bool = false
+    private var _isProlongedAbsence: Bool = false
     private var absenceStart: TimeInterval?
     private var lastFaceExecutionTime: TimeInterval = -.infinity
     private var lastFaceDetectedTime: TimeInterval?
@@ -573,11 +581,12 @@ final class ProlongedAbsenceTracker {
         faceFallbackThrottleInterval: TimeInterval = 5.0
     ) { ... }
 
-    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool { ... }
-    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool { ... }
-    func recordFaceDetected(now: TimeInterval) { ... }
-    var faceDetectedHoldActive: Bool { ... }
-    func reset() { ... }
+    var isProlongedAbsence: Bool { ... }
+    mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool { ... }
+    mutating func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool { ... }
+    mutating func recordFaceDetected(now: TimeInterval) { ... }
+    func faceDetectedHoldActive(now: TimeInterval) -> Bool { ... }
+    mutating func reset() { ... }
     struct Snapshot: Equatable { ... }
     func snapshot() -> Snapshot { ... }
 }
@@ -585,6 +594,7 @@ final class ProlongedAbsenceTracker {
 
 - 既存 `DimPowerPolicy` と併存。責務は完全分離（段階遷移 vs モード非依存不在管理）
 - `NSLock` 内包でスレッドセーフ。`MotionService.SharedState` 同パターン
+- 値型のためコピー時は状態共有されず、`inout` 渡しで同一インスタンスを共有
 
 ### PoseDetector.Metrics 拡張
 
