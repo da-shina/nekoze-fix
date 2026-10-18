@@ -4,10 +4,10 @@ _Last updated: 2026-10-17_
 
 ## Architecture: 単方向レイヤード
 
-依存方向は一方向に固定する。左の層は右の層を知らない。図解は `architecture-diagram.md` を参照。
+依存方向は一方向に固定する。**矢印は依存元 → 依存先**（左が右を import する）を示す。図解は `architecture-diagram.md` を参照。
 
 ```
-Types → Domain → Services → Session → UI
+UI → Session → Services → Domain → Types
 ```
 
 - **Types** (`NekozeFix/Types/`): 全層が共有する値オブジェクト・列挙。`SessionSnapshot`、`SessionPhase`、`ReferenceVector`、`MotionUpdateFrequency` など。

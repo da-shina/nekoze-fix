@@ -17,9 +17,11 @@
 #       /tmp/nekoze-dd/Build/Products/Debug-iphoneos/NekozeFix.app
 #
 # 電力は手順Dの別コマンドで取得（アプリ起動中に別シェルで実行）:
-#   xctrace record --template 'Power Profiler' --device mini \
-#     --attach NekozeFix --time-limit 5m \
-#     --output /tmp/nekoze-measure/08-dim-<条件>.trace
+#   Xcode → Run → Debug Navigator → Energy Report
+#   Average Energy Impact ゲージ評価（Low/High/Very High）と
+#   Average Component Utilization の領域別%（Overhead/CPU/GPU/Network/Location/Display）を記録
+#   同一端末・同一セッションで通常時と暗転時を同条件（同姿勢・同取得時間）で取得し相対比較する
+#   詳細は ADR-0025 と design.md「Testing Strategy」を参照
 set -euo pipefail
 
 DEVICE="${DEVICE:-mini}"

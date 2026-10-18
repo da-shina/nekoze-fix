@@ -6,8 +6,8 @@
 顔検出フォールバック（ADR-0021、`PoseDetector.detect` 119〜141行）が**毎推論で実行**される。
 このため推論あたりの Vision 時間が約2倍（約17ms→約34ms）になり、
 **窓あたりの Vision 総量は通常(15fps)より増える**。
-Requirement 2.2「暗転直後よりさらに低下させる」は、推論FPS上限では満たすが、
-実 Vision 負荷では満たしていない（むしろ増える）。
+Requirement 2.2「暗転直後よりさらに低下させる」は、**推論FPS上限（10fps据置き）では満たすが**、
+実 Vision 負荷では満たしていない（むしろ増える）。推論実行頻度の低下と Vision 総実行時間は別評価項目として扱う。
 
 ## 計測方法
 
@@ -19,7 +19,7 @@ Requirement 2.2「暗転直後よりさらに低下させる」は、推論FPS�
 
 ## 実測値（窓あたり平均。limitFPS/motionFreq で区分）
 
-| 状態 (limitFPS/motionFreq) | 窓数 | 推論/窓 | visionExec/窓 | visionSkip/窓 | poseTime/窓 | faceTime/窓 | 推論あたりVision |
+| 状態 (limitFPS/motionFreq) | 窓数 | 推論回数/窓 | visionExec/窓 | visionSkip/窓 | poseTime/窓 | faceTime/窓 | 推論あたりVision |
 |---|---|---|---|---|---|---|---|
 | 通常 15.0/30Hz | 2 | 90.5 | 0.5 | 60.0 | 1.040s | 0.042s | 約17ms |
 | 暗転 10.0/30Hz（在席） | 1 | 166 | 0.0 | 45.0 | 0.743s | 0s | 約17ms |
