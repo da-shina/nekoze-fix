@@ -397,7 +397,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
 
 - Preconditions: `tick` の入力はデバウンス済み `isPersonDetected` のみ。生検出不使用。`now` は単調時計。無効値は遷移を見送る
 - Postconditions: `tick` 呼び出しごとに `isProlongedAbsence` が更新され、遷移時は新値を返す
-- Invariants: しきい値・間隔は判定中不変。`absenceStart` は `isProlongedAbsence == true` の間のみ非 nil。`lastFaceDetectedTime` は顔実行時のみ更新。
+- Invariants: しきい値・間隔は判定中不変。`absenceStart` は人物不在検出時から長時間不在解除まで非 nil（長時間不在に入る前から設定され得る）。`lastFaceDetectedTime` は顔実行時のみ更新。
 
 ##### State Management
 
