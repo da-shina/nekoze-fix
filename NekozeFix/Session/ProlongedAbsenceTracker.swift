@@ -1,9 +1,9 @@
 import Foundation
 import QuartzCore
 
-/// スレッドセーフな長時間不在トラッカー（Session層・値型・`@unchecked Sendable`）。
+/// スレッドセーフな長時間不在トラッカー（Session層・`@unchecked Sendable` クラス）。
 ///
-/// MotionService.SharedState と同パターンで NSLock による内部同期を行う。
+/// `MotionService.SharedState` と同パターンで NSLock による内部同期を行う。
 /// 人物不在継続時間を単調時計（`CACurrentMediaTime` 系）で計測し、
 /// 不在しきい値（既定 60 秒、`DimPowerPolicy.defaultAbsentThreshold` 共用）超過で長時間不在状態へ遷移する。
 /// 顔フォールバック間引き間隔（既定 5 秒）を内部に保持し、スレッドセーフに実行可否を判定・記録する。

@@ -9,7 +9,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 初期状態では長時間不在でない。
     func testInitialState_isNotProlongedAbsence() {
-        let tracker = ProlongedAbsenceTracker()
+        var tracker = ProlongedAbsenceTracker()
         XCTAssertFalse(tracker.isProlongedAbsence)
         XCTAssertEqual(tracker.snapshot().isProlongedAbsence, false)
     }

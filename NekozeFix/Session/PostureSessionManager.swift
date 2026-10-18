@@ -87,7 +87,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
 /// 長時間不在トラッカー（absent-vision-reduction）。
     /// 不在計測・顔フォールバック間引き判定・ホールド管理を所有する。
-    /// 値型（struct）で内部 NSLock を持つため、検出キュー・MainActor 間で同一インスタンスを共有可能。
+    /// クラス（`@unchecked Sendable`）で内部 NSLock を持つため、検出キュー・MainActor 間で同一インスタンスを安全に共有可能。
     nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()
 
     // MARK: - 初期化

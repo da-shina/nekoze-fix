@@ -4,7 +4,7 @@
 
 - [ ] 1. テスト基盤と共有ユーティリティの整備
   - `ProlongedAbsenceTracker` 用のテストヘルパー（不正閾値・間隔注入、時間モック、スナップショット比較）を `NekozeFixTests/TestUtilities/` に追加
-  - `PoseDetector` 間引きテスト用の時刻注入可能な `ProlongedAbsenceTracker` と合成フレーム生成ユーティリティを作成（final クラスのモック化は避け、値型の時刻注入でテスト可能にする）
+  - `PoseDetector` 間引きテスト用の時刻注入可能な `ProlongedAbsenceTracker` と合成フレーム生成ユーティリティを作成（クラスの時刻注入でテスト可能にする）
   - 既存の `DimPowerPolicyTests` パターンに合わせ、単体テストのテンプレートを整理
   - 完了条件: テストビルドが通過し、ヘルパーが `ProlongedAbsenceTrackerTests` / `PoseDetectorTests` で利用可能
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.4, 3.1, 3.2, 3.3_

@@ -109,10 +109,10 @@ graph TB
 
 **Architecture Integration**:
 
-- Selected pattern: **純粋値型によるポリシー隔離** + 既存受口への制御指示（`dim-mode-saving` と同パターン）
+- Selected pattern: **クラスによるポリシー隔離** + 既存受口への制御指示（`dim-mode-saving` と同パターン、`MotionService.SharedState` 同パターン）
 - Domain/feature boundaries: 長時間不在管理は `ProlongedAbsenceTracker` 単独所有。暗転段階は `DimPowerPolicy` 継続所有
 - Existing patterns preserved: Session 唯一書き込み点、間引き→条件化の順序、起停一本化、依存方向
-- New components rationale: モード非依存の不在管理を値型に隔離し、カメラなしで単体検証可能にする
+- New components rationale: モード非依存の不在管理をクラスに隔離し、検出キュー・MainActor 間で同一インスタンスを安全に共有可能にする
 - Steering compliance: 新規依存なし、実測なき効果記載なし、3秒確定の意味不変、監視継続の期待変更なし
 
 ### Technology Stack
@@ -128,7 +128,7 @@ graph TB
 
 ### New Files
 
-- `NekozeFix/Session/ProlongedAbsenceTracker.swift` — 新規。長時間不在の計測・遷移・間引き判定・閾値を持つ値型
+- `NekozeFix/Session/ProlongedAbsenceTracker.swift` — 新規。長時間不在の計測・遷移・間引き判定・閾値を持つクラス（`@unchecked Sendable`、`NSLock` 内包）
 - `NekozeFixTests/ProlongedAbsenceTrackerTests.swift` — 新規。遷移判定・間引き判定・閾値境界・復帰の単体検証
 
 ### Modified Files
@@ -225,7 +225,7 @@ stateDiagram-v2
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
-| ProlongedAbsenceTracker | Session / 値型 | 長時間不在の計測・遷移・間引き判定・閾値 | 1.1–1.4, 2.1, 2.4 | `DimPowerPolicy.defaultAbsentThreshold` (P0) | State [x] |
+| ProlongedAbsenceTracker | Session / クラス（`@unchecked Sendable`） | 長時間不在の計測・遷移・間引き判定・閾値 | 1.1–1.4, 2.1, 2.4 | `DimPowerPolicy.defaultAbsentThreshold` (P0) | State [x] |
 | PoseDetector | Services | 姿勢検出・顔フォールバック間引き実行 | 2.1, 2.2, 2.4, 3.1–3.3 | ProlongedAbsenceTracker (P0), Vision (P0) | Service [x], State [x] |
 | PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への bool + inout Tracker 渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
 | Metrics 計測 | Session/Services | 視覚処理量・電力の実測記録 | 5.1–5.4 | 既存 5秒窓ログ (P0), Energy Report (P0) | State [x] |
@@ -261,11 +261,11 @@ stateDiagram-v2
 ##### Interface
 
 ```swift
-/// スレッドセーフな長時間不在トラッカー（Session層・値型）。
+/// スレッドセーフな長時間不在トラッカー（Session層・`@unchecked Sendable` クラス）。
 /// 内部状態はロックで保護し、単一の `tick(now:)` と `shouldExecuteFaceFallback(now:)` で
 /// 全状態更新をアトミックに行う。`MotionService.SharedState` と同パターンで
-/// NSLock による内部同期を行う。`@unchecked Sendable` 準拠。
-struct ProlongedAbsenceTracker: @unchecked Sendable {
+/// NSLock による内部同期を行う。
+final class ProlongedAbsenceTracker: @unchecked Sendable {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
@@ -561,10 +561,10 @@ final class PoseDetector: @unchecked Sendable {
 
 本機能で新規に定義するデータモデル：
 
-### ProlongedAbsenceTracker (Session 値型・スレッドセーフ)
+### ProlongedAbsenceTracker (Session クラス・スレッドセーフ・`@unchecked Sendable`)
 
 ```swift
-struct ProlongedAbsenceTracker: @unchecked Sendable {
+final class ProlongedAbsenceTracker: @unchecked Sendable {
     let absentThreshold: TimeInterval           // 既定 60s（DimPowerPolicy 共用）
     let faceFallbackThrottleInterval: TimeInterval // 既定 5s
 
@@ -592,7 +592,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
 
 - 既存 `DimPowerPolicy` と併存。責務は完全分離（段階遷移 vs モード非依存不在管理）
 - `NSLock` 内包でスレッドセーフ。`MotionService.SharedState` 同パターン
-- 値型のためコピー時は状態共有されず、`inout` 渡しで同一インスタンスを共有
+- クラスのため同一インスタンスを検出キュー・MainActor 間で安全に共有可能
 
 ### PoseDetector.Metrics 拡張
 

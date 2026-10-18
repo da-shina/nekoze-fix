@@ -99,8 +99,8 @@ final class PoseDetectorTests: XCTestCase {
             throw NSError(domain: "PoseDetectorTests", code: 1)
         }
         let detector = PoseDetector()
-        var tracker = ProlongedAbsenceTracker()
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
+        let tracker = ProlongedAbsenceTracker()
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
         detector.reset()
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics())
     }
@@ -118,8 +118,8 @@ final class PoseDetectorTests: XCTestCase {
         }
 
         let detector = PoseDetector()
-        var tracker = ProlongedAbsenceTracker()
-        let result = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
+        let tracker = ProlongedAbsenceTracker()
+        let result = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
 
         guard case .absent = result else {
             return XCTFail("無効バッファは .absent であること")
@@ -190,9 +190,8 @@ final class PoseDetectorTests: XCTestCase {
         _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
 
         let metrics = detector.snapshot()
-        // 無効バッファでも間引き判定は毎回 true が返るため faceExecutedCount が増える
-        // （実際の Vision 実行は失敗するが、間引き判定のロジックは通る）
-        XCTAssertEqual(metrics.faceExecutedCount, 3)
+        // 無効バッファでは早期リターンするため計数は進まない（testDetect_invalidBufferReturnsAbsentWithoutCounting と同一挙動）
+        XCTAssertEqual(metrics.faceExecutedCount, 0)
         XCTAssertEqual(metrics.faceThrottledCount, 0)
     }
 
@@ -257,7 +256,8 @@ final class PoseDetectorTests: XCTestCase {
         _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
 
         let metrics = detector.snapshot()
-        XCTAssertEqual(metrics.faceExecutedCount, 3) // 初回 + リセット後2回
+        // 無効バッファでは早期リターンするため、リセット後の2回は計数されない
+        XCTAssertEqual(metrics.faceExecutedCount, 1) // 長時間不在中の初回のみ
         XCTAssertEqual(metrics.faceThrottledCount, 0)
     }
 
