@@ -265,8 +265,7 @@ stateDiagram-v2
 /// 内部状態はロックで保護し、単一の `tick(now:)` と `shouldExecuteFaceFallback(now:)` で
 /// 全状態更新をアトミックに行う。`MotionService.SharedState` と同パターンで
 /// NSLock による内部同期を行う。`@unchecked Sendable` 準拠。
-@unchecked Sendable
-struct ProlongedAbsenceTracker {
+struct ProlongedAbsenceTracker: @unchecked Sendable {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
@@ -565,8 +564,7 @@ final class PoseDetector: @unchecked Sendable {
 ### ProlongedAbsenceTracker (Session 値型・スレッドセーフ)
 
 ```swift
-@unchecked Sendable
-struct ProlongedAbsenceTracker {
+struct ProlongedAbsenceTracker: @unchecked Sendable {
     let absentThreshold: TimeInterval           // 既定 60s（DimPowerPolicy 共用）
     let faceFallbackThrottleInterval: TimeInterval // 既定 5s
 
