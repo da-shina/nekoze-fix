@@ -141,6 +141,9 @@ struct SessionSnapshot: Equatable {
     var isShoulderMissing: Bool = false
     var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
+    /// 校正カウントダウンをユーザーがタップで一時停止しているか。
+    /// true の間は `calibrationProgress` の経過時間を進めない（校正フロー側で蓄積を凍結）。
+    var isCalibrationPaused: Bool = false
     var referenceAngle: Double? = nil
     /// 校正時耳-肩距離の平均（正規化座標系）。ロック側の基準距離。
     var referenceDistance: Double? = nil

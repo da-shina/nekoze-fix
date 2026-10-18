@@ -492,8 +492,7 @@ final class CalibrationLogicTests: XCTestCase {
 
     /// 重要ユニットテスト: 角度変化 > 5度は蓄積をリセット
     /// 姿勢不安定検出を検証
-    func testObservableReset_AngleChangeMoreThanFiveDegreesResets() {
-        sut.start()
+    func testObservableReset_AngleChangeMoreThanFiveDegreesResets() {        sut.start()
 
         // 40度で1.5秒蓄積
         for frameIndex in 0..<90 {
@@ -515,5 +514,56 @@ final class CalibrationLogicTests: XCTestCase {
         default:
             break
         }
+    }
+
+    // MARK: - 一時停止からの再開（校正カウントダウン）
+
+    /// 停止区間の実時間は経過に加算されない（resume が基準時刻を置き直す）。
+    func testResume_DoesNotCountPausedDuration() {
+        sut.start()
+
+        _ = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 0.0)
+        _ = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 1.0)
+
+        // 10秒間の一時停止を挟んで再開する
+        sut.resume(now: 11.0)
+
+        let progress = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 11.1)
+
+        // 停止区間（1.0〜11.0）は加算されず、経過は約1.1秒のまま
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertEqual(elapsed, 1.1, accuracy: 0.001)
+        } else {
+            XCTFail("accumulating を期待したが \(progress)")
+        }
+    }
+
+    /// 停止が脱落許容時間を超えても、再開ではリセットされず蓄積が保持される。
+    func testResume_KeepsAccumulationBeyondDropoutTolerance() {
+        sut.start()
+
+        _ = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 0.0)
+        _ = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 2.0)
+
+        // dropoutTolerance(1.0秒) を大きく超える停止
+        sut.resume(now: 100.0)
+
+        let progress = sut.ingest(sample: makeSample(angle: 45.0), referenceSource: nil, presence: .personDetected, now: 100.5)
+
+        if case .accumulating(let elapsed) = progress {
+            XCTAssertEqual(elapsed, 2.5, accuracy: 0.001, "停止区間は加算されず、蓄積もリセットされない")
+        } else {
+            XCTFail("accumulating を期待したが \(progress)")
+        }
+    }
+
+    /// 待機中（未蓄積）の resume は状態を変えない。
+    func testResume_WhileWaiting_IsNoOp() {
+        sut.start()
+
+        sut.resume(now: 10.0)
+
+        let progress = sut.ingest(sample: nil, referenceSource: nil, presence: .personMissing, now: 10.5)
+        XCTAssertEqual(progress, .waitingForPerson)
     }
 }

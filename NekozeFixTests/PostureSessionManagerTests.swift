@@ -60,6 +60,52 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
+    // MARK: - 校正カウントダウンの一時停止/再開
+
+    func testToggleCalibrationPause_togglesWhileCalibrating() {
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        XCTAssertTrue(sut.snapshot.isCalibrationPaused)
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testToggleCalibrationPause_ignoredOutsideCalibrating() {
+        // idle では無効
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+
+        // 監視中では無効
+        sut.startMonitoring()
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testStartCalibration_resetsPauseFlag() {
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        XCTAssertTrue(sut.snapshot.isCalibrationPaused)
+        sut.startCalibration()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testPausedCalibration_doesNotProgress() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: nil
+        )
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        for _ in 0..<60 {
+            sut.processDetection(.pose(frame))
+        }
+        // 一時停止中は ingest されず進捗が動かない（表示は凍結）
+        XCTAssertEqual(sut.snapshot.calibrationProgress, .waitingForPerson)
+    }
+
     // MARK: - 姿勢更新（processDetection 経由で不変条件を維持）
 
     func testProcessDetection_absent_showsPersonMissing() {

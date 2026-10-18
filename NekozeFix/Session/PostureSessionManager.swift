@@ -343,6 +343,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         setPhase(.calibrating)
         setMotionRotationRunning(true)
         calibrationLogic.start()
+        snapshot.isCalibrationPaused = false
         resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         smoothedPoints = []
         lastShoulderSeenTime = nil
@@ -351,6 +352,19 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         Task {
             await startCameraPipeline()
             startMetricsLogging()
+        }
+    }
+
+    /// 校正カウントダウンの一時停止/再開を切り替える（校正中のみ有効）。
+    /// 停止中は `processDetection` 側で `CalibrationLogic.ingest` を呼ばず経過時間を凍結する。
+    /// 再開時は停止区間の実時間を加算しないよう `resume(now:)` で基準時刻を置き直す。
+    func toggleCalibrationPause() {
+        guard snapshot.phase == .calibrating else { return }
+        if snapshot.isCalibrationPaused {
+            calibrationLogic.resume(now: CACurrentMediaTime())
+            snapshot.isCalibrationPaused = false
+        } else {
+            snapshot.isCalibrationPaused = true
         }
     }
 
@@ -886,8 +900,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             }
         }
 
-        if self.snapshot.phase == .calibrating {
+        if self.snapshot.phase == .calibrating && !self.snapshot.isCalibrationPaused {
             // キャリブレーションロジックに投入 (可視化ポイントも渡す)
+            // 一時停止中は ingest を呼ばず、経過時間と蓄積を凍結する（表示は最後の進捗のまま）。
             let progress = self.calibrationLogic.ingest(
                 sample: sample,
                 referenceSource: resolvedReference?.source,
@@ -927,6 +942,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.setPhase(.calibrating)
                 self.calibrationLogic.start()
                 self.snapshot.calibrationProgress = .waitingForPerson
+                self.snapshot.isCalibrationPaused = false
                 self.resetCalibrationState()
                 self.settingsStore.isMonitoringEnabled = false
                 self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 3.0)

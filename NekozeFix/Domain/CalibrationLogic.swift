@@ -44,6 +44,15 @@ struct CalibrationLogic {
         resetAccumulation()
     }
 
+    /// 一時停止からの再開。停止中に経過した実時間を蓄積へ加算しないよう、
+    /// 直近サンプル時刻を現在時刻に置き直す（脱落扱いも解除する）。
+    /// 蓄積中でない（待機中）場合は何もしない。
+    mutating func resume(now: TimeInterval) {
+        guard isAccumulating else { return }
+        lastSampleTime = now
+        dropoutActive = false
+    }
+
     /// 人物検出状態を処理する。
     /// - Parameters:
     ///   - sample: PostureAnalyzer からの角度サンプル（有効な角度がない場合は nil）
