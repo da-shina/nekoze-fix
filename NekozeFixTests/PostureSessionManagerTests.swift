@@ -1375,14 +1375,14 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         }
 
         // 最初は実行される
-        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: sut.prolongedAbsenceTracker.isProlongedAbsence, prolongedAbsenceTracker: &sut.prolongedAbsenceTracker)
         var metrics = sut.poseDetector.snapshot()
         XCTAssertEqual(metrics.faceExecutedCount, 1)
         XCTAssertEqual(metrics.faceThrottledCount, 0)
 
         // 間引き間隔内はスキップ
-        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
-        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: sut.prolongedAbsenceTracker)
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: sut.prolongedAbsenceTracker.isProlongedAbsence, prolongedAbsenceTracker: &sut.prolongedAbsenceTracker)
+        _ = sut.poseDetector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: sut.prolongedAbsenceTracker.isProlongedAbsence, prolongedAbsenceTracker: &sut.prolongedAbsenceTracker)
         metrics = sut.poseDetector.snapshot()
         XCTAssertEqual(metrics.faceExecutedCount, 1, "間引き間隔内は顔実行されない")
         XCTAssertEqual(metrics.faceThrottledCount, 2, "間引きスキップが計数される")

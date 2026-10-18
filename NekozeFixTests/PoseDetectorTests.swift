@@ -99,8 +99,8 @@ final class PoseDetectorTests: XCTestCase {
             throw NSError(domain: "PoseDetectorTests", code: 1)
         }
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker()
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        var tracker = ProlongedAbsenceTracker()
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
         detector.reset()
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics())
     }
@@ -118,8 +118,8 @@ final class PoseDetectorTests: XCTestCase {
         }
 
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker()
-        let result = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        var tracker = ProlongedAbsenceTracker()
+        let result = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
 
         guard case .absent = result else {
             return XCTFail("無効バッファは .absent であること")
@@ -136,7 +136,7 @@ final class PoseDetectorTests: XCTestCase {
     /// 長時間不在中かつ姿勢観測ゼロ件時、間引き間隔内は顔スキップ（.absent 返却、faceThrottledCount++）。
     func testDetect_prolongedAbsence_throttlesFaceFallback() throws {
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -153,14 +153,14 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertTrue(tracker.isProlongedAbsence)
 
         // 最初の顔実行は実行される（間引き判定 true）
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
         let metrics1 = detector.snapshot()
         XCTAssertEqual(metrics1.faceExecutedCount, 1)
         XCTAssertEqual(metrics1.faceThrottledCount, 0)
 
         // 間引き間隔内（5秒）はスキップされる
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
         let metrics2 = detector.snapshot()
         XCTAssertEqual(metrics2.faceExecutedCount, 1, "間引き間隔内は顔実行されない")
         XCTAssertEqual(metrics2.faceThrottledCount, 2, "間引きでスキップされた回数が計数される")
@@ -170,7 +170,7 @@ final class PoseDetectorTests: XCTestCase {
     /// 長時間不在でない場合、毎回顔フォールバックが実行される（faceExecutedCount インクリメント）。
     func testDetect_notProlongedAbsence_executesFaceFallbackEveryTime() throws {
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker()
+        var tracker = ProlongedAbsenceTracker()
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -185,9 +185,9 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertFalse(tracker.isProlongedAbsence)
 
         // 無効バッファでは .absent が返るが、間引き判定は true（実行済みとして記録される）
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
 
         let metrics = detector.snapshot()
         // 無効バッファでも間引き判定は毎回 true が返るため faceExecutedCount が増える
@@ -199,7 +199,7 @@ final class PoseDetectorTests: XCTestCase {
     /// Metrics 計数: faceThrottledCount / faceExecutedCount / faceSkippedCount / faceTotalTime / poseTotalTime
     func testMetrics_throttlingCountsAllMetrics() throws {
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -214,9 +214,9 @@ final class PoseDetectorTests: XCTestCase {
         _ = tracker.tick(isPersonDetected: false, now: 1001)
 
         // 1回実行、2回間引き
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
 
         let metrics = detector.snapshot()
         XCTAssertEqual(metrics.faceExecutedCount, 1)
@@ -229,7 +229,7 @@ final class PoseDetectorTests: XCTestCase {
     /// 長時間不在解除後（Tracker リセット後）は毎回実行に復帰する。
     func testDetect_afterProlongedAbsenceReset_executesEveryTime() throws {
         let detector = PoseDetector()
-        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -246,15 +246,15 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertTrue(tracker.isProlongedAbsence)
 
         // 1回実行
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: &tracker)
 
         // リセット（長時間不在解除相当）
         tracker.reset()
         XCTAssertFalse(tracker.isProlongedAbsence)
 
         // リセット後は毎回実行
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: &tracker)
 
         let metrics = detector.snapshot()
         XCTAssertEqual(metrics.faceExecutedCount, 3) // 初回 + リセット後2回

@@ -84,12 +84,14 @@ final class PoseDetector: @unchecked Sendable {
     /// - Parameters:
     ///   - sampleBuffer: 入力画像バッファ
     ///   - orientation: 画像向き
-    ///   - prolongedAbsenceTracker: 長時間不在トラッカー（間引き判定・ホールド用）。長時間不在中かつ姿勢観測ゼロ件時に間引き制御を行う。
+    ///   - isProlongedAbsence: 長時間不在中か（`ProlongedAbsenceTracker.isProlongedAbsence` の値を渡す）
+    ///   - prolongedAbsenceTracker: 長時間不在トラッカー（間引き判定・ホールド用）。`inout` で同一インスタンスを共有する。
     /// - Returns: 検出結果
     func detect(
         sampleBuffer: CMSampleBuffer,
         orientation: CGImagePropertyOrientation,
-        prolongedAbsenceTracker: ProlongedAbsenceTracker
+        isProlongedAbsence: Bool,
+        prolongedAbsenceTracker: inout ProlongedAbsenceTracker
     ) -> Detection {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return .absent
@@ -159,7 +161,7 @@ final class PoseDetector: @unchecked Sendable {
             return .absent
         }
 
-        // 顔検出実行後、ホールド用時刻を更新
+        // 顔検出実行後（.personOnly または .pose を返す直前）、ホールド用時刻を更新
         prolongedAbsenceTracker.recordFaceDetected(now: now)
 
         return Self.synthesize(pose: nil, faceBounds: faceBounds)

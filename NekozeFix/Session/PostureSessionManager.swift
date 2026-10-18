@@ -85,12 +85,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     // slouchGate の deltaTime 算出用（メインアクタからのみアクセス）
     private var lastGateTickTime: TimeInterval?
 
-    /// 長時間不在トラッカー（absent-vision-reduction）。
+/// 長時間不在トラッカー（absent-vision-reduction）。
     /// 不在計測・顔フォールバック間引き判定・ホールド管理を所有する。
-    /// 長時間不在トラッカー（absent-vision-reduction）。
-/// 不在計測・顔フォールバック間引き判定・ホールド管理を所有する。
-/// 検出キューから参照するため nonisolated(unsafe) とする（内部 NSLock でスレッドセーフ）。
-nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()
+    /// 値型（struct）で内部 NSLock を持つため、検出キュー・MainActor 間で同一インスタンスを共有可能。
+    nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()
 
     // MARK: - 初期化
 
@@ -687,10 +685,12 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
         // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
         let inferenceStart = CACurrentMediaTime()
+        let isProlonged = prolongedAbsenceTracker.isProlongedAbsence
         let detection = poseDetector.detect(
             sampleBuffer: sampleBuffer,
             orientation: .up,
-            prolongedAbsenceTracker: prolongedAbsenceTracker
+            isProlongedAbsence: isProlonged,
+            prolongedAbsenceTracker: &prolongedAbsenceTracker
         )
         throttleLock.withLock {
             frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
@@ -910,7 +910,7 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
             points = self.snapshot.visualizationPoints
         }
 
-        self.snapshot.isPersonDetected = (presence == .personDetected)
+self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
 
         // dim-mode-saving 3.1: 不在駆動はデバウンス確定後の人物検出状態のみを入力する
@@ -924,7 +924,7 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
             }
         }
 
-// absent-vision-reduction: 長時間不在トラッカーの更新
+        // absent-vision-reduction: 長時間不在トラッカーの更新
         // デバウンス確定後の人物検出状態を入力し、遷移・リセット・ホールドを制御する
         let wasProlonged = prolongedAbsenceTracker.isProlongedAbsence
         let isNowProlonged = prolongedAbsenceTracker.tick(isPersonDetected: self.snapshot.isPersonDetected, now: now)
@@ -962,7 +962,8 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
-            if presence == .personMissing {
+            // 表示用: 長時間不在中のホールド期間内は personMissing を出さない
+            if !displayIsPersonDetected {
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
