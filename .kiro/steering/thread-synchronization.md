@@ -1,14 +1,18 @@
 # スレッド同期機構（NSLock・キュー・共有状態）図解
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-20_
 
 `tech.md`「Concurrency Model」および `concurrency-model.md` の規則を、**NSLock を中心とした同期境界**として詳細に図解した補助ドキュメント。実装パターンの唯一の正は各 Swift ファイルであり、本書はその可視化のみを担う。
+
+> **Note (2026-10-20)**: `ProlongedAbsenceTracker` が `struct` から `final class (@unchecked Sendable)` に変更され、内部 `NSLock` で同期するパターン（`MotionService.SharedState` と同等）になった。本書はこの変更を反映済み。
 
 ---
 
 ## 1. NSLock 同期境界の全体像
 
 このプロジェクトでは、**5つの NSLock** が各共有状態を所有し、検出キュー・MainActor・制御キュー間のデータ競合を防ぐ。
+
+> **重要**: `ProlongedAbsenceTracker` は `final class (@unchecked Sendable)` であり、内部に `private let lock = NSLock()` を保持する（`MotionService.SharedState` と同パターン）。値型ではなくクラス参照として共有されるため、`inout` 不要で検出キュー・MainActor 双方から安全にアクセス可能。
 
 ```mermaid
 flowchart TB
@@ -222,6 +226,8 @@ sequenceDiagram
 
 ### 2.5 ProlongedAbsenceTracker.lock (ProlongedAbsenceTracker)
 
+> **変更 (2026-10-20)**: `struct` から `final class (@unchecked Sendable)` に変更。内部 `private let lock = NSLock()` を保持し、`MotionService.SharedState` と同パターンでスレッドセーフにする。`inout` 不要でクラス参照として検出キュー・MainActor 双方から共有アクセス可能。
+
 ```mermaid
 stateDiagram-v2
     [*] --> NotAbsent: 初期化
@@ -243,40 +249,43 @@ sequenceDiagram
     autonumber
     participant DQ as detectionQueue
     participant MAIN as MainActor
-    participant PL as ProlongedAbsenceTracker.lock
-    participant PAT as ProlongedAbsenceTracker
+    participant PL as ProlongedAbsenceTracker (class @unchecked Sendable)
+    participant LOCK as private let lock = NSLock()
 
-    Note over DQ,PAT: 不在判定 (毎フレーム)
+    Note over DQ,LOCK: 不在判定 (毎フレーム)
     DQ->>PL: tick(isPersonDetected, now)
-    PL->>PAT: absenceStart 管理・閾値比較・状態遷移
-    PAT-->>PL: isProlongedAbsence (Bool)
+    PL->>LOCK: withLock { ... }
+    LOCK-->>PL: isProlongedAbsence (Bool)
     PL-->>DQ: Bool
 
-    Note over DQ,PAT: 顔フォールバック間引き判定 (長時間不在中のみ)
+    Note over DQ,LOCK: 顔フォールバック間引き判定 (長時間不在中のみ)
     DQ->>PL: shouldExecuteAndRecordFaceFallback(now)
-    PL->>PAT: lastFaceExecutionTime 比較・更新
-    PAT-->>PL: Bool (実行可否)
+    PL->>LOCK: withLock { lastFaceExecutionTime 比較・更新 }
+    LOCK-->>PL: Bool (実行可否)
     PL-->>DQ: Bool
 
-    Note over DQ,PAT: 顔検出完了通知
+    Note over DQ,LOCK: 顔検出完了通知
     DQ->>PL: recordFaceDetected(now)
-    PL->>PAT: lastFaceDetectedTime = now
+    PL->>LOCK: withLock { lastFaceDetectedTime = now }
+    LOCK-->>PL: void
     PL-->>DQ: void
 
-    Note over MAIN,PAT: 表示用ホールド確認
+    Note over MAIN,LOCK: 表示用ホールド確認
     MAIN->>PL: faceDetectedHoldActive(now)
-    PL->>PAT: 経過時間比較
-    PAT-->>PL: Bool
+    PL->>LOCK: withLock { 経過時間比較 }
+    LOCK-->>PL: Bool
     PL-->>MAIN: Bool
 
-    Note over MAIN,PAT: 状態リセット
+    Note over MAIN,LOCK: 状態リセット
     MAIN->>PL: reset()
-    PL->>PAT: 全状態クリア
+    PL->>LOCK: withLock { 全状態クリア }
+    LOCK-->>PL: void
     PL-->>MAIN: void
 ```
 
 **保護対象**: `_isProlongedAbsence`、`absenceStart`、`lastFaceExecutionTime`、`lastFaceDetectedTime`
 **アクセス経路**: detectionQueue（tick・shouldExecuteAndRecordFaceFallback・recordFaceDetected）／Main（isProlongedAbsence・faceDetectedHoldActive・reset・snapshot）
+**実装パターン**: `final class @unchecked Sendable` + `private let lock = NSLock()`、全メソッドが `lock.withLock { ... }` で実装、値複写で返却
 
 ---
 
@@ -317,18 +326,20 @@ flowchart LR
 
 `PostureSessionManager` では、検出キューから直接参照する値を `nonisolated(unsafe)` で公開し、実態の保全は各ロックに委ねる。
 
+> **変更 (2026-10-20)**: `ProlongedAbsenceTracker` は `final class (@unchecked Sendable)` であり、`nonisolated(unsafe) var` は**クラス参照**を保持する。内部 `private let lock = NSLock()` が同期を担う（`MotionService.SharedState` と同パターン）。値型ではなくクラス参照として共有されるため、`inout` 不要で検出キュー・MainActor 双方から安全にアクセス可能。
+
 ```mermaid
 flowchart TB
     subgraph PSM["PostureSessionManager (@MainActor)"]
         FT_VAR["nonisolated(unsafe) var frameThrottle = FrameThrottle()"]
         HG_VAR["nonisolated(unsafe) private(set) var hopGate = LockedMainHopGate()"]
-        PAT_VAR["nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()"]
+        PAT_VAR["nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()\n(final class @unchecked Sendable)"]
     end
 
     subgraph LOCKS["各ロックが実態を保護"]
-        TL["throttleLock"]
+        TL["throttleLock (PostureSessionManager)"]
         HL["LockedMainHopGate.lock"]
-        PL["ProlongedAbsenceTracker.lock"]
+        PL["ProlongedAbsenceTracker.lock (内部 NSLock)"]
     end
 
     FT_VAR -.-> TL
@@ -337,16 +348,17 @@ flowchart TB
 
     DQ["detectionQueue"] -->|参照のみ| FT_VAR
     DQ -->|submit| HG_VAR
-    DQ -->|tick/face| PAT_VAR
+    DQ -->|tick/face (class ref)| PAT_VAR
 
     MAIN["MainActor"] -->|snapshot/計測| FT_VAR
     MAIN -->|setPhase/snapshot| HG_VAR
-    MAIN -->|isProlongedAbsence/reset| PAT_VAR
+    MAIN -->|isProlongedAbsence/reset (class ref)| PAT_VAR
 ```
 
 **なぜ安全か**:
 - 参照自体は不変（同一インスタンスを指し続ける）
-- 可変状態への書き込み・読み出しは必ず対応するロック経由
+- `ProlongedAbsenceTracker` はクラス参照として共有、`inout` 不要
+- 可変状態への書き込み・読み出しは必ず対応するロック経由（内部 NSLock）
 - 新たなロック階層を増やさず、既存ロックで完結させる
 
 ---
@@ -405,11 +417,35 @@ final class ThreadSafe<Value>: @unchecked Sendable {
 }
 ```
 
-**実際の使用例**（`LockedMainHopGate` 等）:
+**実際の使用例**（`LockedMainHopGate`、`ProlongedAbsenceTracker`、`MotionService.SharedState` 等）:
 - `private let lock = NSLock()`
-- `private var state: StateType`
+- `private var state: StateType`（値型の内部状態）
 - 全メソッドが `lock.withLock { ... }` で実装
-- `@unchecked Sendable` 適合でキュー間共有を許可
+- `final class @unchecked Sendable` 適合でキュー間共有を許可
+- 戻り値は値複写（`struct` のコピー）で返し、参照を漏らさない
+
+**`ProlongedAbsenceTracker` 実装パターン**（`MotionService.SharedState` と同等）:
+```swift
+final class ProlongedAbsenceTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _isProlongedAbsence: Bool = false
+    private var absenceStart: TimeInterval?
+    // ... 他の状態
+
+    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
+        lock.withLock { /* 状態更新・判定 */ }
+    }
+
+    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
+        lock.withLock { /* 判定・時刻更新 */ }
+    }
+
+    var isProlongedAbsence: Bool {
+        lock.withLock { _isProlongedAbsence }
+    }
+    // ... 他のメソッドも同様
+}
+```
 
 ---
 
@@ -442,9 +478,9 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    subgraph UNIT["単体テスト（値型直接検証）"]
-        UT1["FrameThrottle / MainHopGate / ProlongedAbsenceTracker"] --> UT2["構造体メソッドを直接呼び出し"]
-        UT2 --> UT3["ロックなしでロジック検証"]
+    subgraph UNIT["単体テスト（内部ロジック検証）"]
+        UT1["FrameThrottle / MainHopGate / ProlongedAbsenceTracker"] --> UT2["クラスメソッドを直接呼び出し"]
+        UT2 --> UT3["ロック経由でロジック検証（内部 lock は実装詳細）"]
     end
 
     subgraph INTEGRATION["結合テスト（ロック経由検証）"]
@@ -467,6 +503,8 @@ xcodebuild test -scheme NekozeFix \
   -enableThreadSanitizer YES
 ```
 
+> **Note**: `ProlongedAbsenceTracker` は `final class` になったため、単体テストでもロック経由で呼び出す（内部 `NSLock` は実装詳細）。`inout` 不要で同一インスタンス参照を共有してテスト可能。
+
 ---
 
 ## 9. まとめ: 同期機構の設計原則
@@ -477,6 +515,7 @@ xcodebuild test -scheme NekozeFix \
 4. **値複写返却**: 参照を漏らさず `struct` コピーで返す
 5. **非同期配送**: 状態変更は直列キューへ `async` 配送し、MainActor をブロックしない
 6. **単調時刻**: 経過時間判定は `CACurrentMediaTime` 系で統一
-7. **テスト可能性**: 値型ロジックはロックなしで単体テスト、結合でロック経由を検証
+7. **テスト可能性**: 内部ロジックはロック経由で単体テスト、結合でクロスキュー検証
+8. **クラス参照共有**: スレッド間共有が必要な状態は `final class @unchecked Sendable` + 内部 `NSLock` パターンで実装し、`inout` を避ける（`ProlongedAbsenceTracker`、`MotionService.SharedState`）
 
 これらの原則は `tech.md`「Concurrency Model」および各 ADR（0022, 0023, 0024）に基づき、判定の正しさ・省電力・応答性のバランスを保つために厳守する。
