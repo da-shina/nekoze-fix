@@ -95,3 +95,23 @@ _Avoid_: 更新頻度（単独略称）、Motion頻度
 **公開値（Visible Gravity Value）**:
 MotionServiceが保持するキーポイント空間に変換済みの最新重力（`latestGravityInKeypointSpace`）。判定は読取り時にその時点の最新公開値を使用する。実質同一の受信時は公開値の更新を抑制する。
 _Avoid_: 最新値（単独略称）、可視値、表示値
+
+**省電力段階（Power Stage）**:
+画面暗転操作と人物の在不在で決まる監視の節電状態。通常・暗転・長時間不在の3値のみをとる。
+_Avoid_: 省電力モード、暗転モード
+
+**長時間不在（Prolonged Absence）**:
+画面暗転モード中に人物なしが不在しきい値を超えて継続している省電力段階。
+_Avoid_: 人物なし、不在
+
+**不在しきい値（Absence Threshold）**:
+暗転段階から長時間不在段階へ進むための人物なし継続秒数。
+_Avoid_: タイムアウト、猶予期間
+
+**復帰（Restore）**:
+省電力段階を通常に戻し頻度を通常水準に戻すこと。画面輝度の復元とは別物。
+_Avoid_: 暗転解除、再開
+
+**電力指標（Energy Metrics）**:
+Xcode の Energy Report が表示する消費電力の相対指標。(a) Average Energy Impact ゲージの色評価（Low/High/Very High）と (b) Average Component Utilization の領域別%（Overhead/CPU/GPU/Network/Location/Display）からなる。校正された電力（W / mAh）ではなく、同一端末・同一セッション内の相対比較にのみ用いる。数値の Energy Impact スコアは Xcode 26 では表示されない。
+_Avoid_: 消費電力（絶対値の意）、電力消費量、省電力率

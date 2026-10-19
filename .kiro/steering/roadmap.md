@@ -32,3 +32,4 @@ NekozeFix iOSアプリのバッテリー消費削減プロジェクト。Vision�
 - [x] mainactor-throttle -- MainActor hop削減とsnapshot更新最適化（P1）。Dependencies: vision-fps-throttle
 - [x] motion-frequency -- CoreMotion更新頻度の調整（P1）。Dependencies: none
 - [x] dim-mode-saving -- 暗転モード中の省電力化（P1）。Dependencies: vision-fps-throttle, motion-frequency
+- [ ] absent-vision-reduction -- 長時間不在時の視覚処理削減（顔フォールバックの間引き／停止）（P2・提案）。Dependencies: vision-face-conditional, dim-mode-saving。dim-mode-saving 4.2 の実測（`absent-vision-cost-4-2.md`）から提案。ADR-0021 の検出意味を変えるため設計判断（ADR）を要する

@@ -41,12 +41,20 @@ struct CalibrationView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 32) {
-                // タイマー表示
-                Text("\(Int(timerRemaining))秒")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-                    .shadow(radius: 4)
+                // タイマー表示（タップでカウントダウンを一時停止/再開）
+                Button {
+                    sessionManager.toggleCalibrationPause()
+                } label: {
+                    Text("\(Int(timerRemaining))秒")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.primary)
+                        .strikethrough(isCalibrationPaused)
+                        .shadow(radius: 4)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(isCalibrationPaused ? "校正を再開" : "校正を一時停止")
+                .accessibilityHint("タップで校正カウントダウンを一時停止または再開します")
 
                 Spacer()
 
@@ -111,6 +119,10 @@ struct CalibrationView: View {
 
     private var isPersonDetected: Bool {
         sessionManager.snapshot.isPersonDetected
+    }
+
+    private var isCalibrationPaused: Bool {
+        sessionManager.snapshot.isCalibrationPaused
     }
 
     private var progressMessage: String {

@@ -60,6 +60,52 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertFalse(sut.snapshot.isDimmed)
     }
 
+    // MARK: - 校正カウントダウンの一時停止/再開
+
+    func testToggleCalibrationPause_togglesWhileCalibrating() {
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        XCTAssertTrue(sut.snapshot.isCalibrationPaused)
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testToggleCalibrationPause_ignoredOutsideCalibrating() {
+        // idle では無効
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+
+        // 監視中では無効
+        sut.startMonitoring()
+        sut.toggleCalibrationPause()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testStartCalibration_resetsPauseFlag() {
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        XCTAssertTrue(sut.snapshot.isCalibrationPaused)
+        sut.startCalibration()
+        XCTAssertFalse(sut.snapshot.isCalibrationPaused)
+    }
+
+    func testPausedCalibration_doesNotProgress() {
+        let frame = PoseFrame(
+            timestamp: 0,
+            leftEar: Keypoint(x: 0.3, y: 0.4, confidence: 0.9),
+            rightEar: nil,
+            leftShoulder: Keypoint(x: 0.4, y: 0.7, confidence: 0.9),
+            rightShoulder: nil
+        )
+        sut.startCalibration()
+        sut.toggleCalibrationPause()
+        for _ in 0..<60 {
+            sut.processDetection(.pose(frame))
+        }
+        // 一時停止中は ingest されず進捗が動かない（表示は凍結）
+        XCTAssertEqual(sut.snapshot.calibrationProgress, .waitingForPerson)
+    }
+
     // MARK: - 姿勢更新（processDetection 経由で不変条件を維持）
 
     func testProcessDetection_absent_showsPersonMissing() {
@@ -916,6 +962,239 @@ final class PostureSessionManagerTests: XCTestCase {
         let before = sut.snapshot.referenceAngle
         sut.applyDeliveredAspectRatio(16.0 / 9.0)
         XCTAssertEqual(sut.snapshot.referenceAngle, before, "判定が参照する値には触れない")
+    }
+
+    // MARK: - 暗転省電力の段階連動 (dim-mode-saving 3.1)
+
+    /// 暗転移行で推論上限・取得頻度の低下指示が適用される（通常15fps/30Hz→暗転10fps/15Hz）。
+    func testEnterDimMode_appliesDimmedStageLowering() {
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "暗転移行で推論上限を低下させる")
+        XCTAssertEqual(sut.motionService.updateFrequency, .fifteenHz, "暗転移行で取得頻度を低下させる")
+    }
+
+    /// 長時間不在段階への遷移で更なる低下指示が適用される（取得頻度15Hz→10Hz、推論上限10fps据置き）。
+    func testDimmedAbsentTick_appliesFurtherLowering() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        // デバウンス猶予（0.5秒）超過まで不在を送り続け、しきい値超過で長時間不在へ進める。
+        for _ in 0..<10 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "長時間不在は推論上限据置き（ADR-0024）")
+        XCTAssertEqual(sut.motionService.updateFrequency, .tenHz, "長時間不在で取得頻度を更に低下させる")
+    }
+
+    /// 暗転解除で推論上限・取得頻度が通常水準に戻る（暗転10fps/15Hz→通常15fps/30Hz）。
+    func testExitDimMode_restoresNormalStageLevels() {
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0)
+        sut.exitDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0, "暗転解除で推論上限を通常へ戻す")
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz, "暗転解除で取得頻度を通常へ戻す")
+    }
+
+    /// 非暗転の監視では不在・検出の入出力があっても上限・頻度に触れない（flag 不要の根拠）。
+    func testNonDimMonitoring_leavesLimitsUntouched() {
+        sut.startMonitoring()
+        sut.processDetection(.absent)
+        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.9)))
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+    }
+
+    // MARK: - 復帰時戻しの一本化 (dim-mode-saving 3.2)
+
+    /// 監視開始は暗転フラグなしの段階乖離があっても通常段階・通常水準へ戻す。
+    /// （段階駆動の戻し。フラグ駆動のみでは乖離時に幽霊低下が残る）
+    func testStartMonitoring_restoresNormalStageWhenDimFlagLost() {
+        XCTAssertEqual(sut.dimPowerPolicy.dimmed(), .dimmed)
+        XCTAssertFalse(sut.snapshot.isDimmed)
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+    }
+
+    /// 乖離を放置すると監視中の不在入力で非暗転のまま低下する。開始時戻しで防ぐ。
+    func testStartMonitoring_preventsPhantomLoweringAfterFlagLoss() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        XCTAssertEqual(sut.dimPowerPolicy.dimmed(), .dimmed)
+        sut.startMonitoring()
+        // デバウンス猶予（0.5秒）超過まで不在を送り続けても通常に留まる。
+        for _ in 0..<10 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertFalse(sut.snapshot.isDimmed)
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0, "非暗転のまま推論上限を下げない")
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz, "非暗転のまま取得頻度を下げない")
+    }
+
+    /// 監視停止は暗転フラグなしの段階乖離があっても通常段階・通常水準へ戻す。
+    func testStopMonitoring_restoresNormalStageWhenDimFlagLost() {
+        XCTAssertEqual(sut.dimPowerPolicy.dimmed(), .dimmed)
+        sut.stopMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+    }
+
+    /// フォアグラウンド復帰は暗転フラグなしの段階乖離があっても通常へ戻す（再開なしでも）。
+    func testWillEnterForeground_restoresNormalStageWhenDimFlagLost() {
+        XCTAssertEqual(sut.dimPowerPolicy.dimmed(), .dimmed)
+        sut.handleWillEnterForeground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.snapshot.phase, .idle, "未校正・フラグ false は停止維持")
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+    }
+
+    /// 長時間不在→停止→開始の結合: 全経路で通常水準に戻り、起停は呼出し側の則通り。
+    func testDimmedAbsent_stopStartCycle_restoresNormalLevels() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        // デバウンス猶予（0.5秒）超過まで不在を送り続け、長時間不在へ進める。
+        for _ in 0..<10 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
+        XCTAssertEqual(sut.motionService.updateFrequency, .tenHz)
+
+        sut.stopMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertFalse(sut.snapshot.isDimmed)
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+        XCTAssertFalse(sut.motionService.isRunning, "停止で Motion 停止（呼出し側の則）")
+
+        sut.startMonitoring()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0)
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz)
+        XCTAssertTrue(sut.motionService.isRunning, "開始で Motion 開始（呼出し側の則）")
+    }
+
+    /// 暗転→背景→復帰の結合: 復帰で通常水準に戻り、監視・センサーが再開する。
+    func testDimmed_backgroundForegroundCycle_restoresNormalLevels() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
+        )
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0)
+
+        sut.handleDidEnterBackground()
+        XCTAssertEqual(sut.snapshot.phase, .idle)
+        XCTAssertTrue(sut.snapshot.isDimmed, "背面移行中は暗転フラグを維持（既存則）")
+        XCTAssertFalse(sut.motionService.isRunning, "背景移行で Motion 停止（既存則）")
+
+        sut.handleWillEnterForeground()
+        sut.throttleResetQueue.sync {}
+        XCTAssertFalse(sut.snapshot.isDimmed)
+        XCTAssertEqual(sut.snapshot.phase, .monitoring)
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .normal)
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 15.0, "復帰で推論上限を通常へ戻す")
+        XCTAssertEqual(sut.motionService.updateFrequency, .thirtyHz, "復帰で取得頻度を通常へ戻す")
+        XCTAssertTrue(sut.motionService.isRunning, "監視再開で Motion 再開（呼出し側の則）")
+    }
+
+    // MARK: - 不在駆動の結線と既存則の回帰 (dim-mode-saving 3.3)
+
+    /// 顔のみ検出（.personOnly）は人物ありとして不在計測を進めない（Req 2.2）。
+    /// 判定ロジックへの介入はなく、検出受取り点のデバウンス確定状態のみが駆動する。
+    func testDimmed_personOnlyDoesNotAdvanceAbsence() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        sut.startMonitoring()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        // 不在しきい値（0.2秒）を超過する期間、顔のみ検出を送り続ける。
+        for _ in 0..<8 {
+            sut.processDetection(.personOnly)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertTrue(sut.snapshot.isPersonDetected, "顔のみ検出でも人物ありを維持する")
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed, "顔のみ検出は長時間不在へ進めない")
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "暗転上限を維持し更なる低下を起こさない")
+        XCTAssertEqual(sut.motionService.updateFrequency, .fifteenHz, "暗転頻度を維持し更なる低下を起こさない")
+    }
+
+    /// 校正中は不在が続いても段階を進めない（Req 2.2。不在駆動は監視フェーズのみ）。
+    /// 不在自体は確定する（isPersonDetected=false）が、段階は暗転に留まる。
+    func testCalibrating_absentDoesNotAdvanceStage() {
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        sut.startCalibration()
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        // デバウンス猶予（0.5秒）＋不在しきい値（0.2秒）を超過する期間、不在を送り続ける。
+        for _ in 0..<10 {
+            sut.processDetection(.absent)
+            usleep(100_000)
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定（検出側の既存則）")
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed, "校正中は不在駆動を進めない")
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "校正中の不在で推論上限を下げない")
+        XCTAssertEqual(sut.motionService.updateFrequency, .fifteenHz, "校正中の不在で取得頻度を下げない")
+    }
+
+    /// 暗転中も3秒連続で猫背が確定し、監視・判定・抑止・センサーが継続する
+    /// （Req 1.1, 2.4, 6.2。判定入力・閾値・代替鎖は暗転と無関係に不変）。
+    func testDimmed_slouchStillConfirmsAfter3SecondsAndContinuesMonitoring() {
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        sut.enterDimMode()
+        sut.throttleResetQueue.sync {}
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
+        for _ in 0..<3 {
+            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
+        }
+        XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は暗転中も良好")
+
+        let deadline = Date().addingTimeInterval(15)
+        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+            usleep(100_000) // 10fps相当間隔（暗転上限の再現）
+        }
+        sut.throttleResetQueue.sync {}
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "暗転中も猫背3秒連続で確定する")
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertEqual(sut.snapshot.referenceAngle, 0.0, "暗転中の判定は基準角度を変えない")
+        XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed, "人物ありの判定継続は不在駆動を進めない")
+        XCTAssertTrue(sut.motionService.isRunning, "暗転中の確定後もセンサー稼働を継続する（Req 3.2）")
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "暗転中の確定後も抑止を継続する（Req 4.1）")
     }
 
     /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
