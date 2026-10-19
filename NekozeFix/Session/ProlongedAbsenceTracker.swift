@@ -111,7 +111,6 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
             return now - last < faceFallbackThrottleInterval
         }
     }
-    }
 
     /// 長時間不在解除・監視開始・復帰時に状態をリセットする。
     func reset() {
