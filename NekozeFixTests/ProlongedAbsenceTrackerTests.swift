@@ -9,7 +9,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 初期状態では長時間不在でない。
     func testInitialState_isNotProlongedAbsence() {
-        var tracker = ProlongedAbsenceTracker()
+        let tracker = ProlongedAbsenceTracker()
         XCTAssertFalse(tracker.isProlongedAbsence)
         XCTAssertEqual(tracker.snapshot().isProlongedAbsence, false)
     }
@@ -33,7 +33,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 人物不在継続がしきい値を超えると長時間不在へ遷移する。
     func testTick_AbsentBeyondThreshold_BecomesProlongedAbsence() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let start = 1000.0
 
         // しきい値未満では遷移しない
@@ -47,7 +47,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 人物再検出で長時間不在が解除される。
     func testTick_PersonDetected_ResetsProlongedAbsence() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let start = 1000.0
 
         // 長時間不在へ遷移
@@ -63,7 +63,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 人物再検出前の不在計測はリセットされ、再不在時はゼロから計測し直す。
     func testTick_PersonReturnsThenAbsentAgain_RestartsMeasurement() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let start = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: start)
@@ -84,7 +84,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 59.9s / 60.0s / 60.1s の境界で遷移が正しく動作する。
     func testTick_ThresholdBoundary_TransitionsAtExactThreshold() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         // 59.9s では未遷移
@@ -102,14 +102,14 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 長時間不在でなければ毎回実行可（true）。
     func testShouldExecuteAndRecordFaceFallback_NotProlonged_ReturnsTrue() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: 1000))
         XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: 1001))
     }
 
     /// 長時間不在中、間引き間隔未満では実行不可（false）。
     func testShouldExecuteAndRecordFaceFallback_WithinInterval_ReturnsFalse() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         // 長時間不在へ遷移
@@ -133,7 +133,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
     /// `shouldExecuteAndRecordFaceFallback` は判定と実行時刻記録をアトミックに行う。
     /// 顔検出時刻（lastFaceDetectedTime）はここでは更新しない。
     func testShouldExecuteAndRecordFaceFallback_Atomicity() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -151,7 +151,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 顔実行後、間引き間隔内は `faceDetectedHoldActive(now:) == true`。
     func testFaceDetectedHoldActive_WithinInterval_IsTrue() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -167,7 +167,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 間引き間隔経過後は `faceDetectedHoldActive(now:) == false`。
     func testFaceDetectedHoldActive_AfterInterval_IsFalse() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -180,7 +180,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 長時間不在解除後は `faceDetectedHoldActive(now:) == false`。
     func testFaceDetectedHoldActive_AfterProlongedAbsenceEnds_IsFalse() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -195,7 +195,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 非長時間不在時は `faceDetectedHoldActive(now:) == false`。
     func testFaceDetectedHoldActive_NotProlonged_IsFalse() {
-        var tracker = ProlongedAbsenceTracker()
+        let tracker = ProlongedAbsenceTracker()
         tracker.recordFaceDetected(now: 1000)
         XCTAssertFalse(tracker.faceDetectedHoldActive(now: 1001))
     }
@@ -204,7 +204,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// `reset()` で全状態が初期化される。
     func testReset_ClearsAllState() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -224,7 +224,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// 無効時刻（NaN・負・無限大）は遷移を見送り現状維持。
     func testTick_InvalidTime_KeepsState() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -240,7 +240,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// `shouldExecuteAndRecordFaceFallback` で無効時刻は実行可（true）に倒す。
     func testShouldExecuteAndRecordFaceFallback_InvalidTime_ReturnsTrue() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -253,7 +253,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// `recordFaceDetected` で無効時刻は無視される。
     func testRecordFaceDetected_InvalidTime_IsIgnored() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         _ = tracker.tick(isPersonDetected: false, now: base)
@@ -270,7 +270,7 @@ final class ProlongedAbsenceTrackerTests: XCTestCase {
 
     /// `snapshot()` で現在状態が正しく取得できる。
     func testSnapshot_ReflectsCurrentState() {
-        var tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         let base = 1000.0
 
         let snap0 = tracker.snapshot()

@@ -133,8 +133,8 @@ graph TB
 
 ### Modified Files
 
-- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `isProlongedAbsence: Bool` と `inout ProlongedAbsenceTracker` 引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
-- `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で bool + `inout Tracker` 渡し、復帰時 `reset()`
+- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `isProlongedAbsence: Bool` と `ProlongedAbsenceTracker` 引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
+- `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で bool + Tracker 渡し、復帰時 `reset()`
 - `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
 - `docs/adr/XXXX-face-fallback-throttling.md` — 新規 ADR。間引き間隔・チラつき許容・同一間隔の決定根拠
@@ -227,7 +227,7 @@ stateDiagram-v2
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | ProlongedAbsenceTracker | Session / クラス（`@unchecked Sendable`） | 長時間不在の計測・遷移・間引き判定・閾値 | 1.1–1.4, 2.1, 2.4 | `DimPowerPolicy.defaultAbsentThreshold` (P0) | State [x] |
 | PoseDetector | Services | 姿勢検出・顔フォールバック間引き実行 | 2.1, 2.2, 2.4, 3.1–3.3 | ProlongedAbsenceTracker (P0), Vision (P0) | Service [x], State [x] |
-| PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への bool + inout Tracker 渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
+| PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への bool + Tracker 渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
 | Metrics 計測 | Session/Services | 視覚処理量・電力の実測記録 | 5.1–5.4 | 既存 5秒窓ログ (P0), Energy Report (P0) | State [x] |
 
 ---
@@ -449,13 +449,12 @@ final class PoseDetector: @unchecked Sendable {
         var faceTotalTime: Double = 0
     }
 
-    func detect(
+func detect(
         sampleBuffer: CMSampleBuffer,
         orientation: CGImagePropertyOrientation,
         isProlongedAbsence: Bool,
-        prolongedAbsenceTracker: inout ProlongedAbsenceTracker
+        prolongedAbsenceTracker: ProlongedAbsenceTracker
     ) -> Detection { ... }
-}
 ```
 
 - Preconditions: `isProlongedAbsence == true` かつ姿勢観測ゼロ件の場合のみ間引き判定を行う。Tracker 内部で `shouldExecuteAndRecordFaceFallback(now:)` を実行し、実行可否と実行時刻記録をアトミックに行う
@@ -470,7 +469,7 @@ final class PoseDetector: @unchecked Sendable {
 
 **Implementation Notes**
 
-- Integration: `captureOutput` 内で `detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up, isProlongedAbsence: isProlongedAbsence, prolongedAbsenceTracker: &tracker)` を呼ぶ。Tracker との連携は `detect()` 内部で完結
+- Integration: `captureOutput` 内で `detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up, isProlongedAbsence: isProlongedAbsence, prolongedAbsenceTracker: tracker)` を呼ぶ。Tracker との連携は `detect()` 内部で完結
 - Validation: 間引き動作・Metrics 計数（`faceThrottledCount`）・復帰時毎回実行・非長時間不在時毎回実行・ホールドによる `personMissing` 抑制を単体・結合で検証
 - Risks: なし（Tracker 内部でアトミックに判定・記録するため脱調なし。ホールド機構で `personMissing` ちらつき防止済み）
 
@@ -490,7 +489,7 @@ final class PoseDetector: @unchecked Sendable {
 - `prolongedAbsenceTracker` をインスタンス変数として保持（イニシャライザで閾値・間隔注入）
 - `updateState(presence:...)` 内で `tracker.tick(isPersonDetected: snapshot.isPersonDetected, now:)` を呼び、`isProlongedAbsence` 変化時にログ等出力（任意）
 - **ホールド抑制（表示のみ）**: 長時間不在中かつホールド有効時、表示用 `isPersonDetected` を `true` に維持（`personMissing` 表示を防ぐ）。**実検出状態（`DimPowerPolicy` への入力等）とは分離する**
-- `captureOutput` 内で `isProlongedAbsence` と `inout prolongedAbsenceTracker` を `poseDetector.detect(..., isProlongedAbsence:, prolongedAbsenceTracker:)` に渡す。間引き判定・実行・ホールド更新は `detect()` 内部で完結
+- `captureOutput` 内で `isProlongedAbsence` と `prolongedAbsenceTracker` を `poseDetector.detect(..., isProlongedAbsence:, prolongedAbsenceTracker:)` に渡す。間引き判定・実行・ホールド更新は `detect()` 内部で完結
 - 長時間不在解除（`tracker.tick` が `false` を返したとき）で `tracker.reset()` を呼び、通常頻度へ即座に復帰
 - 既存の `DimPowerPolicy` 結合（暗転段階遷移・FPS/頻度切替）は変更しない。二重管理だが責務分離を維持
 

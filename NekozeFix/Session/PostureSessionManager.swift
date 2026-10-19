@@ -690,7 +690,7 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
             sampleBuffer: sampleBuffer,
             orientation: .up,
             isProlongedAbsence: isProlonged,
-            prolongedAbsenceTracker: &prolongedAbsenceTracker
+            prolongedAbsenceTracker: prolongedAbsenceTracker
         )
         throttleLock.withLock {
             frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)

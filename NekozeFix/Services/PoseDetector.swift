@@ -85,13 +85,13 @@ final class PoseDetector: @unchecked Sendable {
     ///   - sampleBuffer: 入力画像バッファ
     ///   - orientation: 画像向き
     ///   - isProlongedAbsence: 長時間不在中か（`ProlongedAbsenceTracker.isProlongedAbsence` の値を渡す）
-///   - prolongedAbsenceTracker: 長時間不在トラッカー（間引き判定・ホールド用）。`inout` で同一インスタンスを共有する。
-/// - Returns: 検出結果
+    ///   - prolongedAbsenceTracker: 長時間不在トラッカー（間引き判定・ホールド用）。クラス参照で同一インスタンスを共有する。
+    /// - Returns: 検出結果
     func detect(
         sampleBuffer: CMSampleBuffer,
         orientation: CGImagePropertyOrientation,
         isProlongedAbsence: Bool,
-        prolongedAbsenceTracker: inout ProlongedAbsenceTracker
+        prolongedAbsenceTracker: ProlongedAbsenceTracker
     ) -> Detection {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return .absent

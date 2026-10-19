@@ -8,7 +8,7 @@ import QuartzCore
 /// 不在しきい値（既定 60 秒、`DimPowerPolicy.defaultAbsentThreshold` 共用）超過で長時間不在状態へ遷移する。
 /// 顔フォールバック間引き間隔（既定 5 秒）を内部に保持し、スレッドセーフに実行可否を判定・記録する。
 /// 暗転段階遷移（`DimPowerPolicy`）とは独立に動作する。
-struct ProlongedAbsenceTracker: @unchecked Sendable {
+final class ProlongedAbsenceTracker: @unchecked Sendable {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
@@ -46,7 +46,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
     ///   - isPersonDetected: デバウンス済み人物検出状態（`updateState` 確定後の値）
     ///   - now: 単調時刻系（`CACurrentMediaTime` 系）。無効時刻は遷移を見送る。
     /// - Returns: 更新後の `isProlongedAbsence`
-    mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
+    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
         return lock.withLock {
             guard now.isFinite, now >= 0 else { return _isProlongedAbsence }
             if isPersonDetected {
@@ -78,7 +78,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
     /// ここでは顔検出結果を得る前のため `lastFaceDetectedTime` は更新しない。
     /// - Parameter now: 単調時刻系（`CACurrentMediaTime` 系）。
     /// - Returns: 実行すべきなら true。呼び出し側は true 時にのみ顔検出を実行する。
-    mutating func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
+    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
         return lock.withLock {
             guard _isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
             guard now.isFinite, now >= 0 else { return true }
@@ -92,7 +92,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
 
     /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
-    mutating func recordFaceDetected(now: TimeInterval) {
+    func recordFaceDetected(now: TimeInterval) {
         lock.withLock {
             guard now.isFinite, now >= 0 else { return }
             lastFaceDetectedTime = now
@@ -114,7 +114,7 @@ struct ProlongedAbsenceTracker: @unchecked Sendable {
     }
 
     /// 長時間不在解除・監視開始・復帰時に状態をリセットする。
-    mutating func reset() {
+    func reset() {
         lock.withLock {
             _isProlongedAbsence = false
             absenceStart = nil
