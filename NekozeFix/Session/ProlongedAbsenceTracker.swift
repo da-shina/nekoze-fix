@@ -106,7 +106,10 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     /// - Returns: 長時間不在中かつホールド期間内なら true。
     func faceDetectedHoldActive(now: TimeInterval) -> Bool {
         lock.withLock {
-            guard isProlongedAbsence else { return false }
+            // 注意: ここではロック保持中のため、ロックを再取得する計算プロパティ
+            // `isProlongedAbsence` を参照しない（NSLock 非再入のため再入するとデッドロックする）。
+            // 格納プロパティ `_isProlongedAbsence` を直接読む。
+            guard _isProlongedAbsence else { return false }
             guard let last = lastFaceDetectedTime else { return false }
             return now - last < faceFallbackThrottleInterval
         }

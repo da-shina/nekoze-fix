@@ -190,4 +190,74 @@ final class RotationWiringOrderTests: XCTestCase {
 
         XCTAssertEqual(connection.videoRotationAngle, 90.0, "同一インスタンスでも追従は維持される")
     }
+
+    // MARK: - 二重適用経路の単一障害点（SPOF）検証
+
+    /// 同一 Service インスタンスから同一角度を注入しても、capture 側と preview 側で
+    /// `isVideoRotationAngleSupported` の対応集合が異なる場合、角度がズレる。
+    /// 片側のみ非対応 → 見送り、もう片側は適用 → プレビューと Vision 入力で回転ズレ発生。
+    /// requirements.md 2.1, 2.2（回転追従の整合性）。
+    func testDualApplicationPath_divergesWhenSupportSetsDiffer() {
+        let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
+
+        // Capture 側：90° をサポート
+        let captureConn = FakeCaptureConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
+
+        // Preview 側：90° を**サポートしない**（空集合＝全角非対応、または 90° を除外）
+        let previewConn = FakeCaptureConnection(supportedAngles: [0, 180, 270], initialAngle: 0.0)
+
+        sut.cameraManager.rotationConnectionForTesting = captureConn
+
+        // Session に回転サービスを注入（購読を確立するため必須）
+        sut.rotationService = fake
+
+        // View にも同一 fake インスタンスを注入
+        let view = CameraPreviewUIView(
+            session: AVCaptureSession(),
+            rotationSource: fake,
+            previewConnectionForTesting: previewConn
+        )
+
+        // 90° を注入（同一角度を両経路へ）
+        fake.inject(preview: 90.0, capture: 90.0)
+        sut.cameraManager.flushRotationWorkForTesting()
+
+        // 検証：Capture は 90° に追従、Preview は 0° のまま（SPOF 実証）
+        XCTAssertEqual(captureConn.videoRotationAngle, 90.0, "capture 側は 90° 対応のため適用される")
+        XCTAssertEqual(previewConn.videoRotationAngle, 0.0, "preview 側は 90° 非対応のため見送られズレが発生する")
+
+        // さらに 180° を注入：両側とも対応 → ズレ解消
+        fake.inject(preview: 180.0, capture: 180.0)
+        sut.cameraManager.flushRotationWorkForTesting()
+
+        XCTAssertEqual(captureConn.videoRotationAngle, 180.0)
+        XCTAssertEqual(previewConn.videoRotationAngle, 180.0, "両側対応角ではズレが解消する")
+    }
+
+    /// 逆パターン：preview 側のみ対応、capture 側非対応
+    func testDualApplicationPath_divergesWhenCaptureUnsupportedOnly() {
+        let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
+
+        // Capture 側：90° を非対応
+        let captureConn = FakeCaptureConnection(supportedAngles: [0, 180, 270], initialAngle: 0.0)
+
+        // Preview 側：90° をサポート
+        let previewConn = FakeCaptureConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
+
+        sut.cameraManager.rotationConnectionForTesting = captureConn
+
+        let view = CameraPreviewUIView(
+            session: AVCaptureSession(),
+            rotationSource: fake,
+            previewConnectionForTesting: previewConn
+        )
+        _ = view
+
+        fake.inject(preview: 90.0, capture: 90.0)
+        sut.cameraManager.flushRotationWorkForTesting()
+
+        // Capture は見送り（0° 維持）、Preview は適用（90°） → 逆ズレ
+        XCTAssertEqual(captureConn.videoRotationAngle, 0.0, "capture 側は 90° 非対応のため見送られる")
+        XCTAssertEqual(previewConn.videoRotationAngle, 90.0, "preview 側は 90° 対応のため適用される")
+    }
 }
