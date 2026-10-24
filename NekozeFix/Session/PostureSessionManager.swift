@@ -354,8 +354,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         lastShoulderSeenTime = nil
         lastHeldKeypoints = [nil, nil, nil, nil]
         lastJointSeenTime = [nil, nil, nil, nil]
-        // キャリブレーション開始時にトラッカーをリセットし、顔フォールバックを即座に有効にする
-        prolongedAbsenceTracker.reset()
         Task {
             await startCameraPipeline()
             startMetricsLogging()

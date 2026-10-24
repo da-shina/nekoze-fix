@@ -298,7 +298,7 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     ///   - isPersonDetected: デバウンス済み人物検出状態（`updateState` 確定後の値）
     ///   - now: 単調時刻系（`CACurrentMediaTime` 系）。無効時刻は遷移を見送る。
     /// - Returns: 更新後の `isProlongedAbsence`
-    mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
+    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool {
         return lock.withLock {
             guard now.isFinite, now >= 0 else { return _isProlongedAbsence }
             if isPersonDetected {
@@ -329,7 +329,7 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     /// 長時間不在中かつ前回実行から間引き間隔以上経過なら true を返し、内部で実行時刻を更新する。
     /// - Parameter now: 単調時刻系（`CACurrentMediaTime` 系）。
     /// - Returns: 実行すべきなら true。呼び出し側は true 時にのみ顔検出を実行する。
-    mutating func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
+    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
         return lock.withLock {
             guard _isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
             guard now.isFinite, now >= 0 else { return true }
@@ -346,7 +346,7 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
 
     /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
-    mutating func recordFaceDetected(now: TimeInterval) {
+    func recordFaceDetected(now: TimeInterval) {
         lock.withLock {
             guard now.isFinite, now >= 0 else { return }
             lastFaceDetectedTime = now
@@ -366,7 +366,7 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     }
 
     /// 長時間不在解除・監視開始・復帰時に状態をリセットする。
-    mutating func reset() {
+    func reset() {
         lock.withLock {
             _isProlongedAbsence = false
             absenceStart = nil
@@ -525,7 +525,7 @@ func detect(
       sampleBuffer: sampleBuffer,
       orientation: .up,
       isProlongedAbsence: isProlonged,
-      prolongedAbsenceTracker: &prolongedAbsenceTracker
+      prolongedAbsenceTracker: prolongedAbsenceTracker
   )
   // 間引き判定・顔実行・ホールド更新は detect() 内部で完結
   ```
@@ -579,11 +579,11 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     ) { ... }
 
     var isProlongedAbsence: Bool { ... }
-    mutating func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool { ... }
-    mutating func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool { ... }
-    mutating func recordFaceDetected(now: TimeInterval) { ... }
+    func tick(isPersonDetected: Bool, now: TimeInterval) -> Bool { ... }
+    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool { ... }
+    func recordFaceDetected(now: TimeInterval) { ... }
     func faceDetectedHoldActive(now: TimeInterval) -> Bool { ... }
-    mutating func reset() { ... }
+    func reset() { ... }
     struct Snapshot: Equatable { ... }
     func snapshot() -> Snapshot { ... }
 }

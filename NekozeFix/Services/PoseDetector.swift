@@ -135,9 +135,14 @@ final class PoseDetector: @unchecked Sendable {
         }
 
         // パス2: 観測ゼロ件時のみ顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
-        // 長時間不在中は間引き判定を行う
+        // 長時間不在中は間引き判定を行う（非長時間不在時は毎回実行）。
         let now = CACurrentMediaTime()
-        let shouldExecuteFaceFallback = prolongedAbsenceTracker.shouldExecuteAndRecordFaceFallback(now: now)
+        let shouldExecuteFaceFallback: Bool
+        if isProlongedAbsence {
+            shouldExecuteFaceFallback = prolongedAbsenceTracker.shouldExecuteAndRecordFaceFallback(now: now)
+        } else {
+            shouldExecuteFaceFallback = true
+        }
 
         if !shouldExecuteFaceFallback {
             // 間引きでスキップ
