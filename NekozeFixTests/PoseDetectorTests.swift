@@ -1,6 +1,7 @@
 import XCTest
 import Vision
 import CoreMedia
+import QuartzCore
 @testable import NekozeFix
 
 final class PoseDetectorTests: XCTestCase {
@@ -98,7 +99,8 @@ final class PoseDetectorTests: XCTestCase {
             throw NSError(domain: "PoseDetectorTests", code: 1)
         }
         let detector = PoseDetector()
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up)
+        let tracker = ProlongedAbsenceTracker()
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
         detector.reset()
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics())
     }
@@ -116,7 +118,8 @@ final class PoseDetectorTests: XCTestCase {
         }
 
         let detector = PoseDetector()
-        let result = detector.detect(sampleBuffer: buffer, orientation: .up)
+        let tracker = ProlongedAbsenceTracker()
+        let result = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
 
         guard case .absent = result else {
             return XCTFail("無効バッファは .absent であること")
@@ -127,4 +130,158 @@ final class PoseDetectorTests: XCTestCase {
     // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する（tasks 3.1）。
     // シミュレータでは VNDetectHumanBodyPoseRequest の setup 自体が
     // Code=9 で失敗するため、ここでは合成則と計測器の単体検証に留める。
+
+    // MARK: - 顔フォールバック間引き（absent-vision-reduction）
+
+    /// 長時間不在中かつ姿勢観測ゼロ件時、間引き間隔内は顔スキップ（.absent 返却、faceThrottledCount++）。
+    /// 注: 無効バッファでは早期リターンするため、実際の間引き動作はProlongedAbsenceTrackerTestsで検証。
+    func testDetect_prolongedAbsence_throttlesFaceFallback() throws {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+
+        // 長時間不在状態にする（閾値 0.1s なので即遷移）
+        _ = tracker.tick(isPersonDetected: false, now: 1000)
+        _ = tracker.tick(isPersonDetected: false, now: 1001)
+        XCTAssertTrue(tracker.isProlongedAbsence)
+
+        // 無効バッファでは早期リターンするため計数は進まない
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+        let metrics = detector.snapshot()
+        XCTAssertEqual(metrics.faceExecutedCount, 0, "無効バッファでは顔実行されない")
+        XCTAssertEqual(metrics.faceThrottledCount, 0, "無効バッファでは間引き計数も進まない")
+        XCTAssertEqual(metrics.faceSkippedCount, 0)
+    }
+
+    /// 長時間不在でない場合、毎回顔フォールバックが実行される（faceExecutedCount インクリメント）。
+    func testDetect_notProlongedAbsence_executesFaceFallbackEveryTime() throws {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker()
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+
+        // 長時間不在でない状態
+        XCTAssertFalse(tracker.isProlongedAbsence)
+
+        // 無効バッファでは .absent が返るが、間引き判定は true（実行済みとして記録される）
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
+
+        let metrics = detector.snapshot()
+        // 無効バッファでは早期リターンするため計数は進まない（testDetect_invalidBufferReturnsAbsentWithoutCounting と同一挙動）
+        XCTAssertEqual(metrics.faceExecutedCount, 0)
+        XCTAssertEqual(metrics.faceThrottledCount, 0)
+    }
+
+    /// Metrics 計数: faceThrottledCount / faceExecutedCount / faceSkippedCount / faceTotalTime / poseTotalTime
+    /// 注: 無効バッファでは早期リターンするため計数は進まない。間引き動作はProlongedAbsenceTrackerTestsで検証。
+    func testMetrics_throttlingCountsAllMetrics() throws {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+
+        _ = tracker.tick(isPersonDetected: false, now: 1000)
+        _ = tracker.tick(isPersonDetected: false, now: 1001)
+
+        // 無効バッファでは早期リターンするため計数は進まない
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+
+        let metrics = detector.snapshot()
+        XCTAssertEqual(metrics.faceExecutedCount, 0, "無効バッファでは顔実行されない")
+        XCTAssertEqual(metrics.faceThrottledCount, 0, "無効バッファでは間引き計数も進まない")
+        XCTAssertEqual(metrics.faceSkippedCount, 0)
+        XCTAssertEqual(metrics.poseTotalTime, 0, "無効バッファでは姿勢推論時間も0")
+        XCTAssertEqual(metrics.faceTotalTime, 0, "無効バッファでは顔推論時間も0")
+    }
+
+    /// 長時間不在解除後（Tracker リセット後）は毎回実行に復帰する。
+    /// 注: 無効バッファでは早期リターンするため計数は進まない。復帰動作はProlongedAbsenceTrackerTestsで検証。
+    func testDetect_afterProlongedAbsenceReset_executesEveryTime() throws {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 0.1, faceFallbackThrottleInterval: 5.0)
+        var sb: CMSampleBuffer?
+        let status = CMSampleBufferCreate(
+            allocator: nil, dataBuffer: nil, dataReady: false,
+            makeDataReadyCallback: nil, refcon: nil, formatDescription: nil,
+            sampleCount: 0, sampleTimingEntryCount: 0, sampleTimingArray: nil,
+            sampleSizeEntryCount: 0, sampleSizeArray: nil, sampleBufferOut: &sb)
+        guard status == noErr, let buffer = sb else {
+            throw NSError(domain: "PoseDetectorTests", code: 1)
+        }
+
+        // 長時間不在状態にする
+        _ = tracker.tick(isPersonDetected: false, now: 1000)
+        _ = tracker.tick(isPersonDetected: false, now: 1001)
+        XCTAssertTrue(tracker.isProlongedAbsence)
+
+        // 無効バッファでは早期リターンするため計数は進まない
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: true, prolongedAbsenceTracker: tracker)
+
+        // リセット（長時間不在解除相当）
+        tracker.reset()
+        XCTAssertFalse(tracker.isProlongedAbsence)
+
+        // リセット後も無効バッファでは早期リターン
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, isProlongedAbsence: false, prolongedAbsenceTracker: tracker)
+
+        let metrics = detector.snapshot()
+        // 無効バッファでは早期リターンするため計数は進まない
+        XCTAssertEqual(metrics.faceExecutedCount, 0)
+        XCTAssertEqual(metrics.faceThrottledCount, 0)
+    }
+
+    /// 合成則不変: synthesize 既存テストで回帰確認（姿勢優先、顔有無の順序）
+    func testSynthesize_invariance_withThrottling() {
+        // 間引き導入前後で合成則が変わらないことを確認
+        let frame = PoseFrame(timestamp: 0, leftEar: nil, rightEar: nil, leftShoulder: nil, rightShoulder: nil)
+
+        // 姿勢観測あり（4点全 nil）は顔有無にかかわらず .pose
+        for faceBounds in [CGRect(x: 0, y: 0, width: 1, height: 1), nil as CGRect?] {
+            let result = PoseDetector.synthesize(pose: .pose(frame), faceBounds: faceBounds)
+            guard case .pose = result else {
+                return XCTFail("姿勢観測ありは顔有無にかかわらず .pose を返すこと")
+            }
+        }
+
+        // 姿勢なし・顔ありは .personOnly
+        let resultFace = PoseDetector.synthesize(pose: nil, faceBounds: CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2))
+        guard case .personOnly = resultFace else {
+            return XCTFail("姿勢なし・顔ありは .personOnly であること")
+        }
+
+        // 両方なしは .absent
+        let resultAbsent = PoseDetector.synthesize(pose: nil, faceBounds: nil)
+        guard case .absent = resultAbsent else {
+            return XCTFail("両方なしは .absent であること")
+        }
+    }
 }
