@@ -139,7 +139,7 @@ struct SessionSnapshot: Equatable {
     /// 人物は映っているが肩のキーポイントが読めない状態（顔のみ検出）。
     /// 校正中の「肩が映っていません」案内に使用。
     var isShoulderMissing: Bool = false
-    var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 3.0)
+    var slouchGate: TimedConditionGate = TimedConditionGate(requiredDuration: 5.0)
     var calibrationProgress: CalibrationProgress = .waitingForPerson
     /// 校正カウントダウンをユーザーがタップで一時停止しているか。
     /// true の間は `calibrationProgress` の経過時間を進めない（校正フロー側で蓄積を凍結）。

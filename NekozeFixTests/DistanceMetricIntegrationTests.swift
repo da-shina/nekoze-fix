@@ -175,7 +175,7 @@ final class DistanceMetricIntegrationTests: XCTestCase {
             sut.processDetection(.pose(frame(rightEarDistance: 0.21)))
             usleep(20_000)
         }
-        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "猫背3秒連続で確定するはず")
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "猫背5秒連続で確定するはず")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
 
         // 回復（基準比100%）→ 即改善・ゲート解除

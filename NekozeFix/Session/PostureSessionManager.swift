@@ -385,6 +385,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         prolongedAbsenceTracker.reset()
         resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         lastGateTickTime = nil
+        motionService.setUpdateFrequency(.thirtyHz) // 監視開始時は必ず通常頻度へ（restoreDimPowerToNormalIfNeeded の早期リターン時も保証）
         setMotionRotationRunning(true)
         Task {
             await startCameraPipeline()
@@ -520,9 +521,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 復帰時戻しの一本化（dim-mode-saving 3.2）。
     /// 暗転解除・監視開始・監視停止・フォアグラウンド復帰の各経路から呼び、
-    /// 段階が通常でなければ通常へ戻して上限・頻度を通常水準へ戻す。
+    /// 通常へ戻して上限・頻度を通常水準へ戻す。
     /// 輝度・暗転フラグ・センサー起停・フェーズには触れない（輝度復元は exitDimMode が先行して行う）。
-    /// 既に通常なら何もしない（通常経路での Motion 再開などの副作用を起こさない）。
     private func restoreDimPowerToNormalIfNeeded() {
         guard dimPowerPolicy.stage != .normal else { return }
         _ = dimPowerPolicy.restored()
@@ -960,13 +960,16 @@ self.snapshot.isPersonDetected = (presence == .personDetected)
                     referenceSource: refSource
                 )
             }
-        } else if self.snapshot.phase == .monitoring {
+            } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
             // 表示用: 長時間不在中のホールド期間内は personMissing を出さない
             if !displayIsPersonDetected {
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
+            } else if self.snapshot.displayedPosture == .personMissing {
+                // ホールド有効中かつサンプルなし: personMissing を維持せず good に戻す
+                self.snapshot.displayedPosture = .good
             }
             // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
 
@@ -985,10 +988,10 @@ self.snapshot.isPersonDetected = (presence == .personDetected)
                 self.snapshot.isCalibrationPaused = false
                 self.resetCalibrationState()
                 self.settingsStore.isMonitoringEnabled = false
-                self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 3.0)
+                self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 5.0)
                 self.alertPlayer?.stop()
             } else {
-                // 確定猫背ゲート: 3秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
+                // 確定猫背ゲート: 5秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
                 let now = CACurrentMediaTime()
                 let deltaTime = now - (self.lastGateTickTime ?? now)
                 self.lastGateTickTime = now
