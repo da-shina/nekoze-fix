@@ -29,6 +29,7 @@ final class PoseDetector: @unchecked Sendable {
     struct Metrics: Equatable {
         var faceSkippedCount = 0
         var faceExecutedCount = 0
+        var faceThrottledCount = 0
         var poseTotalTime: Double = 0
         var faceTotalTime: Double = 0
     }
@@ -79,7 +80,18 @@ final class PoseDetector: @unchecked Sendable {
         pose ?? (faceBounds != nil ? .personOnly : .absent)
     }
 
-    func detect(sampleBuffer: CMSampleBuffer, orientation: CGImagePropertyOrientation) -> Detection {
+    /// 姿勢検出・顔フォールバックを実行する。
+    /// - Parameters:
+    ///   - sampleBuffer: 入力画像バッファ
+    ///   - orientation: 画像向き
+    ///   - isProlongedAbsence: 長時間不在中か（`ProlongedAbsenceTracker.isProlongedAbsence` の値を渡す）
+    ///   - prolongedAbsenceTracker: 長時間不在トラッカー（間引き判定・ホールド用）。クラス参照で同一インスタンスを共有する。
+    /// - Returns: 検出結果
+    func detect(
+        sampleBuffer: CMSampleBuffer,
+        orientation: CGImagePropertyOrientation,
+        prolongedAbsenceTracker: ProlongedAbsenceTracker
+    ) -> Detection {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return .absent
         }
@@ -122,6 +134,13 @@ final class PoseDetector: @unchecked Sendable {
         }
 
         // パス2: 観測ゼロ件時のみ顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
+        // 長時間不在中の間引き判定は tracker 内部が持つ（非長時間不在時は毎回実行）。
+        let now = CACurrentMediaTime()
+        guard prolongedAbsenceTracker.shouldExecuteAndRecordFaceFallback(now: now) else {
+            metricsLock.withLock { _metrics.faceThrottledCount += 1 }
+            return .absent
+        }
+
         var faceBounds: CGRect?
         let faceRequest = VNDetectFaceRectanglesRequest { request, _ in
             faceBounds = (request.results as? [VNFaceObservation])?
@@ -136,6 +155,11 @@ final class PoseDetector: @unchecked Sendable {
             }
         }) else {
             return .absent
+        }
+
+        // 顔検出実行後（.personOnly を返す場合のみ）、ホールド用時刻を更新
+        if faceBounds != nil {
+            prolongedAbsenceTracker.recordFaceDetected(now: now)
         }
 
         return Self.synthesize(pose: nil, faceBounds: faceBounds)

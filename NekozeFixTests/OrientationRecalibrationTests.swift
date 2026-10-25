@@ -65,7 +65,7 @@ final class OrientationRecalibrationTests: XCTestCase {
             sut.processDetection(.pose(slouchFrame()))
             usleep(20_000)
         }
-        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "前提: 猫背3秒連続で確定")
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "前提: 猫背5秒連続で確定")
 
         changeCaptureAngle(to: 90.0)
 

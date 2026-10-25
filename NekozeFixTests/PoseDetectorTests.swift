@@ -1,11 +1,12 @@
 import XCTest
 import Vision
 import CoreMedia
+import QuartzCore
 @testable import NekozeFix
 
 final class PoseDetectorTests: XCTestCase {
 
-    // MARK: - 中央人物選択の距離基準（FR 4.7）
+    // MARK: - 中央人物選択の距離基準(FR 4.7)
 
     func testCenterDistance_prefersFrameCenter() {
         let centered = CGRect(x: 0.4, y: 0.4, width: 0.2, height: 0.2)   // 中心 (0.5, 0.5)
@@ -25,7 +26,7 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertNil([CGRect]().min(by: { PoseDetector.centerDistance($0) < PoseDetector.centerDistance($1) }))
     }
 
-    // MARK: - 向き別の信頼度閾値（要件4.6）
+    // MARK: - 向き別の信頼度閾値(要件4.6)
 
     func testConfidenceThreshold_portrait_isStrict() {
         XCTAssertEqual(keypointConfidenceThreshold(isLandscape: false), 0.3, accuracy: 1e-9)
@@ -38,7 +39,7 @@ final class PoseDetectorTests: XCTestCase {
     // MARK: - 人物選択矩形は有効点のみで算出
 
     func testPoseBoundingBox_ignoresLowConfidenceOutliers() {
-        // 前提: 中心人物の高信頼度3点＋離れた低信頼度1点
+        // 前提: 中心人物の高信頼度3点+離れた低信頼度1点
         let frame = PoseFrame(
             timestamp: 0,
             leftEar: Keypoint(x: 0.45, y: 0.5, confidence: 0.9),
@@ -53,10 +54,10 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertEqual(box.maxX, 0.55, accuracy: 1e-9)
     }
 
-    // MARK: - 条件付き顔検出の合成則（ADR 0021、tasks 2.1）
+    // MARK: - 条件付き顔検出の合成則(ADR 0021、tasks 2.1)
 
     func testSynthesize_poseWinsRegardlessOfFace() {
-        // Q2確定：観測あり（4点全 nil を含む）は顔有無にかかわらず成功経路（.pose）のままであること
+        // Q2確定:観測あり(4点全 nil を含む)は顔有無にかかわらず成功経路(.pose)のままであること
         let frame = PoseFrame(timestamp: 0, leftEar: nil, rightEar: nil, leftShoulder: nil, rightShoulder: nil)
         for faceBounds in [CGRect(x: 0, y: 0, width: 1, height: 1), nil] {
             let result = PoseDetector.synthesize(pose: .pose(frame), faceBounds: faceBounds)
@@ -80,14 +81,14 @@ final class PoseDetectorTests: XCTestCase {
         }
     }
 
-    // MARK: - 推論計測器（tasks 1.3 / 2.1）
+    // MARK: - 推論計測器(tasks 1.3 / 2.1)
 
     func testMetrics_initialStateIsZero() {
         XCTAssertEqual(PoseDetector().snapshot(), PoseDetector.Metrics())
     }
 
     func testMetrics_resetRestoresZero() throws {
-        // 前提: 無効バッファ検出（計数不変）→ reset → 初期値に戻ること
+        // 前提: 無効バッファ検出(計数不変)→ reset → 初期値に戻ること
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -98,13 +99,14 @@ final class PoseDetectorTests: XCTestCase {
             throw NSError(domain: "PoseDetectorTests", code: 1)
         }
         let detector = PoseDetector()
-        _ = detector.detect(sampleBuffer: buffer, orientation: .up)
+        let tracker = ProlongedAbsenceTracker()
+        _ = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
         detector.reset()
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics())
     }
 
     func testDetect_invalidBufferReturnsAbsentWithoutCounting() throws {
-        // 前提: 画像を含まないサンプルバッファ（Visionに触れずガードで不在を返す）
+        // 前提: 画像を含まないサンプルバッファ(Visionに触れずガードで不在を返す)
         var sb: CMSampleBuffer?
         let status = CMSampleBufferCreate(
             allocator: nil, dataBuffer: nil, dataReady: false,
@@ -116,7 +118,8 @@ final class PoseDetectorTests: XCTestCase {
         }
 
         let detector = PoseDetector()
-        let result = detector.detect(sampleBuffer: buffer, orientation: .up)
+        let tracker = ProlongedAbsenceTracker()
+        let result = detector.detect(sampleBuffer: buffer, orientation: .up, prolongedAbsenceTracker: tracker)
 
         guard case .absent = result else {
             return XCTFail("無効バッファは .absent であること")
@@ -124,7 +127,8 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics(), "無効バッファでは計数が進まないこと")
     }
 
-    // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する（tasks 3.1）。
+    // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する(tasks 3.1)。
     // シミュレータでは VNDetectHumanBodyPoseRequest の setup 自体が
     // Code=9 で失敗するため、ここでは合成則と計測器の単体検証に留める。
+    // 顔フォールバック間引きの分岐(tracker 連携)は ProlongedAbsenceTrackerTests が検証する。
 }

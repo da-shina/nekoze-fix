@@ -1,0 +1,24 @@
+17:34:00 CONDITION_D_normal_present START
+17:35:55 CONDITION_D_normal_present END
+17:36:03 CONDITION_A_normal_prolonged_absence START (leave view now)
+17:37:53 CONDITION_A_normal_prolonged_absence END
+17:38:03 RECOVERY_return_to_view START (come back now)
+17:38:48 RECOVERY_return_to_view END
+17:38:56 CONDITION_C_dim_present START (enter dim mode, stay seated)
+17:40:46 CONDITION_C_dim_present END
+17:41:36 DIM_EXIT START (exit dim now)
+17:42:16 DIM_EXIT END
+17:44:25 CONDITION_C_dim_present_start (instrumented) START
+17:46:16 CONDITION_C_dim_present_start END
+17:46:24 CONDITION_B_dim_prolonged_absence START (leave view now)
+17:48:34 CONDITION_B_dim_prolonged_absence END
+17:50:52 FINAL_D_normal_present START
+17:52:22 FINAL_D_normal_present END
+17:52:26 FINAL_A_normal_absence START (leave now)
+17:54:36 FINAL_A_normal_absence END
+17:54:41 FINAL_RECOVERY START (return now)
+17:55:11 FINAL_RECOVERY END
+17:55:16 FINAL_C_dim_present START (enter dim now)
+17:56:51 FINAL_C_dim_present END
+17:56:55 FINAL_B_dim_absence START (leave now)
+17:59:05 FINAL_B_dim_absence END

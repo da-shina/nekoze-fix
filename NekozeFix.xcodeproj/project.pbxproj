@@ -21,6 +21,7 @@
 		20DBBC11304EEE2E00B43650 /* FrameThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */; };
 		20DBBC13304EEE2E00B43650 /* MainHopGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC12304EEE2E00B43650 /* MainHopGate.swift */; };
 		20DBBC15304EEE2E00B43650 /* DimPowerPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBC14304EEE2E00B43650 /* DimPowerPolicy.swift */; };
+		B4E63073AEFA47FEBE0C7D26 /* ProlongedAbsenceTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3500FBD0A677441C8C903380 /* ProlongedAbsenceTracker.swift */; };
 		20DBBB2B304EEFCA00B43650 /* PostureTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */; };
 		20DBBB2C304EEFCE00B43650 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB01304EEE2E00B43650 /* CalibrationView.swift */; };
 		20DBBB2D304EEFCE00B43650 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */; };
@@ -61,6 +62,7 @@
 		20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameThrottle.swift; sourceTree = "<group>"; };
 		20DBBC12304EEE2E00B43650 /* MainHopGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainHopGate.swift; sourceTree = "<group>"; };
 		20DBBC14304EEE2E00B43650 /* DimPowerPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DimPowerPolicy.swift; sourceTree = "<group>"; };
+		3500FBD0A677441C8C903380 /* ProlongedAbsenceTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProlongedAbsenceTracker.swift; sourceTree = "<group>"; };
 		20DBBAFF304EEE2E00B43650 /* PostureTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureTypes.swift; sourceTree = "<group>"; };
 		20DBBB01304EEE2E00B43650 /* CalibrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalibrationView.swift; sourceTree = "<group>"; };
 		20DBBB02304EEE2E00B43650 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
@@ -144,6 +146,7 @@
 				20DBBC10304EEE2E00B43650 /* FrameThrottle.swift */,
 				20DBBC12304EEE2E00B43650 /* MainHopGate.swift */,
 				20DBBC14304EEE2E00B43650 /* DimPowerPolicy.swift */,
+				3500FBD0A677441C8C903380 /* ProlongedAbsenceTracker.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
@@ -342,6 +345,7 @@
 				20DBBB26304EEE9B00B43650 /* PoseDetector.swift in Sources */,
 				20DBBC01304EEE9B00B43650 /* MotionService.swift in Sources */,
 				20DBBC03304EEE9B00B43650 /* DeviceRotationService.swift in Sources */,
+				B4E63073AEFA47FEBE0C7D26 /* ProlongedAbsenceTracker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

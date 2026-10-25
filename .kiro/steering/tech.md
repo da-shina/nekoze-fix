@@ -1,6 +1,6 @@
 # Technology Stack
 
-_Last updated: 2026-10-17_
+_Last updated: 2026-10-22_
 
 ## Platform & Languages
 
@@ -25,8 +25,8 @@ _Last updated: 2026-10-17_
 
 - **単一書き込み点**: `PostureSessionManager` は `@MainActor`。セッション状態（`SessionSnapshot`）の唯一の書き込み点であり、UI は状態表示とコマンド送信のみ。
 - **推論はバックグラウンドキュー**: Vision 推論はサンプルバッファ／検出キュー上で実行し、UI 更新のみメインキューへ hop する。
-- **共有状態は明示的な排他で守る**: 検出キューと Main をまたぐ可変状態は `NSLock`（`withLock`）で保護する。例: `FrameThrottle`（`throttleLock`）、`MotionService` の `SharedState`（`@unchecked Sendable` + `NSLock`）、`LockedMainHopGate`。ロック・キュー・共有状態の関係は `.kiro/steering/concurrency-model.md` に図解する。
-- **nonisolated アクセス**: 検出キューから直接読む必要のある値は `nonisolated(unsafe)` で公開し、参照の不変性またはロックで安全性を担保する。新たなロック階層を安易に増やさない。
+- **共有状態は明示的な排他で守る**: 検出キューと Main をまたぐ可変状態は `NSLock`（`withLock`）で保護する。例: `FrameThrottle`（`throttleLock`）、`MotionService` の `SharedState`（`@unchecked Sendable` + `NSLock`）、`LockedMainHopGate`、`ProlongedAbsenceTracker`（`final class (@unchecked Sendable)` + 内部 `private let lock = NSLock()`）。ロック・キュー・共有状態の関係は `.kiro/steering/concurrency-model.md` に図解する。
+- **nonisolated アクセス**: 検出キューから直接読む必要のある値は `nonisolated(unsafe)` で公開し、参照の不変性またはロックで安全性を担保する。クラス参照を共有する場合（`ProlongedAbsenceTracker` など）は `inout` を使わず、同一インスタンスを参照渡しする。新たなロック階層を安易に増やさない。
 - **新規スレッド機構を避ける**: タイマーやスレッドを新設するより、既存の直列キュー（例: `throttleResetQueue`）と配送則に乗せる。非同期の適用は `async` 配送で行い、判定中の変更を起こさない。
 - **時計は単調時刻系に統一**: 経過時間・ゲート・しきい値判定には `CACurrentMediaTime` 系（`TimeInterval`）を使い、`Date`（暦時刻・壁時計）を使わない。
 
@@ -42,9 +42,9 @@ _Last updated: 2026-10-17_
 ## Commands
 
 ```bash
-# ビルド（接続済み実機を Destination にする。端末名は -showdestinations で確認）
+# ビルド（接続済み実機を Destination にする。UDID は xcrun devicectl list devices で確認）
 xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix \
-  -destination 'platform=iOS,name=<device-name>' build
+  -destination 'id=<device-udid>' build
 
 # 実機へインストール（ビルド済みアプリを転送）
 xcrun devicectl list devices

@@ -17,7 +17,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     private var cancellables = Set<AnyCancellable>()
     let cameraManager = CameraSessionManager()
-    private let poseDetector = PoseDetector()
+    let poseDetector = PoseDetector()
     /// 時刻基準の推論間引き判定器 (vision-fps-throttle)。
     /// 全アクセスを `throttleLock` で直列化する（レビュー指摘 4241621567 対応）。
     /// captureOutput 先頭で判定し、対象外フレームを検出前に破棄する。
@@ -84,6 +84,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     }()
     // slouchGate の deltaTime 算出用（メインアクタからのみアクセス）
     private var lastGateTickTime: TimeInterval?
+
+/// 長時間不在トラッカー（absent-vision-reduction）。
+    /// 不在計測・顔フォールバック間引き判定・ホールド管理を所有する。
+    /// クラス（`@unchecked Sendable`）で内部 NSLock を持つため、検出キュー・MainActor 間で同一インスタンスを安全に共有可能。
+    nonisolated(unsafe) var prolongedAbsenceTracker = ProlongedAbsenceTracker()
 
     // MARK: - 初期化
 
@@ -376,8 +381,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         settingsStore.isMonitoringEnabled = true // 復帰判定の単一ソース（要求 8.2）
         // 監視開始時にゲートをリセットする
         snapshot.slouchGate.reset()
+        // 長時間不在トラッカーをリセット（通常頻度へ復帰）
+        prolongedAbsenceTracker.reset()
         resetDetectionPipeline() // 再開直後の過剰破棄を防ぐ（2.2, requirements 6.1）
         lastGateTickTime = nil
+        motionService.setUpdateFrequency(.thirtyHz) // 監視開始時は必ず通常頻度へ（restoreDimPowerToNormalIfNeeded の早期リターン時も保証）
         setMotionRotationRunning(true)
         Task {
             await startCameraPipeline()
@@ -397,6 +405,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         stopMetricsLogging()
         // 監視停止時は通知音も即停止（design.md Q20）
         alertPlayer?.stop()
+        // 長時間不在トラッカーをリセット
+        prolongedAbsenceTracker.reset()
     }
 
     // MARK: - ライフサイクル（要求 8.1/8.2、タスク3.5）
@@ -410,6 +420,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         resetDetectionPipeline() // 停止時の判定状態を初期化する（2.2, requirements 6.1）
         setMotionRotationRunning(false)
         stopMetricsLogging()
+        // 長時間不在トラッカーをリセット
+        prolongedAbsenceTracker.reset()
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             setPhase(.idle)
         }
@@ -456,6 +468,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 復帰順序は輝度復元→通常段階→上限・頻度戻し（ADR-0024）。起停には触れない。
         // 全経路の一本化は restoreDimPowerToNormalIfNeeded に寄せる（3.2）。
         restoreDimPowerToNormalIfNeeded()
+        // 長時間不在トラッカーをリセット（復帰時は通常頻度へ即座に戻す）
+        prolongedAbsenceTracker.reset()
         // 監視中ならログ再開（idle 時は startMonitoring で再開される）
         if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
             startMetricsLogging()
@@ -507,9 +521,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     /// 復帰時戻しの一本化（dim-mode-saving 3.2）。
     /// 暗転解除・監視開始・監視停止・フォアグラウンド復帰の各経路から呼び、
-    /// 段階が通常でなければ通常へ戻して上限・頻度を通常水準へ戻す。
+    /// 通常へ戻して上限・頻度を通常水準へ戻す。
     /// 輝度・暗転フラグ・センサー起停・フェーズには触れない（輝度復元は exitDimMode が先行して行う）。
-    /// 既に通常なら何もしない（通常経路での Motion 再開などの副作用を起こさない）。
     private func restoreDimPowerToNormalIfNeeded() {
         guard dimPowerPolicy.stage != .normal else { return }
         _ = dimPowerPolicy.restored()
@@ -592,6 +605,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         windowJudgeInsufficient = 0
         windowJudgeAbsent = 0
         windowJudgePersonOnly = 0
+        poseDetector.reset()
         motionService.startMeasuring(note: "freq=\(motionService.updateFrequency.shortLabel)")
         metricsLogTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -614,6 +628,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private func logMetricsSnapshot() {
         let (metrics, limit) = throttleLock.withLock { (frameThrottle.snapshot(), frameThrottle.maxFPS) }
         let hop = hopGate.snapshot()
+        let poseMetrics = poseDetector.snapshot()
         let elapsed = CACurrentMediaTime() - metricsStartTime
         let inputFPS = elapsed > 0 ? Double(metrics.arrivals) / elapsed : 0
         let inferFPS = elapsed > 0 ? Double(metrics.inferences) / elapsed : 0
@@ -638,7 +653,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         windowJudgeAbsent = 0
         windowJudgePersonOnly = 0
 
-        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge) faceThrottled=\(poseMetrics.faceThrottledCount) faceExecuted=\(poseMetrics.faceExecutedCount) faceSkipped=\(poseMetrics.faceSkippedCount)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -670,7 +685,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
         // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
         let inferenceStart = CACurrentMediaTime()
-        let detection = poseDetector.detect(sampleBuffer: sampleBuffer, orientation: .up)
+        let detection = poseDetector.detect(
+            sampleBuffer: sampleBuffer,
+            orientation: .up,
+            prolongedAbsenceTracker: prolongedAbsenceTracker
+        )
         throttleLock.withLock {
             frameThrottle.recordInference(duration: CACurrentMediaTime() - inferenceStart)
         }
@@ -903,6 +922,18 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             }
         }
 
+        // absent-vision-reduction: 長時間不在トラッカーの更新
+        // デバウンス確定後の人物検出状態を入力し、遷移・リセット・ホールドを制御する
+        let wasProlonged = prolongedAbsenceTracker.isProlongedAbsence
+        let isNowProlonged = prolongedAbsenceTracker.tick(isPersonDetected: self.snapshot.isPersonDetected, now: now)
+        if !isNowProlonged && wasProlonged {
+            // 長時間不在解除時はリセットして通常頻度へ即座に復帰
+            prolongedAbsenceTracker.reset()
+        }
+        // 長時間不在中の顔検出ホールド: 間引き間隔内に顔検出があれば表示用 isPersonDetected を true 維持
+        // 実検出状態（DimPowerPolicy 入力等）は元の snapshot.isPersonDetected のまま保持
+        let displayIsPersonDetected = prolongedAbsenceTracker.faceDetectedHoldActive(now: now) || self.snapshot.isPersonDetected
+
         if self.snapshot.phase == .calibrating && !self.snapshot.isCalibrationPaused {
             // キャリブレーションロジックに投入 (可視化ポイントも渡す)
             // 一時停止中は ingest を呼ばず、経過時間と蓄積を凍結する（表示は最後の進捗のまま）。
@@ -926,10 +957,14 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             }
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
-            if presence == .personMissing {
+            // 表示用: 長時間不在中のホールド期間内は personMissing を出さない
+            if !displayIsPersonDetected {
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
+            } else if self.snapshot.displayedPosture == .personMissing {
+                // ホールド有効中かつサンプルなし: personMissing を維持せず good に戻す
+                self.snapshot.displayedPosture = .good
             }
             // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
 
@@ -948,10 +983,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.isCalibrationPaused = false
                 self.resetCalibrationState()
                 self.settingsStore.isMonitoringEnabled = false
-                self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 3.0)
+                self.snapshot.slouchGate = TimedConditionGate(requiredDuration: 5.0)
                 self.alertPlayer?.stop()
             } else {
-                // 確定猫背ゲート: 3秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
+                // 確定猫背ゲート: 5秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
                 let now = CACurrentMediaTime()
                 let deltaTime = now - (self.lastGateTickTime ?? now)
                 self.lastGateTickTime = now
