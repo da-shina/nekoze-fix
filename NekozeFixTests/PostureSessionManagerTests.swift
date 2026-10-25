@@ -1302,6 +1302,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         sut.throttleResetQueue.sync {}
 
         sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        _ = sut.dimPowerPolicy.dimmed()
 
         // 不在継続で長時間不在へ（暗転段階とは独立に）
         for _ in 0..<5 {
@@ -1329,6 +1331,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         sut.throttleResetQueue.sync {}
 
         sut.prolongedAbsenceTracker = ProlongedAbsenceTracker(absentThreshold: 0.2, faceFallbackThrottleInterval: 5.0)
+        sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
+        _ = sut.dimPowerPolicy.dimmed()
 
         // 長時間不在へ遷移
         for _ in 0..<5 {
