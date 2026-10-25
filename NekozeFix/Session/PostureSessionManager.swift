@@ -653,7 +653,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         windowJudgeAbsent = 0
         windowJudgePersonOnly = 0
 
-print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge) faceThrottled=\(poseMetrics.faceThrottledCount) faceExecuted=\(poseMetrics.faceExecutedCount) faceSkipped=\(poseMetrics.faceSkippedCount)")
+        print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inferences) drops=\(metrics.drops) totalInferenceTime=\(String(format: "%.4f", metrics.totalInferenceTime))s inputFPS=\(String(format: "%.2f", inputFPS)) inferFPS=\(String(format: "%.2f", inferFPS)) avgInferTime=\(String(format: "%.4f", avgInferenceTime))s dropRate=\(String(format: "%.2f%%", dropRate * 100)) residual=\(String(format: "%.4f", inferenceResidual))s limitFPS=\(limit) hopSubmits=\(hop.submits) hopDelivers=\(hop.delivers) hopCoalesced=\(hop.coalesced) hopLastWait=\(String(format: "%.4f", hop.lastDrainWait))s motionFreq=\(motion.frequency.shortLabel) motionSecs=\(String(format: "%.1f", motion.duration))s motionSamples=\(motion.sampleCount) motionVisible=\(motion.dispatchCount) motionReads=\(motion.consumptionCount) motionInvalid=\(motion.invalidCount) motionNote=\(motion.conditionNote) judge=\(judge) faceThrottled=\(poseMetrics.faceThrottledCount) faceExecuted=\(poseMetrics.faceExecutedCount) faceSkipped=\(poseMetrics.faceSkippedCount)")
     }
 
     nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -685,11 +685,9 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
         // 検出中のフレームは alwaysDiscardsLateVideoFrames が自動で間引く。
         // 推論所要時間を単調時計で実測し FrameThrottle へ記録する（判定器は時計を持たない）。
         let inferenceStart = CACurrentMediaTime()
-        let isProlonged = prolongedAbsenceTracker.isProlongedAbsence
         let detection = poseDetector.detect(
             sampleBuffer: sampleBuffer,
             orientation: .up,
-            isProlongedAbsence: isProlonged,
             prolongedAbsenceTracker: prolongedAbsenceTracker
         )
         throttleLock.withLock {
@@ -910,7 +908,7 @@ print("[NekozeFix Metrics] arrivals=\(metrics.arrivals) inferences=\(metrics.inf
             points = self.snapshot.visualizationPoints
         }
 
-self.snapshot.isPersonDetected = (presence == .personDetected)
+        self.snapshot.isPersonDetected = (presence == .personDetected)
         self.snapshot.visualizationPoints = points
 
         // dim-mode-saving 3.1: 不在駆動はデバウンス確定後の人物検出状態のみを入力する
@@ -928,9 +926,6 @@ self.snapshot.isPersonDetected = (presence == .personDetected)
         // デバウンス確定後の人物検出状態を入力し、遷移・リセット・ホールドを制御する
         let wasProlonged = prolongedAbsenceTracker.isProlongedAbsence
         let isNowProlonged = prolongedAbsenceTracker.tick(isPersonDetected: self.snapshot.isPersonDetected, now: now)
-        if wasProlonged != isNowProlonged {
-            // 遷移時のログ出力等（任意）
-        }
         if !isNowProlonged && wasProlonged {
             // 長時間不在解除時はリセットして通常頻度へ即座に復帰
             prolongedAbsenceTracker.reset()
@@ -960,7 +955,7 @@ self.snapshot.isPersonDetected = (presence == .personDetected)
                     referenceSource: refSource
                 )
             }
-            } else if self.snapshot.phase == .monitoring {
+        } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
             // 表示用: 長時間不在中のホールド期間内は personMissing を出さない
             if !displayIsPersonDetected {

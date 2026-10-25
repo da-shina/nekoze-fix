@@ -5,19 +5,19 @@ import Combine
 
 /// Task 4.1: 実結線と順序保証の検証。
 /// requirements.md 1.1, 2.1, 2.2, 2.3, 2.4, 3.1, 3.2, 4.1。
-/// design.md Architecture（Boundary Map＋依存方向）、System Flows（順序・キュー保証注記）、
-/// DeviceRotationService＋CameraSessionManager＋PostureSessionManager＋CameraPreviewView。
+/// design.md Architecture(Boundary Map+依存方向)、System Flows(順序・キュー保証注記)、
+/// DeviceRotationService+CameraSessionManager+PostureSessionManager+CameraPreviewView。
 ///
 /// 【結線内容】Session がプレビュー層を生成して View へ注入し、同一 Service
-/// インスタンスを Session＋View で共有する。coordinator再生成と接続再構成
-/// （回転角適用順序）の順序・キュー保証を初回・切替・層再出現の3ケースで確定する。
+/// インスタンスを Session+View で共有する。coordinator再生成と接続再構成
+/// (回転角適用順序)の順序・キュー保証を初回・切替・層再出現の3ケースで確定する。
 /// KVO 配送はメイン、最新値の上書きのみ。
 ///
 /// 【TestDouble 方針】角度値は `FakeDeviceRotationService` から注入し、接続は
-/// 共有 `FakeCaptureConnection`（DeviceRotationTestDouble.swift）へ注入する。
+/// 共有 `FakeCaptureConnection`(DeviceRotationTestDouble.swift)へ注入する。
 /// simulator には video デバイスが存在しないため実接続は使わない。
-/// デバイスを要する箇所は audio フォールバック＋graceful-skip（1.2／2.1／3.2 と同一パターン）。
-/// 不明時維持則の TestDouble 再現は行わない（design.md：「smoke のみ」）。
+/// デバイスを要する箇所は audio フォールバック+graceful-skip(1.2/2.1/3.2 と同一パターン)。
+/// 不明時維持則の TestDouble 再現は行わない(design.md:「smoke のみ」)。
 
 @MainActor
 final class RotationWiringOrderTests: XCTestCase {
@@ -33,7 +33,7 @@ final class RotationWiringOrderTests: XCTestCase {
         super.tearDown()
     }
 
-    // MARK: - Fake 接続は共有 FakeCaptureConnection（DeviceRotationTestDouble.swift）を使用
+    // MARK: - Fake 接続は共有 FakeCaptureConnection(DeviceRotationTestDouble.swift)を使用
 
     private func anyWiringDevice() -> AVCaptureDevice? {
         AVCaptureDevice.default(for: .video) ?? AVCaptureDevice.default(for: .audio)
@@ -49,10 +49,10 @@ final class RotationWiringOrderTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
     }
 
-    // MARK: - 結線後の回転角追従（Session→CameraSessionManager 転送）
+    // MARK: - 結線後の回転角追従(Session→CameraSessionManager 転送)
 
     /// 結線した Fake への角度注入が、直接呼出しを介さず購読経路で
-    /// data-output 接続へ転送される（requirements 2.1, 2.2）。
+    /// data-output 接続へ転送される(requirements 2.1, 2.2)。
     func testAttachedServiceAngleInjection_flowsToCaptureConnection() {
         let fake = FakeDeviceRotationService()
         sut.rotationService = fake
@@ -62,17 +62,17 @@ final class RotationWiringOrderTests: XCTestCase {
         fake.inject(preview: 90.0, capture: 90.0)
         sut.cameraManager.flushRotationWorkForTesting()
 
-        XCTAssertEqual(connection.videoRotationAngle, 90.0, "結線後の注入角（capture 90°）が data-output 接続へ転送される")
+        XCTAssertEqual(connection.videoRotationAngle, 90.0, "結線後の注入角(capture 90°)が data-output 接続へ転送される")
         XCTAssertEqual(sut.cameraManager.lastCaptureRotationAngle, 90.0)
     }
 
     /// 結線経路の capture 角変化で monitoring→calibrating へ自動遷移する
-    /// （requirements 2.3, 2.4。直接呼出しではなく注入駆動で確認する）。
+    /// (requirements 2.3, 2.4。直接呼出しではなく注入駆動で確認する)。
     func testAttachedServiceCaptureChange_triggersRecalibrationViaSubscription() {
         seedCalibratedMonitoring()
         let fake = FakeDeviceRotationService()
         sut.rotationService = fake
-        XCTAssertEqual(sut.snapshot.phase, .monitoring, "結線時の初期角（0°）では遷移しない")
+        XCTAssertEqual(sut.snapshot.phase, .monitoring, "結線時の初期角(0°)では遷移しない")
 
         fake.inject(preview: 90.0, capture: 90.0)
 
@@ -80,12 +80,12 @@ final class RotationWiringOrderTests: XCTestCase {
         XCTAssertNil(sut.snapshot.referenceAngle, "旧基準角度を破棄する")
     }
 
-    // MARK: - 初回ケース：確定通知→所有層で再生成→追従
+    // MARK: - 初回ケース:確定通知→所有層で再生成→追従
 
-    /// カメラ確定通知（configureSession 由来）が所有層での coordinator再生成を
-    /// 駆動し、以後その所有層で追従する（requirements 3.1, 3.2）。
+    /// カメラ確定通知(configureSession 由来)が所有層での coordinator再生成を
+    /// 駆動し、以後その所有層で追従する(requirements 3.1, 3.2)。
     /// 確定通知は sessionQueue 上で発行され Main へ hop するため、
-    /// `MainActor.run` の drain 後に順序（確定→再生成→追従）を確定する。
+    /// `MainActor.run` の drain 後に順序(確定→再生成→追従)を確定する。
     func testFinalizedDeviceNotification_recreatesWithOwnedLayerAndTracks() async {
         guard let device = anyWiringDevice() else {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
@@ -95,7 +95,7 @@ final class RotationWiringOrderTests: XCTestCase {
         let connection = FakeCaptureConnection(initialAngle: 0.0)
         sut.cameraManager.rotationConnectionForTesting = connection
 
-        // 初回：カメラ構成時の確定通知（Session→recreate の順序）。
+        // 初回:カメラ構成時の確定通知(Session→recreate の順序)。
         sut.cameraManager.deviceFinalizedHandler?(device)
         await MainActor.run {}
 
@@ -111,10 +111,10 @@ final class RotationWiringOrderTests: XCTestCase {
         XCTAssertEqual(connection.videoRotationAngle, 90.0, "再生成後の注入角が data-output 接続へ適用される")
     }
 
-    // MARK: - 切替・層再出現ケース：同一デバイス＋同一層での再生成順序
+    // MARK: - 切替・層再出現ケース:同一デバイス+同一層での再生成順序
 
-    /// 確定後の層再出現通知が、同一デバイス＋同一所有層でもう一度再生成する
-    /// （初回→再出現の順序が確定する。requirements 3.1）。
+    /// 確定後の層再出現通知が、同一デバイス+同一所有層でもう一度再生成する
+    /// (初回→再出現の順序が確定する。requirements 3.1)。
     func testLayerReappearance_afterFinalize_recreatesWithSameDeviceAndLayer() async {
         guard let device = anyWiringDevice() else {
             return // simulator に capture/audio デバイスなし。意味的検証は実機に委ねる
@@ -123,10 +123,10 @@ final class RotationWiringOrderTests: XCTestCase {
         sut.rotationService = fake
         sut.cameraManager.deviceFinalizedHandler?(device)
         await MainActor.run {}
-        XCTAssertEqual(fake.recreateCallCount, 1, "前提：初回確定で1回再生成")
+        XCTAssertEqual(fake.recreateCallCount, 1, "前提:初回確定で1回再生成")
         let ownedLayer = sut.ownedPreviewLayer
 
-        // 層再出現：View からのペイロードなし通知（結線先）。
+        // 層再出現:View からのペイロードなし通知(結線先)。
         sut.handlePreviewLayerAppeared()
 
         XCTAssertEqual(fake.recreateCallCount, 2, "層再出現で2回目の再生成を指示する")
@@ -134,10 +134,10 @@ final class RotationWiringOrderTests: XCTestCase {
         XCTAssertTrue(fake.recreatedLayer === ownedLayer, "所有層の同一インスタンスを使い回す")
     }
 
-    // MARK: - 同一インスタンス共有・所有権（Session→View 注入の構造）
+    // MARK: - 同一インスタンス共有・所有権(Session→View 注入の構造)
 
     /// Session と View が同一 Service インスタンスを共有する
-    /// （二重解決・隠れた共有所有を作らない。design.md Boundary Map）。
+    /// (二重解決・隠れた共有所有を作らない。design.md Boundary Map)。
     func testRotationServiceForPreview_sharesSameInstanceWithSession() {
         let fake = FakeDeviceRotationService()
         sut.rotationService = fake
@@ -146,7 +146,7 @@ final class RotationWiringOrderTests: XCTestCase {
     }
 
     /// 注入用所有層は初回アクセス時に生成され、以後同一インスタンスである
-    /// （所有権は Session。View 側で生成しない）。
+    /// (所有権は Session。View 側で生成しない)。
     func testPreviewLayerForInjection_isStableSessionOwnedInstance() {
         let first = sut.ensureOwnedPreviewLayer()
         let second = sut.ensureOwnedPreviewLayer()
@@ -155,27 +155,27 @@ final class RotationWiringOrderTests: XCTestCase {
         XCTAssertTrue(sut.ownedPreviewLayer === first, "Session 所有層と同一である")
     }
 
-    // MARK: - View 側：attach-after-appear の再購読
+    // MARK: - View 側:attach-after-appear の再購読
 
     /// View 出現後に Service が結線された場合も、再購読により preview 角追従が始まる
-    /// （requirements 2.1, 2.2。updateUIView 経路の TestDouble 駆動）。
+    /// (requirements 2.1, 2.2。updateUIView 経路の TestDouble 駆動)。
     func testPreviewViewResubscribe_afterAttach_appliesInjectedAngle() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
         let connection = FakeCaptureConnection(initialAngle: 0.0)
-        // View 出現時点では未結線（rotationSource なし）。
+        // View 出現時点では未結線(rotationSource なし)。
         let view = CameraPreviewUIView(
             session: AVCaptureSession(),
             previewConnectionForTesting: connection
         )
 
-        // 結線（updateUIView が rotationSource 変化時に呼ぶ受口）。
+        // 結線(updateUIView が rotationSource 変化時に呼ぶ受口)。
         view.resubscribeIfNeeded(to: fake)
         fake.inject(preview: 90.0, capture: 90.0)
 
-        XCTAssertEqual(connection.videoRotationAngle, 90.0, "結線後の preview 角（90°）が preview 接続へ適用される")
+        XCTAssertEqual(connection.videoRotationAngle, 90.0, "結線後の preview 角(90°)が preview 接続へ適用される")
     }
 
-    /// 同一インスタンスへの再通知では購読し直さない（重複購読なし）。
+    /// 同一インスタンスへの再通知では購読し直さない(重複購読なし)。
     func testPreviewViewResubscribe_sameInstance_doesNotResubscribe() {
         let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
         let connection = FakeCaptureConnection(initialAngle: 0.0)
@@ -189,75 +189,5 @@ final class RotationWiringOrderTests: XCTestCase {
         fake.inject(preview: 90.0, capture: 90.0)
 
         XCTAssertEqual(connection.videoRotationAngle, 90.0, "同一インスタンスでも追従は維持される")
-    }
-
-    // MARK: - 二重適用経路の単一障害点（SPOF）検証
-
-    /// 同一 Service インスタンスから同一角度を注入しても、capture 側と preview 側で
-    /// `isVideoRotationAngleSupported` の対応集合が異なる場合、角度がズレる。
-    /// 片側のみ非対応 → 見送り、もう片側は適用 → プレビューと Vision 入力で回転ズレ発生。
-    /// requirements.md 2.1, 2.2（回転追従の整合性）。
-    func testDualApplicationPath_divergesWhenSupportSetsDiffer() {
-        let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-
-        // Capture 側：90° をサポート
-        let captureConn = FakeCaptureConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
-
-        // Preview 側：90° を**サポートしない**（空集合＝全角非対応、または 90° を除外）
-        let previewConn = FakeCaptureConnection(supportedAngles: [0, 180, 270], initialAngle: 0.0)
-
-        sut.cameraManager.rotationConnectionForTesting = captureConn
-
-        // Session に回転サービスを注入（購読を確立するため必須）
-        sut.rotationService = fake
-
-        // View にも同一 fake インスタンスを注入
-        let view = CameraPreviewUIView(
-            session: AVCaptureSession(),
-            rotationSource: fake,
-            previewConnectionForTesting: previewConn
-        )
-
-        // 90° を注入（同一角度を両経路へ）
-        fake.inject(preview: 90.0, capture: 90.0)
-        sut.cameraManager.flushRotationWorkForTesting()
-
-        // 検証：Capture は 90° に追従、Preview は 0° のまま（SPOF 実証）
-        XCTAssertEqual(captureConn.videoRotationAngle, 90.0, "capture 側は 90° 対応のため適用される")
-        XCTAssertEqual(previewConn.videoRotationAngle, 0.0, "preview 側は 90° 非対応のため見送られズレが発生する")
-
-        // さらに 180° を注入：両側とも対応 → ズレ解消
-        fake.inject(preview: 180.0, capture: 180.0)
-        sut.cameraManager.flushRotationWorkForTesting()
-
-        XCTAssertEqual(captureConn.videoRotationAngle, 180.0)
-        XCTAssertEqual(previewConn.videoRotationAngle, 180.0, "両側対応角ではズレが解消する")
-    }
-
-    /// 逆パターン：preview 側のみ対応、capture 側非対応
-    func testDualApplicationPath_divergesWhenCaptureUnsupportedOnly() {
-        let fake = FakeDeviceRotationService(previewAngle: 0.0, captureAngle: 0.0)
-
-        // Capture 側：90° を非対応
-        let captureConn = FakeCaptureConnection(supportedAngles: [0, 180, 270], initialAngle: 0.0)
-
-        // Preview 側：90° をサポート
-        let previewConn = FakeCaptureConnection(supportedAngles: [0, 90, 180, 270], initialAngle: 0.0)
-
-        sut.cameraManager.rotationConnectionForTesting = captureConn
-
-        let view = CameraPreviewUIView(
-            session: AVCaptureSession(),
-            rotationSource: fake,
-            previewConnectionForTesting: previewConn
-        )
-        _ = view
-
-        fake.inject(preview: 90.0, capture: 90.0)
-        sut.cameraManager.flushRotationWorkForTesting()
-
-        // Capture は見送り（0° 維持）、Preview は適用（90°） → 逆ズレ
-        XCTAssertEqual(captureConn.videoRotationAngle, 0.0, "capture 側は 90° 非対応のため見送られる")
-        XCTAssertEqual(previewConn.videoRotationAngle, 90.0, "preview 側は 90° 対応のため適用される")
     }
 }

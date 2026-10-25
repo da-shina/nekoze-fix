@@ -1374,8 +1374,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         XCTAssertEqual(metrics1.faceExecutedCount, 0)
         XCTAssertEqual(metrics1.faceThrottledCount, 0)
 
-        tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
-        tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
+        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
+        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
         let metrics2 = sut.poseDetector.snapshot()
         XCTAssertEqual(metrics2.faceExecutedCount, 0, "無効バッファでは顔実行されない")
         XCTAssertEqual(metrics2.faceThrottledCount, 0, "無効バッファでは間引き計数も進まない")

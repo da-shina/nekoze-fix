@@ -90,7 +90,6 @@ final class PoseDetector: @unchecked Sendable {
     func detect(
         sampleBuffer: CMSampleBuffer,
         orientation: CGImagePropertyOrientation,
-        isProlongedAbsence: Bool,
         prolongedAbsenceTracker: ProlongedAbsenceTracker
     ) -> Detection {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
@@ -135,17 +134,9 @@ final class PoseDetector: @unchecked Sendable {
         }
 
         // パス2: 観測ゼロ件時のみ顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
-        // 長時間不在中は間引き判定を行う（非長時間不在時は毎回実行）。
+        // 長時間不在中の間引き判定は tracker 内部が持つ（非長時間不在時は毎回実行）。
         let now = CACurrentMediaTime()
-        let shouldExecuteFaceFallback: Bool
-        if isProlongedAbsence {
-            shouldExecuteFaceFallback = prolongedAbsenceTracker.shouldExecuteAndRecordFaceFallback(now: now)
-        } else {
-            shouldExecuteFaceFallback = true
-        }
-
-        if !shouldExecuteFaceFallback {
-            // 間引きでスキップ
+        guard prolongedAbsenceTracker.shouldExecuteAndRecordFaceFallback(now: now) else {
             metricsLock.withLock { _metrics.faceThrottledCount += 1 }
             return .absent
         }
