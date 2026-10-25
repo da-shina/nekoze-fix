@@ -121,7 +121,9 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   - _Boundary: FrameThrottle, MotionService, DimPowerPolicy, MainHopGate, PostureAnalyzer, AlertPlayer_
 
-- [_Blocked:_ 実機 E2E テストと性能計測] 11.
+- [x] 11. 実機 E2E テストと性能計測
+  - 実測記録: `.kiro/specs/absent-vision-reduction/measurements-task11.md`
+  - 注: 視覚処理量（通常/暗転の在席・長時間不在）と復帰5秒以内は実測。電力（全条件）と長時間監視は未計測（iOS 18.7.7 で `xctrace` Power Profiler 不可、Xcode GUI Energy Report 未取得）。5.3 に従い未計測と明記し、推定値は記載しない。
   - 実機（iOS 18.7.7 以上）で以下条件を測定・記録:
     - 条件: 通常モード長時間不在 / 暗転モード長時間不在 / 暗転段階（在席） / 通常モード在席 / 長時間監視
     - 指標: 視覚処理量（5秒窓ログ `faceThrottledCount` / `faceExecutedCount` / `faceTotalTime` / `poseTotalTime`）、電力指標（Xcode Energy Report: Average Energy Impact ゲージ色評価 + Average Component Utilization 領域別%）
