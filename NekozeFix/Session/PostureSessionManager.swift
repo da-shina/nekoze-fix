@@ -454,7 +454,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.isDimmed = true
         // 暗転段階へ進め、不在計測を起点からやり直した上で低下指示を適用する。
         applyDimPowerStage(dimPowerPolicy.dimmed())
+        // 暗転中も顔計数(faceThrottled/Executed/Skipped)を出力し続けるため、
+        // 計数初期化と対になる区間再開を行う(exitDimMode まで継続)。
         stopMetricsLogging()
+        if snapshot.phase == .monitoring || snapshot.phase == .calibrating {
+            startMetricsLogging()
+        }
     }
 
     /// ディムモードを終了する（輝度復元のみ。暗転解除後も自動スリープは復活しない — 要求 8.4）

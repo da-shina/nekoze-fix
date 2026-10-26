@@ -1349,9 +1349,10 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     // MARK: - PoseDetector 間引き連携
 
-    /// 長時間不在中、PoseDetector が間引き実行し faceThrottledCount が計数される。
-    /// 注: 無効バッファでは早期リターンするため、間引き動作はProlongedAbsenceTrackerTestsで検証。
-    func testProlongedAbsence_PoseDetectorThrottlesAndCounts() {
+    /// 長時間不在中、Session が結線した tracker が間引き判定を返す(結線確認)。
+    /// 注: 無効バッファでは PoseDetector が早期リターンするため、間引き動作そのものは
+    /// ProlongedAbsenceTrackerTests で検証する。
+    func testProlongedAbsence_TrackerThrottlesFaceFallback() {
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1367,18 +1368,13 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
-        // トラッカー直接検証（無効バッファではPoseDetectorが早期リターンするため）
+        // 結線された tracker の間引き判定: 1回目は実行可、間隔内は不可、経過後は可
         let tracker = sut.prolongedAbsenceTracker
-        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime()))
-        let metrics1 = sut.poseDetector.snapshot()
-        XCTAssertEqual(metrics1.faceExecutedCount, 0)
-        XCTAssertEqual(metrics1.faceThrottledCount, 0)
-
-        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
-        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
-        let metrics2 = sut.poseDetector.snapshot()
-        XCTAssertEqual(metrics2.faceExecutedCount, 0, "無効バッファでは顔実行されない")
-        XCTAssertEqual(metrics2.faceThrottledCount, 0, "無効バッファでは間引き計数も進まない")
+        let now = CACurrentMediaTime()
+        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now))
+        XCTAssertFalse(tracker.shouldExecuteAndRecordFaceFallback(now: now + 0.1))
+        XCTAssertFalse(tracker.shouldExecuteAndRecordFaceFallback(now: now + 4.9))
+        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now + 5.0))
     }
 
     // MARK: - DimPowerPolicy との併存確認

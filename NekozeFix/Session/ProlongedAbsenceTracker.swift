@@ -51,7 +51,6 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
             guard now.isFinite, now >= 0 else { return _isProlongedAbsence }
             if isPersonDetected {
                 absenceStart = nil
-                lastFaceDetectedTime = now
                 if _isProlongedAbsence {
                     _isProlongedAbsence = false
                 }
