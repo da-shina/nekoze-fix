@@ -44,9 +44,9 @@
   - `NekozeFix/Services/PoseDetector.swift` を修正
   - `Metrics` に `faceThrottledCount: Int` 追加
   - `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` シグニチャ変更（Tracker 渡し）
-  - 長時間不在中かつ姿勢観測ゼロ件時: PoseDetector `shouldExecuteFaceFallback(now:tracker:)` が Tracker `shouldExecuteAndRecordFaceFallback(now:)` へ委譲
+  - 長時間不在中かつ姿勢観測ゼロ件時: PoseDetector `evaluateFaceFallbackGate(now:tracker:)` が Tracker `shouldExecuteAndRecordFaceFallback(now:)` へ委譲
     - true なら顔リクエスト発行、`faceExecutedCount++`、`faceTotalTime` 記録、結果 `.personOnly` / `.absent` 返却、Tracker `recordFaceDetected(now:)` 呼び出し
-    - false なら即 `.absent` 返却(`faceThrottledCount++` は `shouldExecuteFaceFallback` 内で計数)
+    - false なら即 `.absent` 返却(`faceThrottledCount++` は `evaluateFaceFallbackGate` 内で計数)
   - 長時間不在でない場合: 従来通り毎回顔フォールバック実行、`faceSkippedCount` は姿勢あり時のみ
   - `synthesize` 意味不変確認（既存テストで回帰確認）
   - 完了条件: ビルド通過、間引き有効/無効/復帰/ホールドが単体テストで確認可能
@@ -106,7 +106,7 @@
   - テストケース: 通常モード長時間不在遷移・解除（`tick` → `isProlongedAbsence` → 解除で `reset`）
   - テストケース: 暗転モード長時間不在遷移・解除（暗転操作後 `dimmed()` → 不在継続 → `dimmedAbsent` 相当 → 解除）
   - テストケース: 暗転解除での通常復帰（`exitDimMode` → `restored()` + Tracker `reset()`）
-  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` の `shouldExecuteFaceFallback` 呼び出し（`detect()` 経路）は実機確認（タスク 11）。
+  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` の `evaluateFaceFallbackGate` 呼び出し（`detect()` 経路）は実機確認（タスク 11）。
   - テストケース: DimPowerPolicy との併存確認（二重不在計測が乖離しない）
   - テストケース: ホールド抑制（`faceDetectedHoldActive` 時に `isPersonDetected` 維持）
   - 完了条件: 全テストパス、通常/暗転それぞれで遷移・解除・ホールド・復帰が検証済み

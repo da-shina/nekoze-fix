@@ -126,19 +126,19 @@ graph TB
 
 ## File Structure Plan
 
-### New Files
+### New / Pre-existing Files
 
 - `NekozeFix/Session/ProlongedAbsenceTracker.swift` — 新規。長時間不在の計測・遷移・間引き判定・閾値を持つクラス（`@unchecked Sendable`、`NSLock` 内包）
 - `NekozeFixTests/ProlongedAbsenceTrackerTests.swift` — 既存（origin/main で追加済み）。遷移判定・間引き判定・閾値境界・復帰の単体検証
+- `docs/adr/0026-face-fallback-throttling.md` — 既存（origin/main で追加済み）。間引き間隔・チラつき許容・同一間隔の決定根拠
 
 ### Modified Files
 
-- `NekozeFix/Types/PostureTypes.swift` — `FaceFallbackGating` プロトコル追加(既存型は不変)
-- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `FaceFallbackGating`(Types の契約)引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
+- `NekozeFix/Types/PostureTypes.swift` — `FaceFallbackGating` プロトコル追加（既存型は不変）
+- `NekozeFix/Services/PoseDetector.swift` — `detect()` に `FaceFallbackGating`（Types の契約）引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
 - `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で `FaceFallbackGating` 適合インスタンス渡し、復帰時 `reset()`
 - `NekozeFixTests/PoseDetectorTests.swift` — 境界メソッドの間引き判定と `faceThrottledCount` 計数の単体検証追加（`.absent` 短絡と `detect()` 経路は実機確認）
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
-- `docs/adr/0026-face-fallback-throttling.md` — 既存（origin/main で追加済み）。間引き間隔・チラつき許容・同一間隔の決定根拠
 
 ### Shared File Arbitration
 
@@ -208,12 +208,12 @@ stateDiagram-v2
 | 1.2 | しきい値超過で長時間不在扱い | ProlongedAbsenceTracker | `tick()` 戻り値 / `isProlongedAbsence` | 長時間不在遷移 |
 | 1.3 | 人物検出で長時間不在解除 | ProlongedAbsenceTracker | `tick()` → `isProlongedAbsence=false` | 長時間不在解除 |
 | 1.4 | 不在しきい値共用・暗転独立 | ProlongedAbsenceTracker | `init(absentThreshold:)` | 閾値共有 |
-| 2.1 | 顔フォールバック頻度低下 | PoseDetector + Tracker | `detect(..., prolongedAbsenceTracker:)` / `shouldExecuteFaceFallback(now:tracker:)` → `shouldExecuteAndRecordFaceFallback(now:)` | 間引き実行 |
+| 2.1 | 顔フォールバック頻度低下 | PoseDetector + Tracker | `detect(..., prolongedAbsenceTracker:)` / `evaluateFaceFallbackGate(now:tracker:)` → `shouldExecuteAndRecordFaceFallback(now:)` | 間引き実行 |
 | 2.2 | 暗転長時間不在で視覚処理量低下 | PoseDetector + Tracker | 実測ログ | 実測比較 |
 | 2.3 | カメラ継続・FPS上限不変 | PostureSessionManager | 既存 `applyDimPowerStage` | 変更なし |
 | 2.4 | 解除時頻度復帰 | PoseDetector + Tracker | `detect(..., prolongedAbsenceTracker:)` / `reset()` | 復帰フロー |
 | 3.1 | 顔のみ=人物あり意味維持 | PoseDetector.synthesize() | 既存合成則 | 不変 |
-| 3.2 | 復帰検出を間引き間隔内で | PoseDetector + Tracker | `shouldExecuteFaceFallback(now:tracker:)` / `shouldExecuteAndRecordFaceFallback(now:)` | 復帰検出保証 |
+| 3.2 | 復帰検出を間引き間隔内で | PoseDetector + Tracker | `evaluateFaceFallbackGate(now:tracker:)` / `shouldExecuteAndRecordFaceFallback(now:)` | 復帰検出保証 |
 | 3.3 | 非長時間不在時は頻度不変 | PoseDetector | `detect(..., prolongedAbsenceTracker:)` | 不変 |
 | 3.4 | 人物なし判定基準・表示則不変 | updateState | 既存デバウンス則 | 不変 |
 | 4.1–4.5 | 判定・通知・監視継続不変 | Domain/Session/AlertPlayer | 既存契約 | 回帰テスト |
@@ -344,7 +344,8 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
         }
     }
 
-    /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔検出が実行された（`.personOnly` を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔フォールバック経路は `synthesize(pose: nil, faceBounds:)` のため `.pose` は返らない。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
     func recordFaceDetected(now: TimeInterval) {
         lock.withLock {
@@ -403,11 +404,11 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
 
 - State model: `isProlongedAbsence`、`absenceStart`、`lastFaceExecutionTime`、`lastFaceDetectedTime`、`absentThreshold`、`faceFallbackThrottleInterval`（すべて `lock` で保護）
 - Persistence & consistency: プロセス内メモリのみ。判定経路は既存直列実行に従い新規キューを作らない
-- Concurrency strategy: **`NSLock` 内包によるスレッドセーフ設計**。`tick`（MainActor）、`shouldExecuteAndRecordFaceFallback`/`recordFaceDetected`（detectionQueue）、`faceDetectedHoldActive`（MainActor/`updateState`）が同一ロックで直列化。`MotionService.SharedState` と同パターン。PoseDetector 側の入口 `shouldExecuteFaceFallback(now:tracker:)` も detectionQueue 上で同メソッドへ委譲する。
+- Concurrency strategy: **`NSLock` 内包によるスレッドセーフ設計**。`tick`（MainActor）、`shouldExecuteAndRecordFaceFallback`/`recordFaceDetected`（detectionQueue）、`faceDetectedHoldActive`（MainActor/`updateState`）が同一ロックで直列化。`MotionService.SharedState` と同パターン。PoseDetector 側の入口 `evaluateFaceFallbackGate(now:tracker:)` も detectionQueue 上で同メソッドへ委譲する。
 
 **Implementation Notes**
 
-- Integration: `PostureSessionManager` がインスタンスを保持し、`updateState` で `tick`、`captureOutput` で `shouldExecuteFaceFallback(now:tracker:)` 経由で `shouldExecuteAndRecordFaceFallback` / `recordFaceDetected`、`updateState` で `faceDetectedHoldActive` 参照
+- Integration: `PostureSessionManager` がインスタンスを保持し、`updateState` で `tick`、`captureOutput` で `evaluateFaceFallbackGate(now:tracker:)` 経由で `shouldExecuteAndRecordFaceFallback` / `recordFaceDetected`、`updateState` で `faceDetectedHoldActive` 参照
 - Validation: 遷移判定・間引き判定・ホールド動作・閾値境界・復帰リセットを単体検証する
 - Risks: しきい値・間隔の既定値不適合 → 実測記録での見直しを再検証トリガーとして扱う
 
@@ -424,15 +425,15 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
 
 **Responsibilities & Constraints**
 
-- `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` にて、長時間不在中かつ姿勢観測ゼロ件の場合、`shouldExecuteFaceFallback(now:tracker:)` が Tracker 内部で間引き判定を行い、実行可なら顔検出を実行、不可なら即 `.absent` を返す（`faceThrottledCount` インクリメント）
+- `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` にて、長時間不在中かつ姿勢観測ゼロ件の場合、`evaluateFaceFallbackGate(now:tracker:)` が Tracker 内部で間引き判定を行い、実行可なら顔検出を実行、不可なら即 `.absent` を返す（`faceThrottledCount` インクリメント）
 - 顔検出実行時は従来どおり `synthesize(pose: nil, faceBounds:)` を適用し、`.personOnly` / `.absent` を返す（ADR-0021 意味維持）
 - 長時間不在でない場合（`isProlongedAbsence == false` 相当）は従来どおり毎回顔フォールバックを実行
 - `Metrics` に `faceThrottledCount` を追加し、間引きでスキップした回数を計数する
-- 顔検出実行後（`.personOnly` または `.pose` を返す直前）、Tracker に `recordFaceDetected(now:)` を呼びホールド時刻更新
+- 顔検出実行後（`.personOnly` を返す直前）、Tracker に `recordFaceDetected(now:)` を呼びホールド時刻更新
 
 **Dependencies**
 
-- Inbound: `PostureSessionManager.captureOutput` — 検出依頼+`FaceFallbackGating` 適合インスタンス渡し(P0)
+- Inbound: `PostureSessionManager.captureOutput` — 検出依頼+`FaceFallbackGating` 適合インスタンス渡し（P0）
 - Outbound: Vision Framework — `VNDetectHumanBodyPoseRequest` / `VNDetectFaceRectanglesRequest`（P0）
 - Outbound: `FaceFallbackGating`(Types)— 間引き判定・実行記録の契約。Session 層の具象型へは依存しない(P0)
 
@@ -456,12 +457,12 @@ func detect(
         prolongedAbsenceTracker: any FaceFallbackGating
     ) -> Detection { ... }
 
-    /// 姿勢観測ゼロ件時の顔フォールバック実行可否を判定し、間引き時は計数する。
-    func shouldExecuteFaceFallback(now: TimeInterval, tracker: any FaceFallbackGating) -> Bool { ... }
+    /// 顔フォールバックの間引きゲートを評価し、間引き時は計数する。
+    func evaluateFaceFallbackGate(now: TimeInterval, tracker: any FaceFallbackGating) -> Bool { ... }
 ```
 
-- Preconditions: `shouldExecuteFaceFallback(now:tracker:)` が `FaceFallbackGating` に委譲し、判定と実行時刻記録をアトミックに行う
-- Postconditions: 間引きスキップ時は `.absent` を返す（`faceThrottledCount++`）。顔実行時は従来合成則に従う。顔実行後（`.personOnly` または `.pose`）は内部で `prolongedAbsenceTracker.recordFaceDetected(now:)` を呼ぶ。`Metrics` が更新される
+- Preconditions: `evaluateFaceFallbackGate(now:tracker:)` が `FaceFallbackGating` に委譲し、判定と実行時刻記録をアトミックに行う
+- Postconditions: 間引きスキップ時は `.absent` を返す（`faceThrottledCount++`）。顔実行時は従来合成則に従う。顔実行後（`.personOnly`）は内部で `prolongedAbsenceTracker.recordFaceDetected(now:)` を呼ぶ。`Metrics` が更新される
 - Invariants: `synthesize` の意味（`pose ?? (faceBounds != nil ? .personOnly : .absent)`）は不変
 
 ##### State Management
@@ -630,7 +631,7 @@ struct Metrics: Equatable {
 
 - **Unit Tests**:
   - `ProlongedAbsenceTrackerTests`: 初期状態、不正閾値フォールバック、遷移（通常→長時間不在→解除）、人物再検出前/後、閾値境界（59.9s/60.0s/60.1s）、間引き判定（実行可/不可/実行後リセット）、リセット動作、無効時刻無視
-  - `PoseDetectorTests`: 境界メソッド `shouldExecuteFaceFallback(now:tracker:)` の間引き計数(`faceThrottledCount`)と tracker への実行時刻記録、非長時間不在時の毎回実行可、合成則不変(`synthesize` 既存テストで回帰確認)。`.absent` 返却そのものと `detect()` から境界メソッドへの呼び出しは無効バッファでは到達しないため実機確認とする
+  - `PoseDetectorTests`: 境界メソッド `evaluateFaceFallbackGate(now:tracker:)` の間引き計数(`faceThrottledCount`)と tracker への実行時刻記録、非長時間不在時の毎回実行可、合成則不変(`synthesize` 既存テストで回帰確認)。`.absent` 返却そのものと `detect()` から境界メソッドへの呼び出しは無効バッファでは到達しないため実機確認とする
   - `DimPowerPolicyTests`: 既存テスト維持（本 spec 変更なし）
 
 - **Integration Tests**:

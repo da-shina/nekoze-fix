@@ -204,14 +204,14 @@
 
 ### 一般化
 
-別個の `ProlongedAbsenceTracker` クラスを作成
+- **新規**: 別個の `ProlongedAbsenceTracker` クラスを作成
 - **間引きをポリシーとして分離**: 顔フォールバック間引き (要件 2.1) は推論 FPS 制限 (`FrameThrottle`) とは別ポリシー。設計で分離: `ProlongedAbsenceTracker` が間引き間隔決定を所有し、`PoseDetector` がスキップを実行。懸念混在を回避 (選択肢 D 却下)。
 
 ### 採用 vs 新規
 
 - **採用**: 既存 `DimPowerPolicy.defaultAbsentThreshold` (60s) を不在閾値に — 単一真実源、注入テスト可能
 - **採用**: 既存 `FrameThrottle` / `MotionService` 受口 (FPS/頻度) — 新規間引き機構不要
-**新規**: `ProlongedAbsenceTracker` (新規クラス)
+- **新規**: `ProlongedAbsenceTracker`（新規クラス）
 - **新規**: `PoseDetector.detect(prolongedAbsenceTracker:)` パラメータ(`FaceFallbackGating` 契約)— 最小インターフェース変更、スレッドセーフな参照渡し
 - **新規**: `Metrics.faceThrottledCount` — 既存計測を拡張し間引き効果を取得
 
@@ -240,7 +240,7 @@
 ### 繰越リスク
 1. **間引き間隔の検証**: 5s は起点。実機測定で調整の可能性 (ADR 更新)。
 2. **二重不在トラッカー整合性**: `DimPowerPolicy` + `ProlongedAbsenceTracker` が同一 `isPersonDetected`/`now` を受け取ること。結合テストで検証。
-3. **ADR 作成**: `docs/adr/0026-face-fallback-throttling.md` で間引き間隔、ホールド機構、同一間隔決定を記録。
+3. **ADR 作成（完了）**: `docs/adr/0026-face-fallback-throttling.md` に間引き間隔、ホールド機構、同一間隔決定を記録済み。
 
 ---
 
