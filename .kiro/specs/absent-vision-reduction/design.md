@@ -129,7 +129,7 @@ graph TB
 ### New Files
 
 - `NekozeFix/Session/ProlongedAbsenceTracker.swift` — 新規。長時間不在の計測・遷移・間引き判定・閾値を持つクラス（`@unchecked Sendable`、`NSLock` 内包）
-- `NekozeFixTests/ProlongedAbsenceTrackerTests.swift` — 新規。遷移判定・間引き判定・閾値境界・復帰の単体検証
+- `NekozeFixTests/ProlongedAbsenceTrackerTests.swift` — 既存（origin/main で追加済み）。遷移判定・間引き判定・閾値境界・復帰の単体検証
 
 ### Modified Files
 
@@ -138,7 +138,7 @@ graph TB
 - `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で `FaceFallbackGating` 適合インスタンス渡し、復帰時 `reset()`
 - `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加（`.absent` 短絡は実機確認）
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
-- `docs/adr/0026-face-fallback-throttling.md` — 新規 ADR。間引き間隔・チラつき許容・同一間隔の決定根拠
+- `docs/adr/0026-face-fallback-throttling.md` — 既存（origin/main で追加済み）。間引き間隔・チラつき許容・同一間隔の決定根拠
 
 ### Shared File Arbitration
 
