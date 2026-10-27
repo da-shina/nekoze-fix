@@ -55,10 +55,10 @@
 
 - [x] 5. `PoseDetector` 単体テスト拡張
   - `NekozeFixTests/PoseDetectorTests.swift` を拡張
-  - テストケース: 間引き有効時の顔スキップ（`.absent` 返却、`faceThrottledCount++`）
+  - テストケース: 間引き有効時の境界メソッド挙動（`faceThrottledCount++`、実行時刻記録）；`.absent` 返却の `detect()` 短絡は実機確認とする
   - テストケース: 間引き無効時の毎回実行（`faceExecutedCount` インクリメント）
   - テストケース: Metrics 計数 — `faceThrottledCount` / `faceExecutedCount` / `faceSkippedCount` / `faceTotalTime` / `poseTotalTime`
-  - テストケース: 復帰時毎回実行（Tracker リセット後）
+  - テストケース: 非長時間不在時の毎回実行（境界メソッド）；`detect()` 経路の復帰は実機確認とする
   - テストケース: 合成則不変（`synthesize` 既存テストで回帰確認）
   - 完了条件: 全テストパス、間引き/復帰/非長時間不在の各パスで Metrics 正確
   - _Requirements: 2.1, 2.2, 2.4, 3.1, 3.2, 3.3_
@@ -106,7 +106,7 @@
   - テストケース: 通常モード長時間不在遷移・解除（`tick` → `isProlongedAbsence` → 解除で `reset`）
   - テストケース: 暗転モード長時間不在遷移・解除（暗転操作後 `dimmed()` → 不在継続 → `dimmedAbsent` 相当 → 解除）
   - テストケース: 暗転解除での通常復帰（`exitDimMode` → `restored()` + Tracker `reset()`）
-  - テストケース: PoseDetector 間引き結線(`shouldExecuteFaceFallback(now:tracker:)` の `faceThrottledCount` 計数・トラッカーへの実行記録)。`detect()` からの呼び出し自体は無効バッファでは到達しないため実機確認とする
+  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` 側の `shouldExecuteFaceFallback` 結線はタスク 5 の単体テストで検証済み。
   - テストケース: DimPowerPolicy との併存確認（二重不在計測が乖離しない）
   - テストケース: ホールド抑制（`faceDetectedHoldActive` 時に `isPersonDetected` 維持）
   - 完了条件: 全テストパス、通常/暗転それぞれで遷移・解除・ホールド・復帰が検証済み
@@ -121,7 +121,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
   - _Boundary: FrameThrottle, MotionService, DimPowerPolicy, MainHopGate, PostureAnalyzer, AlertPlayer_
 
-- [x] 11. 実機 E2E テストと性能計測
+- [ ] 11. 実機 E2E テストと性能計測（実機未利用のため未完了；実測記録は measurements-task11.md の未計測明記に従う）
   - 実測記録: `.kiro/specs/absent-vision-reduction/measurements-task11.md`
   - 注: 視覚処理量（通常/暗転の在席・長時間不在）と復帰5秒以内は実測。電力（全条件）と長時間監視は未計測（iOS 18.7.7 で `xctrace` Power Profiler 不可、Xcode GUI Energy Report 未取得）。5.3 に従い未計測と明記し、推定値は記載しない。
   - 実機（iOS 18.7.7 以上）で以下条件を測定・記録:
@@ -136,7 +136,7 @@
   - _Depends: 7, 8_
 
 - [x] 12. ADR 作成とドキュメント同期
-  - `docs/adr/XXXX-face-fallback-throttling.md` を作成（連番で次 ADR 番号割当）
+  - `docs/adr/0026-face-fallback-throttling.md` を作成（連番で次 ADR 番号割当）
   - 記録内容: 間引き間隔 5s の決定根拠、`NSLock` スレッドセーフクラス採用理由、`shouldExecuteAndRecordFaceFallback` アトミック化、`faceDetectedHoldActive` ホールド機構、同一間隔(通常/暗転)の決定、チラつき防止ホールド機構
   - `CONTEXT.md` 用語（長時間不在・不在しきい値・顔フォールバック間引き・顔検出ホールド）が設計と整合しているか確認
   - `design.md` の Grilling Decisions と ADR 参照を同期

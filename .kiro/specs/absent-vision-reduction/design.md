@@ -136,9 +136,9 @@ graph TB
 - `NekozeFix/Types/PostureTypes.swift` — `FaceFallbackGating` プロトコル追加(既存型は不変)
 - `NekozeFix/Services/PoseDetector.swift` — `detect()` に `FaceFallbackGating`(Types の契約)引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
 - `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で `FaceFallbackGating` 適合インスタンス渡し、復帰時 `reset()`
-- `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加
+- `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加（`.absent` 短絡は実機確認）
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
-- `docs/adr/XXXX-face-fallback-throttling.md` — 新規 ADR。間引き間隔・チラつき許容・同一間隔の決定根拠
+- `docs/adr/0026-face-fallback-throttling.md` — 新規 ADR。間引き間隔・チラつき許容・同一間隔の決定根拠
 
 ### Shared File Arbitration
 
@@ -403,7 +403,7 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
 
 - State model: `isProlongedAbsence`、`absenceStart`、`lastFaceExecutionTime`、`lastFaceDetectedTime`、`absentThreshold`、`faceFallbackThrottleInterval`（すべて `lock` で保護）
 - Persistence & consistency: プロセス内メモリのみ。判定経路は既存直列実行に従い新規キューを作らない
-- Concurrency strategy: **`NSLock` 内包によるスレッドセーフ設計**。`tick`（MainActor）、`shouldExecuteAndRecordFaceFallback`/`recordFaceDetected`/`faceDetectedHoldActive`（detectionQueue）が同一ロックで直列化。`MotionService.SharedState` と同パターン。PoseDetector 側の入口 `shouldExecuteFaceFallback(now:tracker:)` も detectionQueue 上で同メソッドへ委譲する。
+- Concurrency strategy: **`NSLock` 内包によるスレッドセーフ設計**。`tick`（MainActor）、`shouldExecuteAndRecordFaceFallback`/`recordFaceDetected`（detectionQueue）、`faceDetectedHoldActive`（MainActor/`updateState`）が同一ロックで直列化。`MotionService.SharedState` と同パターン。PoseDetector 側の入口 `shouldExecuteFaceFallback(now:tracker:)` も detectionQueue 上で同メソッドへ委譲する。
 
 **Implementation Notes**
 
@@ -665,4 +665,4 @@ struct Metrics: Equatable {
 
 1. **間引き間隔 5 秒の妥当性**: 実測で Vision 時間削減効果と復帰遅延のバランスを確認し、必要なら設計変更（ADR 更新）
 2. **二重不在管理の整合性**: `DimPowerPolicy`（暗転段階用）と `ProlongedAbsenceTracker`（モード非依存）が同一 `isPersonDetected`・同一 `now` で呼ばれる限り乖離しないが、結合テストで明示確認
-3. **ADR 番号**: 連番で `docs/adr/XXXX-face-fallback-throttling.md` を作成（設計確定時に割当）
+3. **ADR 番号**: `docs/adr/0026-face-fallback-throttling.md` を作成済み（設計確定時に割当）

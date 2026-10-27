@@ -70,7 +70,7 @@
 **互換性**:
 - ✅ 既存 `DimPowerStage` 遷移を保持 (dim-mode-saving 不変)
 - ✅ 閾値の単一ソース (`absentThreshold`)
-- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信 (スレッドセーフ: 検出キューで値コピーとともに呼出し)
+- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信（スレッドセーフ: 検出キュー経由で参照渡し（`@unchecked Sendable` クラス））
 
 **複雑さ**:
 - `PoseDetector` が顔フェーズを間引く必要: 直近顔実行時刻を保持し、間引き間隔内ならスキップ
@@ -204,14 +204,14 @@
 
 ### 一般化
 
-- **モード非依存長時間不在**: 要件 1.1–1.4, 2.1–2.4 で通常/暗転両モードでの長時間不在検出を要求。`DimPowerPolicy` (暗転段階遷移所有) を拡張する代わりに、別個の `ProlongedAbsenceTracker` 値型を作成。*不在計測* 能力を一般化し、*暗転段階遷移* を `DimPowerPolicy` に留める。インターフェース `tick(isPersonDetected:now:)` は現在および将来のモードを自然にサポート。
+別個の `ProlongedAbsenceTracker` クラスを作成
 - **間引きをポリシーとして分離**: 顔フォールバック間引き (要件 2.1) は推論 FPS 制限 (`FrameThrottle`) とは別ポリシー。設計で分離: `ProlongedAbsenceTracker` が間引き間隔決定を所有し、`PoseDetector` がスキップを実行。懸念混在を回避 (選択肢 D 却下)。
 
 ### 採用 vs 新規
 
 - **採用**: 既存 `DimPowerPolicy.defaultAbsentThreshold` (60s) を不在閾値に — 単一真実源、注入テスト可能
 - **採用**: 既存 `FrameThrottle` / `MotionService` 受口 (FPS/頻度) — 新規間引き機構不要
-- **新規**: `ProlongedAbsenceTracker` (新規値型) — モード非依存不在計測を所有する既存コンポーネントなし
+**新規**: `ProlongedAbsenceTracker` (新規クラス)
 - **新規**: `PoseDetector.detect(prolongedAbsenceTracker:)` パラメータ(`FaceFallbackGating` 契約)— 最小インターフェース変更、スレッドセーフな参照渡し
 - **新規**: `Metrics.faceThrottledCount` — 既存計測を拡張し間引き効果を取得
 
@@ -240,7 +240,7 @@
 ### 繰越リスク
 1. **間引き間隔の検証**: 5s は起点。実機測定で調整の可能性 (ADR 更新)。
 2. **二重不在トラッカー整合性**: `DimPowerPolicy` + `ProlongedAbsenceTracker` が同一 `isPersonDetected`/`now` を受け取ること。結合テストで検証。
-3. **ADR 作成**: `docs/adr/XXXX-face-fallback-throttling.md` で間引き間隔、ホールド機構、同一間隔決定を記録。
+3. **ADR 作成**: `docs/adr/0026-face-fallback-throttling.md` で間引き間隔、ホールド機構、同一間隔決定を記録。
 
 ---
 
