@@ -12,9 +12,9 @@
 
 ## Phase 2: Core Implementation
 
-- [x] 2. `ProlongedAbsenceTracker` 実装 (Session層・スレッドセーフ構造体)
+- [x] 2. `ProlongedAbsenceTracker` 実装 (Session層・スレッドセーフクラス)
   - `NekozeFix/Session/ProlongedAbsenceTracker.swift` を新規作成
-  - `NSLock` 内包、`@unchecked Sendable` 構造体として実装
+  - `NSLock` 内包、`@unchecked Sendable` クラスとして実装
   - プロパティ: `absentThreshold`、`faceFallbackThrottleInterval`、`isProlongedAbsence`、`absenceStart`、`lastFaceExecutionTime`、`lastFaceDetectedTime`
   - メソッド: `tick(isPersonDetected:now:)` → `Bool`、不在計測・遷移(ホールド時刻の更新は `recordFaceDetected(now:)` が担う)
   - メソッド: `shouldExecuteAndRecordFaceFallback(now:)` → `Bool`、間引き判定と実行時刻のアトミック更新
@@ -23,7 +23,7 @@
   - メソッド: `reset()`、全状態リセット
   - メソッド: `snapshot()` → `Snapshot`、テスト・ログ用
   - イニシャライザで不正値を既定値（60s / 5s）にフォールバック
-  - 完了条件: 構造体がコンパイル通過し、`snapshot()` で状態が取得可能
+  - 完了条件: クラスがコンパイル通過し、`snapshot()` で状態が取得可能
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.4, 3.2, 3.4_
   - _Boundary: ProlongedAbsenceTracker_
 
@@ -137,7 +137,7 @@
 
 - [x] 12. ADR 作成とドキュメント同期
   - `docs/adr/XXXX-face-fallback-throttling.md` を作成（連番で次 ADR 番号割当）
-  - 記録内容: 間引き間隔 5s の決定根拠、`NSLock` スレッドセーフ構造体採用理由、`shouldExecuteAndRecordFaceFallback` アトミック化、`faceDetectedHoldActive` ホールド機構、同一間隔（通常/暗転）の決定、チラつき防止ホールド機構
+  - 記録内容: 間引き間隔 5s の決定根拠、`NSLock` スレッドセーフクラス採用理由、`shouldExecuteAndRecordFaceFallback` アトミック化、`faceDetectedHoldActive` ホールド機構、同一間隔(通常/暗転)の決定、チラつき防止ホールド機構
   - `CONTEXT.md` 用語（長時間不在・不在しきい値・顔フォールバック間引き・顔検出ホールド）が設計と整合しているか確認
   - `design.md` の Grilling Decisions と ADR 参照を同期
   - 完了条件: ADR ファイル作成、用語集・設計書が最新決定と整合
@@ -160,4 +160,4 @@
 - すべての実装ファイル（`ProlongedAbsenceTracker.swift`、`PoseDetector.swift` 修正、`PostureSessionManager.swift` 修正、`TestUtilities.swift`、テストファイル）が既に存在し、ビルド通過済み（`xcodebuild build` 成功）。
 - ADR 0026 `docs/adr/0026-face-fallback-throttling.md` を新規作成（design.md の参照先と整合）。
 - タスク 11（実機 E2E テスト）は実機（iOS 18.7.7+）が必要なため本環境では未実行。実測記録は別途実機で実施すること。
-- シミュレータでのテスト実行は環境依存（XPC server died）で失敗するため、ビルド通過とコードレビューで検証済み。
+- テストはシミュレータ(iPhone 17 Pro)で全スイート成功(`xcodebuild ... test`)。実機での実推論経路の確認(タスク 11)は未実施。

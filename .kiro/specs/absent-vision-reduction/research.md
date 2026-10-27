@@ -70,7 +70,7 @@
 **互換性**:
 - ✅ 既存 `DimPowerStage` 遷移を保持 (dim-mode-saving 不変)
 - ✅ 閾値の単一ソース (`absentThreshold`)
-- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信 (スレッドセーフ: 検出キューで構造体コピーとともに呼出し)
+- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信 (スレッドセーフ: 検出キューで値コピーとともに呼出し)
 
 **複雑さ**:
 - `PoseDetector` が顔フェーズを間引く必要: 直近顔実行時刻を保持し、間引き間隔内ならスキップ
@@ -231,7 +231,7 @@
 | **5s 間引き間隔** | バランス: 視覚処理削減 vs 復帰検出遅延。要件 3.2「間隔内」を満たす | 要件 2.1, 2.2, 3.2 |
 | **`detect(..., prolongedAbsenceTracker:)` 引数** | Tracker 渡しで内部完結。`shouldExecuteAndRecordFaceFallback` で判定・記録をアトミック化 | 要件 2.1, 3.1 |
 | **`Metrics.faceThrottledCount`** | 間引きスキップを姿勢スキップ (`faceSkippedCount`) と区別 | 要件 5.1 |
-| **`ProlongedAbsenceTracker` を `NSLock` 内包のスレッドセーフ構造体に** | `MotionService.SharedState` パターン踏襲。MainActor/detectionQueue 両スレッドから安全に変更 | 要件 1.1–1.4, 2.1 |
+| **`ProlongedAbsenceTracker` を `NSLock` 内包のスレッドセーフクラスに** | `MotionService.SharedState` パターン踏襲。MainActor/detectionQueue 両スレッドから安全に変更 | 要件 1.1–1.4, 2.1 |
 | **`shouldExecuteAndRecordFaceFallback` で判定・記録をアトミック化** | `recordFaceExecution` 脱調問題解決。`PoseDetector` 内部で完結 | 要件 2.1, 2.4, 3.2 |
 | **`faceDetectedHoldActive` ホールド機構** | 顔実行後間引き間隔内は `isPersonDetected=true` 維持。通常モード `personMissing` ちらつき防止 | 要件 3.2, 3.4 |
 | **通常/暗転で同一間隔** | 実装簡素化。要件 2.2 は暗転比較のみ要求 | 要件 2.2 |

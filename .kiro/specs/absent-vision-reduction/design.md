@@ -226,7 +226,7 @@ stateDiagram-v2
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies (P0/P1) | Contracts |
 |-----------|--------------|--------|--------------|--------------------------|-----------|
 | ProlongedAbsenceTracker | Session / クラス（`@unchecked Sendable`） | 長時間不在の計測・遷移・間引き判定・閾値 | 1.1–1.4, 2.1, 2.4 | `DimPowerPolicy.defaultAbsentThreshold` (P0) | State [x] |
-| PoseDetector | Services | 姿勢検出・顔フォールバック間引き実行 | 2.1, 2.2, 2.4, 3.1–3.3 | ProlongedAbsenceTracker (P0), Vision (P0) | Service [x], State [x] |
+| PoseDetector | Services | 姿勢検出・顔フォールバック間引き実行 | 2.1, 2.2, 2.4, 3.1–3.3 | `FaceFallbackGating` (Types) (P0), Vision (P0) | Service [x], State [x] |
 | PostureSessionManager | Session | Tracker 所有・結合・PoseDetector への `FaceFallbackGating` 適合インスタンス渡し | 1.1–1.4, 2.1–2.4, 3.1–3.4 | Tracker (P0), PoseDetector (P0), DimPowerPolicy (P0) | State [x] |
 | Metrics 計測 | Session/Services | 視覚処理量・電力の実測記録 | 5.1–5.4 | 既存 5秒窓ログ (P0), Energy Report (P0) | State [x] |
 
@@ -630,11 +630,11 @@ struct Metrics: Equatable {
 
 - **Unit Tests**:
   - `ProlongedAbsenceTrackerTests`: 初期状態、不正閾値フォールバック、遷移（通常→長時間不在→解除）、人物再検出前/後、閾値境界（59.9s/60.0s/60.1s）、間引き判定（実行可/不可/実行後リセット）、リセット動作、無効時刻無視
-  - `PoseDetectorTests`: 間引き有効時の顔スキップ（`.absent` 返却）、間引き無効時の毎回実行、Metrics 計数（`faceThrottledCount` 含む）、復帰時毎回実行、合成則不変（`synthesize` 既存テストで回帰確認）
+  - `PoseDetectorTests`: 境界メソッド `shouldExecuteFaceFallback(now:tracker:)` の間引き計数(`faceThrottledCount`)と tracker への実行時刻記録、非長時間不在時の毎回実行可、合成則不変(`synthesize` 既存テストで回帰確認)。`.absent` 返却そのものと `detect()` から境界メソッドへの呼び出しは無効バッファでは到達しないため実機確認とする
   - `DimPowerPolicyTests`: 既存テスト維持（本 spec 変更なし）
 
 - **Integration Tests**:
-  - `PostureSessionManagerTests`: 通常モード長時間不在遷移・解除、暗転モード長時間不在遷移・解除、暗転解除での通常復帰、PoseDetector 間引き連携（`isProlongedAbsence` 渡し・実行記録）、DimPowerPolicy との併存確認
+  - `PostureSessionManagerTests`: 通常モード長時間不在遷移・解除、暗転モード長時間不在遷移・解除、暗転解除での通常復帰、Session が所有する tracker の間引き判定(実行可/間隔内不可/経過後の復帰)、DimPowerPolicy との併存確認
   - `FrameThrottleTests` / `MotionServiceTests`: 既存回帰（全段階条件で再実行）
 
 - **E2E/UI Tests（実機）**:
