@@ -1349,7 +1349,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     // MARK: - PoseDetector 間引き連携
 
-    /// 長時間不在中、Session が結線した tracker が間引き判定を返す(結線確認)。
+    /// 長時間不在中、Session が所有する tracker の間引き判定を検証する。
     /// 注: 無効バッファでは PoseDetector が早期リターンするため、間引き動作そのものは
     /// ProlongedAbsenceTrackerTests で検証する。
     func testProlongedAbsence_TrackerThrottlesFaceFallback() {
@@ -1368,7 +1368,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
-        // 結線された tracker の間引き判定: 1回目は実行可、間隔内は不可、経過後は可
+        // Session が所有する tracker の間引き判定: 1回目は実行可、間隔内は不可、経過後は可
         let tracker = sut.prolongedAbsenceTracker
         let now = CACurrentMediaTime()
         XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now))
