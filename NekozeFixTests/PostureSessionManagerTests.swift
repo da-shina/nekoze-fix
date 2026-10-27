@@ -1368,13 +1368,12 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
-        // Session が所有する tracker の間引き判定: 1回目は実行可、間隔内は不可、経過後は可
+        // Session が所有する tracker が間引きを提供する(間隔の境界値は ProlongedAbsenceTrackerTests が検証)
         let tracker = sut.prolongedAbsenceTracker
         let now = CACurrentMediaTime()
-        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now))
-        XCTAssertFalse(tracker.shouldExecuteAndRecordFaceFallback(now: now + 0.1))
-        XCTAssertFalse(tracker.shouldExecuteAndRecordFaceFallback(now: now + 4.9))
-        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now + 5.0))
+        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now), "初回は実行可")
+        XCTAssertFalse(tracker.shouldExecuteAndRecordFaceFallback(now: now), "間隔内は不可")
+        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: now + 5.0), "間隔経過後は可")
     }
 
     // MARK: - DimPowerPolicy との併存確認
