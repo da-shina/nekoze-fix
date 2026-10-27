@@ -185,7 +185,7 @@
 ### 設計フェーズへの持ち越し調査項目
 1. **間引き間隔選定**: 候補間隔 (2s, 5s, 10s) で実機測定し、視覚処理時間 vs 復帰検出遅延を評価。要件 3.2「間引き間隔の範囲内」に関連。
 2. **CONTEXT.md 用語**: 「長時間不在」の一般化 vs 新用語確定。現 CONTEXT は暗転モード専用定義。
-3. `PoseDetector` インターフェース: `detect(sampleBuffer:orientation:isProlongedAbsence:)` 引数追加か、別途セッターか。`captureOutput` 呼出し箇所に影響。
+3. `PoseDetector` インターフェース: `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` 引数追加か、別途セッターか。`captureOutput` 呼出し箇所に影響。Tracker は Types の `FaceFallbackGating` 契約で受け、Services→Session の上向き依存を作らない。
 4. **`personMissingGracePeriod` (0.5s) との相互作用**: 間引き間隔 > 0.5s の場合、長時間不在中に顔のみ人物が復帰しても顔実行間隔中は `personMissing` にちらつく。許容か？ (要件 3.4 は表示則不変 — ちらつきは表示変更)。設計で緩和必要 (例: 長時間不在中かつ間引きギャップ中は `isPersonDetected=true` を保持)。
 
 ---
@@ -212,7 +212,7 @@
 - **採用**: 既存 `DimPowerPolicy.defaultAbsentThreshold` (60s) を不在閾値に — 単一真実源、注入テスト可能
 - **採用**: 既存 `FrameThrottle` / `MotionService` 受口 (FPS/頻度) — 新規間引き機構不要
 - **新規**: `ProlongedAbsenceTracker` (新規値型) — モード非依存不在計測を所有する既存コンポーネントなし
-- **新規**: `PoseDetector.detect(isProlongedAbsence:)` パラメータ — 最小インターフェース変更、スレッドセーフな値渡し
+- **新規**: `PoseDetector.detect(prolongedAbsenceTracker:)` パラメータ(`FaceFallbackGating` 契約)— 最小インターフェース変更、スレッドセーフな参照渡し
 - **新規**: `Metrics.faceThrottledCount` — 既存計測を拡張し間引き効果を取得
 
 ### 簡素化
@@ -220,7 +220,7 @@
 - **削除**: `DimPowerPolicy` 拡張 (選択肢 A) — 二重責務 (暗転段階 + モード非依存不在) を生む
 - **削除**: Session インライン状態 (選択肢 C) — `DimPowerPolicy` で確立した「小さな純粋ポリシー」パターン違反
 - **削除**: `FrameThrottle` サブモード (選択肢 D) — 推論 FPS 制限と顔フォールバックポリシーの混同
-- **平坦化**: `ProlongedAbsenceTracker` が不在計測 **と** 間引き間隔決定 (`shouldExecuteFaceFallback`) を両方所有。別「間引きポリシー」コンポーネント不要。
+- **平坦化**: `ProlongedAbsenceTracker` が不在計測 **と** 間引き間隔決定 (`shouldExecuteAndRecordFaceFallback`) を両方所有。別「間引きポリシー」コンポーネント不要。
 - **単一間引き間引き間隔**: 通常/暗転 長時間不在で共通 5s 間隔 (要件 2.2 は暗転比較のみ指定。通常比較は計測で暗黙に)。実装・テストを簡素化。
 
 ### 主要設計決定の記録
