@@ -135,7 +135,7 @@ final class PoseDetector: @unchecked Sendable {
         // パス2: 観測ゼロ件時のみ顔検出（人物の所在基準。複数人時は画面中央の顔を選ぶ）
         // 長時間不在中の間引き判定は tracker 内部が持つ（非長時間不在時は毎回実行）。
         let now = CACurrentMediaTime()
-        guard shouldExecuteFaceFallback(now: now, tracker: prolongedAbsenceTracker) else {
+        guard evaluateFaceFallbackGate(now: now, tracker: prolongedAbsenceTracker) else {
             return .absent
         }
 
@@ -163,14 +163,15 @@ final class PoseDetector: @unchecked Sendable {
         return Self.synthesize(pose: nil, faceBounds: faceBounds)
     }
 
-    /// 姿勢観測ゼロ件時の顔フォールバック実行可否を判定し、間引き時は計数する。
-    /// Tracker への問い合わせ(実行記録を含む)と `faceThrottledCount` の計数を一箇所に集約する。
+    /// 顔フォールバックの間引きゲートを評価し、不可なら `faceThrottledCount` を計数する。
+    /// Tracker 側の `shouldExecuteAndRecordFaceFallback(now:)` が実行時刻の記録を担うのに対し、
+    /// 本メソッドは PoseDetector 側の計数責務を足した入口である(名前の紛らわしさを避けて別名にしている)。
     /// `detect` から呼ぶが、Vision を要さず単体検証できるよう独立させている(tasks 9 の結線確認)。
     /// - Parameters:
     ///   - now: 単調時刻系(`CACurrentMediaTime` 系)。
     ///   - tracker: 長時間不在トラッカー(間引き判定・実行記録用)。
     /// - Returns: 顔検出を実行すべきなら true。false のとき呼び出し側は `.absent` を確定してよい。
-    func shouldExecuteFaceFallback(now: TimeInterval, tracker: any FaceFallbackGating) -> Bool {
+    func evaluateFaceFallbackGate(now: TimeInterval, tracker: any FaceFallbackGating) -> Bool {
         let execute = tracker.shouldExecuteAndRecordFaceFallback(now: now)
         if !execute {
             metricsLock.withLock { _metrics.faceThrottledCount += 1 }

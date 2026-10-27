@@ -90,7 +90,8 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
         }
     }
 
-    /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔検出が実行された（`.personOnly` を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔フォールバック経路は `synthesize(pose: nil, faceBounds:)` のため `.pose` は返らない。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
     func recordFaceDetected(now: TimeInterval) {
         lock.withLock {

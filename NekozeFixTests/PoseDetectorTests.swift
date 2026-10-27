@@ -130,18 +130,18 @@ final class PoseDetectorTests: XCTestCase {
     // MARK: - 顔フォールバック間引きの結線(tasks 9)
 
     /// 非長時間不在では毎回実行可となり、間引き計数は進まない。
-    func testShouldExecuteFaceFallback_notProlonged_executesEveryTimeWithoutThrottling() {
+    func testEvaluateFaceFallbackGate_NotProlonged_ExecutesEveryTimeWithoutThrottling() {
         let detector = PoseDetector()
         let tracker = ProlongedAbsenceTracker()
 
-        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1000, tracker: tracker))
-        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1001, tracker: tracker))
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1000, tracker: tracker))
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1001, tracker: tracker))
         XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
     }
 
     /// 長時間不在中の間引き結線: 間引き時は計数し、実行可時は tracker へ実行時刻を記録する。
     /// 間引き間隔の境界値そのものは `ProlongedAbsenceTrackerTests` が検証するため、ここでは繰り返さない。
-    func testShouldExecuteFaceFallback_prolonged_countsAndRecords() {
+    func testEvaluateFaceFallbackGate_Prolonged_CountsAndRecords() {
         let detector = PoseDetector()
         let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
         _ = tracker.tick(isPersonDetected: false, now: 1000)
@@ -150,18 +150,18 @@ final class PoseDetectorTests: XCTestCase {
 
         // 1回目は実行可: 計数は進まず、実行時刻が tracker に記録される(結線)
         let first = 1062.0
-        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: first, tracker: tracker))
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: first, tracker: tracker))
         XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
         XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, first, accuracy: 1e-9)
 
         // 間隔内は間引き: 計数され、実行時刻は据え置き
-        XCTAssertFalse(detector.shouldExecuteFaceFallback(now: first + 0.1, tracker: tracker))
+        XCTAssertFalse(detector.evaluateFaceFallbackGate(now: first + 0.1, tracker: tracker))
         XCTAssertEqual(detector.snapshot().faceThrottledCount, 1)
         XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, first, accuracy: 1e-9, "間引き時は記録を更新しない")
 
         // 間隔経過後は再び実行可: 計数は据え置き、実行時刻が更新される
         let second = first + 5.0
-        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: second, tracker: tracker))
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: second, tracker: tracker))
         XCTAssertEqual(detector.snapshot().faceThrottledCount, 1, "実行可では計数が進まない")
         XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, second, accuracy: 1e-9)
     }
