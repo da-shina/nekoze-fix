@@ -240,7 +240,7 @@ struct MotionFrequencyMeasurement: Equatable {
 ///
 /// Services層(呼び出し側)が Session層の具体型を参照すると依存方向(`UI → Session → Services → Domain → Types`)に
 /// 反するため、契約だけを Types に置き両層から参照する。テストではフェイクを注入できる。
-protocol FaceFallbackGating: AnyObject {
+protocol FaceFallbackGating: AnyObject, Sendable {
     /// この推論で顔フォールバックを実行すべきか判定し、実行可なら時刻を記録する。
     /// - Parameter now: 単調時刻系(`CACurrentMediaTime` 系)。
     /// - Returns: 実行すべきなら true。
