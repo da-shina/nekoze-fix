@@ -127,8 +127,40 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics(), "無効バッファでは計数が進まないこと")
     }
 
+    // MARK: - 顔フォールバック間引きの結線(tasks 9)
+
+    /// 非長時間不在では毎回実行可となり、間引き計数は進まない。
+    func testShouldExecuteFaceFallback_notProlonged_executesEveryTimeWithoutThrottling() {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker()
+
+        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1000, tracker: tracker))
+        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1001, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
+    }
+
+    /// 長時間不在中は間引き間隔で実行可否が決まり、間引き回数が `faceThrottledCount` に計数される。
+    /// 実行記録が tracker に反映されること(結線)も確認する。
+    func testShouldExecuteFaceFallback_prolonged_throttlesAndCounts() {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        _ = tracker.tick(isPersonDetected: false, now: 1000)
+        _ = tracker.tick(isPersonDetected: false, now: 1061)
+        XCTAssertTrue(tracker.isProlongedAbsence)
+
+        // 1回目は実行可、間隔内は不可(計数)、経過後は再び可
+        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1062, tracker: tracker))
+        XCTAssertFalse(detector.shouldExecuteFaceFallback(now: 1062.5, tracker: tracker))
+        XCTAssertFalse(detector.shouldExecuteFaceFallback(now: 1066.9, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 2)
+        // 結線確認: 実行可時の時刻が tracker に記録される
+        XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, 1062, accuracy: 1e-9)
+
+        XCTAssertTrue(detector.shouldExecuteFaceFallback(now: 1067.0, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 2, "実行可では計数が進まない")
+    }
+
     // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する(tasks 3.1)。
     // シミュレータでは VNDetectHumanBodyPoseRequest の setup 自体が
-    // Code=9 で失敗するため、ここでは合成則と計測器の単体検証に留める。
-    // 顔フォールバック間引きの分岐(tracker 連携)は ProlongedAbsenceTrackerTests が検証する。
+    // Code=9 で失敗するため、ここでは合成則・計測器・間引き結線の単体検証に留める。
 }

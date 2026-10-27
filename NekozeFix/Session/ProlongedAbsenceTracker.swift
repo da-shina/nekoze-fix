@@ -41,7 +41,8 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
         lock.withLock { _isProlongedAbsence }
     }
 
-    /// 検出結果による長時間不在判定・ホールド状態更新。
+    /// 検出結果による長時間不在判定・遷移。
+    /// 顔検出ホールドの時刻更新は行わない(`recordFaceDetected(now:)` が更新する)。
     /// - Parameters:
     ///   - isPersonDetected: デバウンス済み人物検出状態（`updateState` 確定後の値）
     ///   - now: 単調時刻系（`CACurrentMediaTime` 系）。無効時刻は遷移を見送る。
