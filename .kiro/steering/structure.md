@@ -52,4 +52,4 @@ UI → Session → Services → Domain → Types
 
 ## Commit Convention
 
-`<type>(<feature>): <要約>` 形式。type は `feat` / `fix` / `docs` / `refactor` / `wip`。feature は spec 名（例: `dim-mode-saving`）。タスク番号があれば要約に含める（例: `feat(dim-mode-saving): 3.1 暗転移行・解除経路への切替え結線`）。
+`<type>(<feature>): <要約>` 形式。type は `feat` / `fix` / `docs` / `refactor` / `revert` / `wip`。feature は spec 名（例: `dim-mode-saving`）。タスク番号があれば要約に含める（例: `feat(dim-mode-saving): 3.1 暗転移行・解除経路への切替え結線`）。
