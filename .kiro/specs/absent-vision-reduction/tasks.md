@@ -3,10 +3,10 @@
 ## Phase 1: Foundation
 
 - [x] 1. テスト基盤と共有ユーティリティの整備
-  - `ProlongedAbsenceTracker` 用のテストヘルパー（不正閾値・間隔注入、時間モック、スナップショット比較）を `NekozeFixTests/TestUtilities/` に追加
+  - `ProlongedAbsenceTracker` 用のテストヘルパーは追加後に参照ゼロとなったため削除（`4744948`）。時刻注入は各テストが `now` を直接渡して代替する
   - `PoseDetector` 間引きテスト用の時刻注入可能な `ProlongedAbsenceTracker` と合成フレーム生成ユーティリティを作成（クラスの時刻注入でテスト可能にする）
   - 既存の `DimPowerPolicyTests` パターンに合わせ、単体テストのテンプレートを整理
-  - 完了条件: テストビルドが通過し、ヘルパーが `ProlongedAbsenceTrackerTests` / `PoseDetectorTests` で利用可能
+  - 完了条件: テストビルドが通過し、`ProlongedAbsenceTrackerTests` / `PoseDetectorTests` が時刻注入で境界値を検証できる
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.4, 3.1, 3.2, 3.3_
   - _Boundary: Test Infrastructure_
 
@@ -53,14 +53,14 @@
   - _Requirements: 2.1, 2.2, 2.4, 3.1, 3.2, 3.3_
   - _Boundary: PoseDetector_
 
-- [x] 5. `PoseDetector` 単体テスト拡張
+- [ ] 5. `PoseDetector` 単体テスト拡張（部分完了: 境界メソッドの検証は完了、Metrics 計数の実機確認が残る）
   - `NekozeFixTests/PoseDetectorTests.swift` を拡張
   - テストケース: 間引き有効時の境界メソッド挙動（`faceThrottledCount++`、実行時刻記録）；`.absent` 返却の `detect()` 短絡は実機確認とする
-  - テストケース: 間引き無効時の毎回実行（`faceExecutedCount` インクリメント）
-  - テストケース: Metrics 計数 — `faceThrottledCount` / `faceExecutedCount` / `faceSkippedCount` / `faceTotalTime` / `poseTotalTime`
+  - テストケース: 間引き無効時の毎回実行（境界メソッドが毎回 true を返すこと。`faceExecutedCount` の計数は実機確認）
+  - テストケース: Metrics 計数 — `faceThrottledCount` は境界メソッド経由で検証済み。`faceExecutedCount` / `faceSkippedCount` / `faceTotalTime` / `poseTotalTime` は Vision 要求が実機でのみ成立するためシミュレータでは検証不能。実機確認とする（タスク 11）
   - テストケース: 非長時間不在時の毎回実行（境界メソッド）；`detect()` 経路の復帰は実機確認とする
   - テストケース: 合成則不変（`synthesize` 既存テストで回帰確認）
-  - 完了条件: 全テストパス、間引き/復帰/非長時間不在の各パスで Metrics 正確
+  - 完了条件: 境界メソッドの単体テストがパス。実機での Metrics 計数（`faceExecutedCount` / `faceTotalTime` / `poseTotalTime`）確認はタスク 11 で満たす
   - _Requirements: 2.1, 2.2, 2.4, 3.1, 3.2, 3.3_
   - _Boundary: PoseDetector_
 
@@ -106,7 +106,7 @@
   - テストケース: 通常モード長時間不在遷移・解除（`tick` → `isProlongedAbsence` → 解除で `reset`）
   - テストケース: 暗転モード長時間不在遷移・解除（暗転操作後 `dimmed()` → 不在継続 → `dimmedAbsent` 相当 → 解除）
   - テストケース: 暗転解除での通常復帰（`exitDimMode` → `restored()` + Tracker `reset()`）
-  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` 側の `shouldExecuteFaceFallback` 結線はタスク 5 の単体テストで検証済み。
+  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` の `shouldExecuteFaceFallback` 呼び出し（`detect()` 経路）は実機確認（タスク 11）。
   - テストケース: DimPowerPolicy との併存確認（二重不在計測が乖離しない）
   - テストケース: ホールド抑制（`faceDetectedHoldActive` 時に `isPersonDetected` 維持）
   - 完了条件: 全テストパス、通常/暗転それぞれで遷移・解除・ホールド・復帰が検証済み
@@ -157,7 +157,7 @@
 
 ## Implementation Notes
 
-- すべての実装ファイル（`ProlongedAbsenceTracker.swift`、`PoseDetector.swift` 修正、`PostureSessionManager.swift` 修正、`TestUtilities.swift`、テストファイル）が既に存在し、ビルド通過済み（`xcodebuild build` 成功）。
+- すべての実装ファイル（`ProlongedAbsenceTracker.swift`、`PoseDetector.swift` 修正、`PostureSessionManager.swift` 修正、テストファイル）が既に存在し、ビルド通過済み（`xcodebuild build` 成功）。
 - ADR 0026 `docs/adr/0026-face-fallback-throttling.md` を新規作成（design.md の参照先と整合）。
 - タスク 11（実機 E2E テスト）は実機（iOS 18.7.7+）が必要なため本環境では未実行。実測記録は別途実機で実施すること。
 - テストはシミュレータ(iPhone 17 Pro)で全スイート成功(`xcodebuild ... test`)。実機での実推論経路の確認(タスク 11)は未実施。

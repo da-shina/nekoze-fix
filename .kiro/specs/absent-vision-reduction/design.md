@@ -136,7 +136,7 @@ graph TB
 - `NekozeFix/Types/PostureTypes.swift` — `FaceFallbackGating` プロトコル追加(既存型は不変)
 - `NekozeFix/Services/PoseDetector.swift` — `detect()` に `FaceFallbackGating`(Types の契約)引数追加、間引きロジック実装、`Metrics` に `faceThrottledCount` 追加
 - `NekozeFix/Session/PostureSessionManager.swift` — `prolongedAbsenceTracker` 保持、`updateState` で `tick` / `faceDetectedHoldActive(now:)` 呼び出し、`captureOutput` で `FaceFallbackGating` 適合インスタンス渡し、復帰時 `reset()`
-- `NekozeFixTests/PoseDetectorTests.swift` — 間引き動作・Metrics 拡張・復帰の単体検証追加（`.absent` 短絡は実機確認）
+- `NekozeFixTests/PoseDetectorTests.swift` — 境界メソッドの間引き判定と `faceThrottledCount` 計数の単体検証追加（`.absent` 短絡と `detect()` 経路は実機確認）
 - `NekozeFixTests/PostureSessionManagerTests.swift` — 長時間不在遷移・解除・PoseDetector 連携の結合検証追加
 - `docs/adr/0026-face-fallback-throttling.md` — 既存（origin/main で追加済み）。間引き間隔・チラつき許容・同一間隔の決定根拠
 
