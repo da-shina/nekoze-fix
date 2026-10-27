@@ -235,3 +235,17 @@ struct MotionFrequencyMeasurement: Equatable {
     /// 計測条件（監視状態・端末向き・計測期間の付記）
     let conditionNote: String
 }
+
+/// 顔フォールバック間引きの可否と実行記録を提供するサービス境界契約(Types層)。
+///
+/// Services層(呼び出し側)が Session層の具体型を参照すると依存方向(`UI → Session → Services → Domain → Types`)に
+/// 反するため、契約だけを Types に置き両層から参照する。テストではフェイクを注入できる。
+protocol FaceFallbackGating: AnyObject {
+    /// この推論で顔フォールバックを実行すべきか判定し、実行可なら時刻を記録する。
+    /// - Parameter now: 単調時刻系(`CACurrentMediaTime` 系)。
+    /// - Returns: 実行すべきなら true。
+    func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool
+
+    /// 顔検出を実行したことを通知し、ホールド時刻を更新する。
+    func recordFaceDetected(now: TimeInterval)
+}

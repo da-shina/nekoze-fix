@@ -8,7 +8,7 @@ import QuartzCore
 /// 不在しきい値（既定 60 秒、`DimPowerPolicy.defaultAbsentThreshold` 共用）超過で長時間不在状態へ遷移する。
 /// 顔フォールバック間引き間隔（既定 5 秒）を内部に保持し、スレッドセーフに実行可否を判定・記録する。
 /// 暗転段階遷移（`DimPowerPolicy`）とは独立に動作する。
-final class ProlongedAbsenceTracker: @unchecked Sendable {
+final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
