@@ -242,6 +242,8 @@ struct MotionFrequencyMeasurement: Equatable {
 /// 反するため、契約だけを Types に置き両層から参照する。テストではフェイクを注入できる。
 protocol FaceFallbackGating: AnyObject, Sendable {
     /// この推論で顔フォールバックを実行すべきか判定し、実行可なら時刻を記録する。
+    /// 記録は長時間不在中の実行可時のみ行う。非長時間不在では間引き自体を行わないため記録しない
+    /// (長時間不在へ移行した直後の初回実行を待たせず、復帰検出を遅らせないため)。
     /// - Parameter now: 単調時刻系(`CACurrentMediaTime` 系)。
     /// - Returns: 実行すべきなら true。
     func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool

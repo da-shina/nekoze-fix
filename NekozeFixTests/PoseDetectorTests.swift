@@ -130,6 +130,7 @@ final class PoseDetectorTests: XCTestCase {
     // MARK: - 顔フォールバック間引きの結線(tasks 9)
 
     /// 非長時間不在では毎回実行可となり、間引き計数は進まない。
+    /// 実行時刻を記録しないのは意図した仕様（移行直後の初回実行を待たせないため）。
     func testEvaluateFaceFallbackGate_NotProlonged_ExecutesEveryTimeWithoutThrottling() {
         let detector = PoseDetector()
         let tracker = ProlongedAbsenceTracker()
@@ -137,6 +138,10 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1000, tracker: tracker))
         XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1001, tracker: tracker))
         XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
+        XCTAssertEqual(
+            tracker.snapshot().lastFaceExecutionTime, -.infinity,
+            "非長時間不在では実行時刻を記録せず、長時間不在移行直後の初回実行を許可する"
+        )
     }
 
     /// 長時間不在中の間引き結線: 間引き時は計数し、実行可時は tracker へ実行時刻を記録する。

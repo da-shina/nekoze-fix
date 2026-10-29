@@ -80,7 +80,10 @@ final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
     /// - Returns: 実行すべきなら true。呼び出し側は true 時にのみ顔検出を実行する。
     func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
         return lock.withLock {
-            guard _isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
+            // 長時間不在でなければ毎回実行する。ここでは実行時刻を記録しない:
+            // 記録すると長時間不在へ移行した直後の初回実行が間引き間隔ぶん待たされ、
+            // 復帰検出(要件 3.2)を遅らせる。間引き判定は長時間不在中のみ意味を持つ。
+            guard _isProlongedAbsence else { return true }
             guard now.isFinite, now >= 0 else { return true }
             if now - lastFaceExecutionTime < faceFallbackThrottleInterval {
                 return false
