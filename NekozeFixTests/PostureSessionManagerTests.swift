@@ -607,7 +607,12 @@ final class PostureSessionManagerTests: XCTestCase {
     }
 
     /// 間引き下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
+    /// 実時刻の待機に依存すると、冷間起動のオーバーヘッドが猶予窓を食い潰して
+    /// フレークするため、`nowProvider` に仮想時刻を注入して決定的に検証する。
     func testThrottledRate_personMissingGraceSurvivesThinning() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
+
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
@@ -616,14 +621,14 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
         for _ in 0..<3 {
-            usleep(100_000)
+            now += 0.1
             sut.processDetection(.absent)
         }
         XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
 
         // 計0.7秒 → 不在確定
         for _ in 0..<4 {
-            usleep(100_000)
+            now += 0.1
             sut.processDetection(.absent)
         }
         XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
