@@ -106,7 +106,8 @@
   - テストケース: 通常モード長時間不在遷移・解除（`tick` → `isProlongedAbsence` → 解除で `reset`）
   - テストケース: 暗転モード長時間不在遷移・解除（暗転操作後 `dimmed()` → 不在継続 → `dimmedAbsent` 相当 → 解除）
   - テストケース: 暗転解除での通常復帰（`exitDimMode` → `restored()` + Tracker `reset()`）
-  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。`PoseDetector` の `evaluateFaceFallbackGate` 呼び出し（`detect()` 経路）は実機確認（タスク 11）。
+  - テストケース: Session が所有する tracker の間引き判定（実行可/間隔内不可/経過後の復帰）、`faceDetectedHoldActive` によるホールド抑制。
+  - テスト対象の切り分け: `PoseDetector` の `faceThrottledCount` 計数と tracker への実行時刻記録は `PoseDetectorTests.swift` で検証する。`PoseDetector.detect()` から `evaluateFaceFallbackGate` への呼び出し（結線）はシミュレータで Body Pose の setup が失敗するため実行できず、実機確認（タスク 11）。
   - テストケース: DimPowerPolicy との併存確認（二重不在計測が乖離しない）
   - テストケース: ホールド抑制（`faceDetectedHoldActive` 時に `isPersonDetected` 維持）
   - 完了条件: 全テストパス、通常/暗転それぞれで遷移・解除・ホールド・復帰が検証済み
@@ -123,7 +124,7 @@
 
 - [ ] 11. 実機 E2E テストと性能計測（実機未利用のため未完了；実測記録は measurements-task11.md の未計測明記に従う）
   - 実測記録: `.kiro/specs/absent-vision-reduction/measurements-task11.md`
-  - 注: 視覚処理量（通常/暗転の在席・長時間不在）と復帰5秒以内は実測。電力（全条件）と長時間監視は未計測（iOS 18.7.7 で `xctrace` Power Profiler 不可、Xcode GUI Energy Report 未取得）。5.3 に従い未計測と明記し、推定値は記載しない。
+  - 注: 視覚処理量（通常/暗転の在席・長時間不在）と復帰5秒以内は実測。もっとも、この実測は `evaluateFaceFallbackGate` 抽出前（`faceTotalTime` / `poseTotalTime` 出力の一時配線下）の経路で得た参考値であり、変更後の `detect()` 経路は実機で再確認していない。電力（全条件）と長時間監視は未計測（iOS 18.7.7 で `xctrace` Power Profiler 不可、Xcode GUI Energy Report 未取得）。5.3 に従い未計測と明記し、推定値は記載しない。
   - 実機（iOS 18.7.7 以上）で以下条件を測定・記録:
     - 条件: 通常モード長時間不在 / 暗転モード長時間不在 / 暗転段階（在席） / 通常モード在席 / 長時間監視
     - 指標: 視覚処理量（5秒窓ログ `faceThrottledCount` / `faceExecutedCount` / `faceTotalTime` / `poseTotalTime`）、電力指標（Xcode Energy Report: Average Energy Impact ゲージ色評価 + Average Component Utilization 領域別%）
