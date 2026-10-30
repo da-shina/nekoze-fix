@@ -70,7 +70,7 @@
 **互換性**:
 - ✅ 既存 `DimPowerStage` 遷移を保持 (dim-mode-saving 不変)
 - ✅ 閾値の単一ソース (`absentThreshold`)
-- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信 (スレッドセーフ: 検出キューで構造体コピーとともに呼出し)
+- ✅ `PoseDetector` はメソッド引数またはセッターでシグナル受信（スレッドセーフ: 検出キュー経由で参照渡し（`@unchecked Sendable` クラス））
 
 **複雑さ**:
 - `PoseDetector` が顔フェーズを間引く必要: 直近顔実行時刻を保持し、間引き間隔内ならスキップ
@@ -185,7 +185,7 @@
 ### 設計フェーズへの持ち越し調査項目
 1. **間引き間隔選定**: 候補間隔 (2s, 5s, 10s) で実機測定し、視覚処理時間 vs 復帰検出遅延を評価。要件 3.2「間引き間隔の範囲内」に関連。
 2. **CONTEXT.md 用語**: 「長時間不在」の一般化 vs 新用語確定。現 CONTEXT は暗転モード専用定義。
-3. `PoseDetector` インターフェース: `detect(sampleBuffer:orientation:isProlongedAbsence:)` 引数追加か、別途セッターか。`captureOutput` 呼出し箇所に影響。
+3. `PoseDetector` インターフェース: `detect(sampleBuffer:orientation:prolongedAbsenceTracker:)` 引数追加か、別途セッターか。`captureOutput` 呼出し箇所に影響。Tracker は Types の `FaceFallbackGating` 契約で受け、Services→Session の上向き依存を作らない。
 4. **`personMissingGracePeriod` (0.5s) との相互作用**: 間引き間隔 > 0.5s の場合、長時間不在中に顔のみ人物が復帰しても顔実行間隔中は `personMissing` にちらつく。許容か？ (要件 3.4 は表示則不変 — ちらつきは表示変更)。設計で緩和必要 (例: 長時間不在中かつ間引きギャップ中は `isPersonDetected=true` を保持)。
 
 ---
@@ -204,15 +204,15 @@
 
 ### 一般化
 
-- **モード非依存長時間不在**: 要件 1.1–1.4, 2.1–2.4 で通常/暗転両モードでの長時間不在検出を要求。`DimPowerPolicy` (暗転段階遷移所有) を拡張する代わりに、別個の `ProlongedAbsenceTracker` 値型を作成。*不在計測* 能力を一般化し、*暗転段階遷移* を `DimPowerPolicy` に留める。インターフェース `tick(isPersonDetected:now:)` は現在および将来のモードを自然にサポート。
+- **新規**: 別個の `ProlongedAbsenceTracker` クラスを作成
 - **間引きをポリシーとして分離**: 顔フォールバック間引き (要件 2.1) は推論 FPS 制限 (`FrameThrottle`) とは別ポリシー。設計で分離: `ProlongedAbsenceTracker` が間引き間隔決定を所有し、`PoseDetector` がスキップを実行。懸念混在を回避 (選択肢 D 却下)。
 
 ### 採用 vs 新規
 
 - **採用**: 既存 `DimPowerPolicy.defaultAbsentThreshold` (60s) を不在閾値に — 単一真実源、注入テスト可能
 - **採用**: 既存 `FrameThrottle` / `MotionService` 受口 (FPS/頻度) — 新規間引き機構不要
-- **新規**: `ProlongedAbsenceTracker` (新規値型) — モード非依存不在計測を所有する既存コンポーネントなし
-- **新規**: `PoseDetector.detect(isProlongedAbsence:)` パラメータ — 最小インターフェース変更、スレッドセーフな値渡し
+- **新規**: `ProlongedAbsenceTracker`（新規クラス）
+- **新規**: `PoseDetector.detect(prolongedAbsenceTracker:)` パラメータ(`FaceFallbackGating` 契約)— 最小インターフェース変更、スレッドセーフな参照渡し
 - **新規**: `Metrics.faceThrottledCount` — 既存計測を拡張し間引き効果を取得
 
 ### 簡素化
@@ -220,7 +220,7 @@
 - **削除**: `DimPowerPolicy` 拡張 (選択肢 A) — 二重責務 (暗転段階 + モード非依存不在) を生む
 - **削除**: Session インライン状態 (選択肢 C) — `DimPowerPolicy` で確立した「小さな純粋ポリシー」パターン違反
 - **削除**: `FrameThrottle` サブモード (選択肢 D) — 推論 FPS 制限と顔フォールバックポリシーの混同
-- **平坦化**: `ProlongedAbsenceTracker` が不在計測 **と** 間引き間隔決定 (`shouldExecuteFaceFallback`) を両方所有。別「間引きポリシー」コンポーネント不要。
+- **平坦化**: `ProlongedAbsenceTracker` が不在計測 **と** 間引き間隔決定 (`shouldExecuteAndRecordFaceFallback`) を両方所有。別「間引きポリシー」コンポーネント不要。
 - **単一間引き間引き間隔**: 通常/暗転 長時間不在で共通 5s 間隔 (要件 2.2 は暗転比較のみ指定。通常比較は計測で暗黙に)。実装・テストを簡素化。
 
 ### 主要設計決定の記録
@@ -231,7 +231,7 @@
 | **5s 間引き間隔** | バランス: 視覚処理削減 vs 復帰検出遅延。要件 3.2「間隔内」を満たす | 要件 2.1, 2.2, 3.2 |
 | **`detect(..., prolongedAbsenceTracker:)` 引数** | Tracker 渡しで内部完結。`shouldExecuteAndRecordFaceFallback` で判定・記録をアトミック化 | 要件 2.1, 3.1 |
 | **`Metrics.faceThrottledCount`** | 間引きスキップを姿勢スキップ (`faceSkippedCount`) と区別 | 要件 5.1 |
-| **`ProlongedAbsenceTracker` を `NSLock` 内包のスレッドセーフ構造体に** | `MotionService.SharedState` パターン踏襲。MainActor/detectionQueue 両スレッドから安全に変更 | 要件 1.1–1.4, 2.1 |
+| **`ProlongedAbsenceTracker` を `NSLock` 内包のスレッドセーフクラスに** | `MotionService.SharedState` パターン踏襲。MainActor/detectionQueue 両スレッドから安全に変更 | 要件 1.1–1.4, 2.1 |
 | **`shouldExecuteAndRecordFaceFallback` で判定・記録をアトミック化** | `recordFaceExecution` 脱調問題解決。`PoseDetector` 内部で完結 | 要件 2.1, 2.4, 3.2 |
 | **`faceDetectedHoldActive` ホールド機構** | 顔実行後間引き間隔内は `isPersonDetected=true` 維持。通常モード `personMissing` ちらつき防止 | 要件 3.2, 3.4 |
 | **通常/暗転で同一間隔** | 実装簡素化。要件 2.2 は暗転比較のみ要求 | 要件 2.2 |
@@ -240,13 +240,13 @@
 ### 繰越リスク
 1. **間引き間隔の検証**: 5s は起点。実機測定で調整の可能性 (ADR 更新)。
 2. **二重不在トラッカー整合性**: `DimPowerPolicy` + `ProlongedAbsenceTracker` が同一 `isPersonDetected`/`now` を受け取ること。結合テストで検証。
-3. **ADR 作成**: `docs/adr/XXXX-face-fallback-throttling.md` で間引き間隔、ホールド機構、同一間隔決定を記録。
+3. **ADR 作成（完了）**: `docs/adr/0026-face-fallback-throttling.md` に間引き間隔、ホールド機構、同一間隔決定を記録済み。
 
 ---
 
 ## 7. 設計レビュー ゲート 結果
 
-- ✅ 要件網羅性: 全 20 件の数値要件 ID (1.1–1.4, 2.1–2.4, 3.1–3.4, 4.1–4.5, 5.1–5.4) をトレーサビリティ表でマッピング
+- ✅ 要件網羅性: 全 21 件の数値要件 ID (1.1–1.4, 2.1–2.4, 3.1–3.4, 4.1–4.5, 5.1–5.4) をトレーサビリティ表でマッピング
 - ✅ アーキテクチャ準備: コンポーネント境界明確 (`ProlongedAbsenceTracker`, `PoseDetector`, `PostureSessionManager`)、Swift シグネチャでインターフェース具体化
 - ✅ 境界準備: Owns/Out-of/Allowed/Revalidation セクション完全記載
 - ✅ 実行可能性: ファイル構成計画に新規 2 + 修正 5 + ADR 1 の具体的パス。孤立コンポーネントなし。並行実行安全 (Tracker 単体テストは PoseDetector/Session テストと独立)

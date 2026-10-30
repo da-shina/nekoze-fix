@@ -1,23 +1,27 @@
 ## Spec Report
 
-### Missing / Partial Requirements
-**Req 7.1, 7.2, 7.3 / Req 8.1, 8.2 — 条件別の実測記録** — AC 7.1: "通常モード・暗転モード・長時間人物不在・復帰直後・長時間監視の各条件で電力消費・復帰時間・検出精度を実測値として記録する" — Only 通常 and 暗転 have full power measurements (Energy Report gauge + Component Utilization). 長時間不在 and 復帰直後 have only CPU component (partial). 長時間監視 is completely unmeasured. Return-time and accuracy are unmeasured for ALL 5 conditions. tasks.md explicitly marks 4.2 as "IN PROGRESS".
+### 未実装 / 部分実装の要件
 
-**Req 2.2 — 暗転時の段階的推論頻度低下 (更なる低下)** — AC 2.2: "画面暗転モードが継続し、かつ人物が長時間検出されない、the NekozeFix shall 推論実行頻度を暗転直後よりさらに低下させる" — Implementation sets FPS limit to 10.0 for BOTH `.dimmed` and `.dimmedAbsent` (PostureSessionManager.swift:474-478). Design explicitly states "長時間不在は上限据置きで更なる低下は実効実行数に委ねるため暗転と同値". However, absent-vision-cost-4-2.md confirms Vision workload actually INCREASES 29% per window (face fallback runs every inference), so "further reduction" is not achieved in practice.
+**Req 7.1, 7.2, 7.3 / Req 8.1, 8.2 — 条件別の実測記録** — AC 7.1: "通常モード・暗転モード・長時間人物不在・復帰直後・長時間監視の各条件で電力消費・復帰時間・検出精度を実測値として記録する" — 通常モードと暗転モードのみが電力の完全な実測（Energy Report ゲージ + Component Utilization）を持つ。長時間人物不在と復帰直後は CPU コンポーネントのみ（部分実装）。長時間監視は完全に未計測。復帰時間と精度は 5 条件すべて未計測。tasks.md は 4.2 を "IN PROGRESS" と明記。
 
-### Scope Creep (Not Asked For)
-**NekozeFix/UI/CalibrationView.swift:44-52, NekozeFix/Domain/CalibrationLogic.swift:47-56, NekozeFixTests/CalibrationLogicTests.swift:518-570** — Calibration pause/resume by tap (commits a3014ee, 14e1d7a). Feature allows pausing/resuming calibration countdown via tap on timer with strikethrough indicator. Zero relation to dim-mode-saving spec.
+**Req 2.2 — 暗転時の段階的推論頻度低下（更なる低下）** — AC 2.2: "画面暗転モードが継続し、かつ人物が長時間検出されない、the NekozeFix shall 推論実行頻度を暗転直後よりさらに低下させる" — 実装は `.dimmed` と `.dimmedAbsent` の両方で FPS 上限を 10.0 に設定（PostureSessionManager.swift:474-478）。設計は「長時間不在は上限据置きで更なる低下は実効実行数に委ねるため暗転と同値」と明記。しかし absent-vision-cost-4-2.md は、ワークロードとして Vision 時間がウィンドウあたり 29% 増加（フォールバック顔検出が各推論で実行）することを確認しており、実際には「更なる低下」は達成されていない。
 
-**.kiro/steering/architecture-diagram.md, concurrency-model.md, product.md, roadmap.md, structure.md, tech.md** — Entire steering directory created (commit 7cb1ad6). Project infrastructure docs, not dim-mode-saving feature work. Spec only references existing steering, doesn't require creating it.
+### スコープクリープ（要求されていない項目）
 
-**NekozeFix/Session/PostureSessionManager.swift:993-1019** — `startFreqCycleIfEnabled()` temporary frequency cycle helper for motion-frequency spec (5.1), guarded by `-measureFreqCycle` launch argument. Test-only but not in dim-mode-saving scope.
+**NekozeFix/UI/CalibrationView.swift:44-52, NekozeFix/Domain/CalibrationLogic.swift:47-56, NekozeFixTests/CalibrationLogicTests.swift:518-570** — 校正の一時停止/再開（タップ）（コミット a3014ee, 14e1d7a）。タイマー上のタップで校正カウントダウンの一時停止/再開を可能にし、取り消し線インジケータを表示する。dim-mode-saving 仕様とは全く関係なし。
 
-**docs/adr/0024-dim-absent-effective-rate.md, docs/adr/0025-energy-impact-as-power-measurement.md** — ADRs created as supporting docs during implementation. Not deliverables requested by spec.
+**.kiro/steering/architecture-diagram.md, concurrency-model.md, product.md, roadmap.md, structure.md, tech.md** — ステアリングディレクトリ全体（コミット 7cb1ad6）。プロジェクトのインフラストラクチャ文書であり、dim-mode-saving 機能の作業ではない。仕様は既存ステアリングを参照するのみであり、新規作成を要求していない。
 
-### Implementation Concerns (Looks Wrong)
-**Req 2.2 — "更なる低下" contradicted by implementation** — AC 2.2: "推論実行頻度を暗転直後よりさらに低下させる" — `dimStageFPSLimit` returns 10.0 for both `.dimmed` and `.dimmedAbsent` (PostureSessionManager.swift:474-478). Design acknowledges FPS limit unchanged ("上限据置き") and delegates to "実効実行数". But absent-vision-cost-4-2.md measurements show Vision time per inference doubles (~17ms→~34ms) and window Vision total increases 29% due to mandatory face fallback on every absent frame. The "further reduction" requirement is violated in actual workload.
+**NekozeFix/Session/PostureSessionManager.swift:993-1019** — `startFreqCycleIfEnabled()` 一時的な周期サイクルヘルパー（motion-frequency 仕様の 5.1 用）。`-measureFreqCycle` 起動引数でガード。テスト専用だが、dim-mode-saving のスコープ外。
 
-**Req 2.4 — 3秒確定の意味維持 (implementation correct but fragile)** — AC 2.4: "推論実行頻度を低下させている、the NekozeFix shall 3秒連続確定判定の意味を変更しない" — Gate uses wall-clock time (3 seconds via `TimedConditionGate`), not inference count, so meaning is preserved. However, at 10 FPS the gate sees ~30 inferences vs ~45 at 15 FPS. If upstream ever changed gate to inference-count-based, this would silently break. Current implementation relies on time-based gate which is correct per design.
+**docs/adr/0024-dim-absent-effective-rate.md, docs/adr/0025-energy-impact-as-power-measurement.md** — 実装中に作成された補足的な ADR。仕様が要求する成果物ではない。
 
-### Summary
-Total findings: 6. Worst issue: **Req 2.2 "更なる低下" is not met in practice** — FPS limit unchanged for long-absent stage, and Vision workload actually increases due to face fallback, directly contradicting the spec's core power-reduction goal for the absent stage. Combined with Req 7/8 measurement gaps (4 of 5 conditions lack full measurements), the spec's verification foundation is incomplete.
+### 実装上の懸念（誤りの可能性）
+
+**Req 2.2 — 「更なる低下」が実装と矛盾** — AC 2.2: "推論実行頻度を暗転直後よりさらに低下させる" — `dimStageFPSLimit` は `.dimmed` と `.dimmedAbsent` の両方で 10.0 を返す（PostureSessionManager.swift:474-478）。設計は FPS 上限を据置き（「上限据置き」）とし、より低い値を「実効実行数」に委ねると明記。しかし absent-vision-cost-4-2.md の実測では、推論あたりの Vision 時間が倍増（約 17ms → 約 34ms）し、ウィンドウあたりの Vision 合計時間が 29% 増加（不在フレームごとに必須の顔フォールバックによる）。「更なる低下」の要件は実際のワークロードで違反している。
+
+**Req 2.4 — 3 秒確定の意味維持（実装は正しいが脆弱）** — AC 2.4: "推論実行頻度を低下させている、the NekozeFix shall 3 秒連続確定判定の意味を変更しない" — ゲートは推論回数ではなく経過時間（`TimedConditionGate` 経由の 3 秒）を使用するため、意味は維持されている。ただし 10 FPS では約 30 回の推論、15 FPS では約 45 回の推論を目にする。上流が将来ゲートを推論回数ベースに変更すれば、この挙動は暗黙に壊れる可能性がある。現在の実装は経過時間ベースで設計に合致する。
+
+### サマリー
+
+調査結果 計 6 件。最も重大な問題: **Req 2.2「更なる低下」が実際には達成されていない** — 長時間不在ステージでは FPS 上限が変わらず、顔フォールバックにより Vision ワークロードが実際に増加しており、欠席ステージの消費電力削減という仕様の核心目標と直接矛盾している。Req 7/8 の実測ギャップ（5 条件のうち 4 条件で完全な実測が不足）とあわせて、仕様の検証基盤は不完全である。

@@ -127,8 +127,51 @@ final class PoseDetectorTests: XCTestCase {
         XCTAssertEqual(detector.snapshot(), PoseDetector.Metrics(), "無効バッファでは計数が進まないこと")
     }
 
+    // MARK: - 顔フォールバック間引きの結線(tasks 9)
+
+    /// 非長時間不在では毎回実行可となり、間引き計数は進まない。
+    /// 実行時刻を記録しないのは意図した仕様（移行直後の初回実行を待たせないため）。
+    func testEvaluateFaceFallbackGate_NotProlonged_ExecutesEveryTimeWithoutThrottling() {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker()
+
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1000, tracker: tracker))
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: 1001, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
+        XCTAssertEqual(
+            tracker.snapshot().lastFaceExecutionTime, -.infinity,
+            "非長時間不在では実行時刻を記録せず、長時間不在移行直後の初回実行を許可する"
+        )
+    }
+
+    /// 長時間不在中の間引き結線: 間引き時は計数し、実行可時は tracker へ実行時刻を記録する。
+    /// 間引き間隔の境界値そのものは `ProlongedAbsenceTrackerTests` が検証するため、ここでは繰り返さない。
+    func testEvaluateFaceFallbackGate_Prolonged_CountsAndRecords() {
+        let detector = PoseDetector()
+        let tracker = ProlongedAbsenceTracker(absentThreshold: 60, faceFallbackThrottleInterval: 5.0)
+        _ = tracker.tick(isPersonDetected: false, now: 1000)
+        _ = tracker.tick(isPersonDetected: false, now: 1061)
+        XCTAssertTrue(tracker.isProlongedAbsence)
+
+        // 1回目は実行可: 計数は進まず、実行時刻が tracker に記録される(結線)
+        let first = 1062.0
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: first, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 0)
+        XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, first, accuracy: 1e-9)
+
+        // 間隔内は間引き: 計数され、実行時刻は据え置き
+        XCTAssertFalse(detector.evaluateFaceFallbackGate(now: first + 0.1, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 1)
+        XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, first, accuracy: 1e-9, "間引き時は記録を更新しない")
+
+        // 間隔経過後は再び実行可: 計数は据え置き、実行時刻が更新される
+        let second = first + 5.0
+        XCTAssertTrue(detector.evaluateFaceFallbackGate(now: second, tracker: tracker))
+        XCTAssertEqual(detector.snapshot().faceThrottledCount, 1, "実行可では計数が進まない")
+        XCTAssertEqual(tracker.snapshot().lastFaceExecutionTime, second, accuracy: 1e-9)
+    }
+
     // 注意: 成功経路・失敗経路の実推論による計数進行は実機で検証する(tasks 3.1)。
     // シミュレータでは VNDetectHumanBodyPoseRequest の setup 自体が
-    // Code=9 で失敗するため、ここでは合成則と計測器の単体検証に留める。
-    // 顔フォールバック間引きの分岐(tracker 連携)は ProlongedAbsenceTrackerTests が検証する。
+    // Code=9 で失敗するため、ここでは合成則・計測器・間引き結線の単体検証に留める。
 }

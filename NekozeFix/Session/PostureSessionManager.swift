@@ -97,6 +97,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 最後に人物を検出した時刻（nil は未検出継続中）
     private var lastPersonSeenTime: TimeInterval?
 
+    /// `updateState` の時刻源。テストから仮想時刻を注入し、猶予判定を決定的に検証するために公開している。
+    /// 既定は実時刻（`CACurrentMediaTime`）。
+    var nowProvider: () -> TimeInterval = { CACurrentMediaTime() }
+
     /// 肩キーポイント欠測確定までの猶予時間（秒）。personMissingGracePeriod と同パターン。
     static let shoulderMissingGracePeriod: TimeInterval = 0.5
     /// 最後に肩キーポイントを検出した時刻（nil は肩未検出継続中）
@@ -898,7 +902,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // personMissing デバウンス: 欠測が gracePeriod 未満の連続なら
         // ノイズとして「検出中」を維持する（表示・蓄積とも）。
         // 復帰（検出）は即時。確定した人物なしのみリセット要因になる。
-        let now = CACurrentMediaTime()
+        let now = nowProvider()
         var presence = rawPresence
         var points = rawPoints
         if rawPresence == .personDetected {

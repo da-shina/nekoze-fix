@@ -8,7 +8,7 @@ import QuartzCore
 /// 不在しきい値（既定 60 秒、`DimPowerPolicy.defaultAbsentThreshold` 共用）超過で長時間不在状態へ遷移する。
 /// 顔フォールバック間引き間隔（既定 5 秒）を内部に保持し、スレッドセーフに実行可否を判定・記録する。
 /// 暗転段階遷移（`DimPowerPolicy`）とは独立に動作する。
-final class ProlongedAbsenceTracker: @unchecked Sendable {
+final class ProlongedAbsenceTracker: FaceFallbackGating, @unchecked Sendable {
     /// 不在しきい値（秒）。既定は DimPowerPolicy.defaultAbsentThreshold (60s)。
     let absentThreshold: TimeInterval
     /// 顔フォールバック間引き間隔（秒）。既定 5 秒。
@@ -41,7 +41,8 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
         lock.withLock { _isProlongedAbsence }
     }
 
-    /// 検出結果による長時間不在判定・ホールド状態更新。
+    /// 検出結果による長時間不在判定・遷移。
+    /// 顔検出ホールドの時刻更新は行わない(`recordFaceDetected(now:)` が更新する)。
     /// - Parameters:
     ///   - isPersonDetected: デバウンス済み人物検出状態（`updateState` 確定後の値）
     ///   - now: 単調時刻系（`CACurrentMediaTime` 系）。無効時刻は遷移を見送る。
@@ -51,7 +52,6 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
             guard now.isFinite, now >= 0 else { return _isProlongedAbsence }
             if isPersonDetected {
                 absenceStart = nil
-                lastFaceDetectedTime = now
                 if _isProlongedAbsence {
                     _isProlongedAbsence = false
                 }
@@ -80,7 +80,10 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
     /// - Returns: 実行すべきなら true。呼び出し側は true 時にのみ顔検出を実行する。
     func shouldExecuteAndRecordFaceFallback(now: TimeInterval) -> Bool {
         return lock.withLock {
-            guard _isProlongedAbsence else { return true } // 長時間不在でなければ毎回実行
+            // 長時間不在でなければ毎回実行する。ここでは実行時刻を記録しない:
+            // 記録すると長時間不在へ移行した直後の初回実行が間引き間隔ぶん待たされ、
+            // 復帰検出(要件 3.2)を遅らせる。間引き判定は長時間不在中のみ意味を持つ。
+            guard _isProlongedAbsence else { return true }
             guard now.isFinite, now >= 0 else { return true }
             if now - lastFaceExecutionTime < faceFallbackThrottleInterval {
                 return false
@@ -90,7 +93,8 @@ final class ProlongedAbsenceTracker: @unchecked Sendable {
         }
     }
 
-    /// 顔検出が実行された（.personOnly または .pose を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔検出が実行された（`.personOnly` を返した）ことを通知し、ホールド時刻を更新する。
+    /// 顔フォールバック経路は `synthesize(pose: nil, faceBounds:)` のため `.pose` は返らない。
     /// `shouldExecuteAndRecordFaceFallback` が true を返した後、実際に顔リクエストを発行して結果を得た場合に呼ぶ。
     func recordFaceDetected(now: TimeInterval) {
         lock.withLock {

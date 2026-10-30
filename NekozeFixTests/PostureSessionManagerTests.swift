@@ -607,7 +607,12 @@ final class PostureSessionManagerTests: XCTestCase {
     }
 
     /// 間引き下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
+    /// 実時刻の待機に依存すると、冷間起動のオーバーヘッドが猶予窓を食い潰して
+    /// フレークするため、`nowProvider` に仮想時刻を注入して決定的に検証する。
     func testThrottledRate_personMissingGraceSurvivesThinning() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
+
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
@@ -616,14 +621,14 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
         for _ in 0..<3 {
-            usleep(100_000)
+            now += 0.1
             sut.processDetection(.absent)
         }
         XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
 
         // 計0.7秒 → 不在確定
         for _ in 0..<4 {
-            usleep(100_000)
+            now += 0.1
             sut.processDetection(.absent)
         }
         XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
@@ -1349,9 +1354,10 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     // MARK: - PoseDetector 間引き連携
 
-    /// 長時間不在中、PoseDetector が間引き実行し faceThrottledCount が計数される。
-    /// 注: 無効バッファでは早期リターンするため、間引き動作はProlongedAbsenceTrackerTestsで検証。
-    func testProlongedAbsence_PoseDetectorThrottlesAndCounts() {
+    /// 長時間不在中、Session が所有する tracker の間引き判定を検証する。
+    /// 注: 無効バッファでは PoseDetector が早期リターンするため、間引き動作そのものは
+    /// ProlongedAbsenceTrackerTests で検証する。
+    func testProlongedAbsence_TrackerThrottlesFaceFallback() {
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1367,18 +1373,12 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
-        // トラッカー直接検証（無効バッファではPoseDetectorが早期リターンするため）
+        // Session が所有する tracker が間引きゲートを提供する(境界値は ProlongedAbsenceTrackerTests を単一の検証点とする)
         let tracker = sut.prolongedAbsenceTracker
-        XCTAssertTrue(tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime()))
-        let metrics1 = sut.poseDetector.snapshot()
-        XCTAssertEqual(metrics1.faceExecutedCount, 0)
-        XCTAssertEqual(metrics1.faceThrottledCount, 0)
-
-        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
-        _ = tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime())
-        let metrics2 = sut.poseDetector.snapshot()
-        XCTAssertEqual(metrics2.faceExecutedCount, 0, "無効バッファでは顔実行されない")
-        XCTAssertEqual(metrics2.faceThrottledCount, 0, "無効バッファでは間引き計数も進まない")
+        XCTAssertTrue(
+            tracker.shouldExecuteAndRecordFaceFallback(now: CACurrentMediaTime()),
+            "Session 所有の tracker から間引き判定を利用できる"
+        )
     }
 
     // MARK: - DimPowerPolicy との併存確認
