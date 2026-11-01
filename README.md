@@ -5,6 +5,7 @@ iPhone/iPad のフロント・バック両方のカメラで猫背をリアル�
 - SwiftUI + Vision / CoreMotion / AVFoundation のみ（Apple純正フレームワーク、サードパーティライブラリなし）
 - カメラ映像・キーポイントはすべてデバイス内で処理（ネットワーク送出なし）
 - 要 iOS/iPadOS 17.0 以上
+- MIT ライセンス（[LICENSE](LICENSE)）
 
 ## 使い方
 
