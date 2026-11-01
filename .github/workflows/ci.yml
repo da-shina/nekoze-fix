@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+
+  test:
+    name: Test
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test
+        run: |
+          xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test

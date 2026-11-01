@@ -27,6 +27,10 @@ iPhone/iPad のフロント・バック両方のカメラで猫背をリアル�
 ## ビルド・テスト
 
 ```bash
+# Git hook（必須）: commit 時にビルド、push 時にテストを実行
+# pre-commit のインストール: pip install pre-commit ; pre-commit install
+# GitHub Actions: .github/workflows/ci.yml が PR マージ前で build と test を通す
+
 # ビルド（接続済み実機を Destination にする。端末名は -showdestinations で確認）
 xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix \
   -destination 'platform=iOS,name=<device-name>' build

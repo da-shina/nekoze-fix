@@ -38,6 +38,7 @@ _Last updated: 2026-10-22_
 - **回帰を必ず取る**: 間引き・頻度・hop 削減の変更では、3秒確定則・近側選択・代替鎖・通知仕様の不変を既存テストで確認する。
 - **実機依存は明示**: 通知音のマナーモード再生、wake lock、消費電力などシミュレータで検証不能な挙動は、design.md の Testing Strategy に従い実機計測として扱う。
 - **Xcode への登録必須**: 新しい `.swift`（ソース・テスト）は `NekozeFix.xcodeproj/project.pbxproj` に登録する（file reference + build phase）。ディスクに置くだけではビルドされない。
+- **guardrail**: 変更は `pre-commit`（`pre-commit install`）でコミット前にビルドが、`pre-push` で push 前にテストが走る。CI は `.github/workflows/ci.yml` が PR マージ前にも同様に build + test を通す。
 
 ## Commands
 
