@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      - id: swift-build
+        name: swift build (xcodebuild)
+        entry: /bin/bash -c 'xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -destination "platform=iOS Simulator,name=iPhone 17 Pro" build'
+        language: system
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-commit]
+
+      - id: swift-test
+        name: swift test (xcodebuild)
+        entry: /bin/bash -c 'xcodebuild -project NekozeFix.xcodeproj -scheme NekozeFix -destination "platform=iOS Simulator,name=iPhone 17 Pro" test'
+        language: system
+        pass_filenames: false
+        require_serial: true
+        stages: [pre-push]
