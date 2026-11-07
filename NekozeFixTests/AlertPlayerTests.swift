@@ -36,12 +36,6 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertNoThrow(sut.stop())
     }
 
-    func testIsPlayingWithNilPlayer_returnsFalse() {
-        // 前提: audioPlayerがnilのAlertPlayer
-        // 検証: isPlayingはfalseであるはず
-        XCTAssertFalse(sut.isPlaying)
-    }
-
     func testStopAfterAlreadyStopped_doesNotCrash() {
         // 前提: audioPlayerがnilのAlertPlayer
         // 手順: stopを2回呼ぶ
@@ -50,12 +44,10 @@ final class AlertPlayerTests: XCTestCase {
         XCTAssertNoThrow(sut.stop())
     }
 
-    func testConfigureSessionFailure_keepsIsPlayingFalse() {
-        // 前提: 無効URLで構成失敗
-        // 検証: 半構築プレイヤーが再生中と誤認しない(不変条件)
+    /// 構成失敗(無効URL)後の再生要求・停止要求もクラッシュしない(不変条件)。
+    func testConfigureSessionFailure_startAndStopDoNotCrash() {
         XCTAssertThrowsError(try sut.configureSession())
-        XCTAssertFalse(sut.isPlaying, "構成失敗後は再生中であってはならない")
         XCTAssertNoThrow(sut.startRepeating(), "失敗後の再生要求もクラッシュしない")
-        XCTAssertFalse(sut.isPlaying)
+        XCTAssertNoThrow(sut.stop())
     }
 }

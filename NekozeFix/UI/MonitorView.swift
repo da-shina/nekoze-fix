@@ -77,10 +77,6 @@ struct MonitorView: View {
             }
 
         }
-        .overlay(alignment: .topLeading) {
-            DebugConfidenceView(confidences: sessionManager.snapshot.keypointConfidences)
-                .padding(8)
-        }
         .background(Color(.systemBackground))
     }
 

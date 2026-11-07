@@ -148,11 +148,14 @@ final class SessionRotationTriggerTests: XCTestCase {
     /// monitoring 中の capture 角変化で旧基準破棄→校正へ自動遷移する。
     func testCaptureChangeDuringMonitoring_discardsReferencesAndMovesToCalibrating() {
         seedCalibratedMonitoring()
-        // ゲートを確定まで進める（破棄の検証用。実フレーム投入で実時間蓄積する）
-        let deadline = Date().addingTimeInterval(10)
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+        // ゲートを確定まで進める(破棄の検証用。仮想時刻で決定的に蓄積する)
+        var now = 1_000.0
+        sut.nowProvider = { now }
+        var frames = 0
+        while !sut.snapshot.slouchGate.isFired && frames < 100 {
+            now += 0.1
             sut.processDetection(.pose(slouchFrame()))
-            usleep(20_000)
+            frames += 1
         }
         XCTAssertTrue(sut.snapshot.slouchGate.isFired, "前提: 猫背5秒連続で確定")
 

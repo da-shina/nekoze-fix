@@ -44,7 +44,7 @@ final class DistanceMetricIntegrationTests: XCTestCase {
 
     // MARK: - 距離パス E2E
 
-    /// ロック側距離が基準比 8% 超へ成長 → 3秒連続で .slouch → 回復で .good
+    /// ロック側距離が基準比 8% 超へ成長 → .slouch → 回復で .good（確定時間は検証しない）
     func testGrowingLockSideDistance_showsSlouchThenGood() throws {
         seedCalibratedMonitoring()
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
@@ -145,8 +145,11 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch, "重力なし（肩直交代替）では約14度で猫背候補")
     }
 
-    /// 重力を差し替えた結合テスト: 校正→基準保存→猫背3秒確定→改善停止
+    /// 重力を差し替えた結合テスト: 校正→基準保存→猫背5秒確定→改善停止
     func testGravityInjectedFlow_calibrationToSlouchConfirmToRecovery() {
+        // 仮想時刻を最初から注入する（実時刻のゲート基準が混ざらないように）。
+        var now = 1_000.0
+        sut.nowProvider = { now }
         // 重力を差し替え（TestDouble gravity）。校正・監視フレームは天方向基準で判定される。
         sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
 
@@ -169,11 +172,12 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(sut.snapshot.displayedPosture, .good)
 
-        // 前出し（基準比116.7%）を実時間で3秒維持 → 確定（ゲート発火）
-        let deadline = Date().addingTimeInterval(10)
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+        // 前出し(基準比116.7%)を5秒維持 → 確定(ゲート発火。仮想時刻で決定的に進める)
+        var frames = 0
+        while !sut.snapshot.slouchGate.isFired && frames < 100 {
+            now += 0.1
             sut.processDetection(.pose(frame(rightEarDistance: 0.21)))
-            usleep(20_000)
+            frames += 1
         }
         XCTAssertTrue(sut.snapshot.slouchGate.isFired, "猫背5秒連続で確定するはず")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
