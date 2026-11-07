@@ -1037,7 +1037,7 @@ final class PostureSessionManagerTests: XCTestCase {
         }
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
-        XCTAssertEqual(sut.frameThrottle.maxFPS, 10.0, "長時間不在は推論上限据置き（ADR-0024）")
+        XCTAssertEqual(sut.frameThrottle.maxFPS, 5.0, "長時間不在で推論上限を更に低下させる（ADR-0024）")
         XCTAssertEqual(sut.motionService.updateFrequency, .tenHz, "長時間不在で取得頻度を更に低下させる")
     }
 
