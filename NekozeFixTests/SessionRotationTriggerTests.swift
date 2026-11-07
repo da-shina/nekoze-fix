@@ -157,7 +157,6 @@ final class SessionRotationTriggerTests: XCTestCase {
             sut.processDetection(.pose(slouchFrame()))
             frames += 1
         }
-        }
         XCTAssertTrue(sut.snapshot.slouchGate.isFired, "前提: 猫背5秒連続で確定")
 
         establishBaseline()

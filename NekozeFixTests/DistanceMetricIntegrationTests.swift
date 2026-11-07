@@ -147,6 +147,9 @@ final class DistanceMetricIntegrationTests: XCTestCase {
 
     /// 重力を差し替えた結合テスト: 校正→基準保存→猫背3秒確定→改善停止
     func testGravityInjectedFlow_calibrationToSlouchConfirmToRecovery() {
+        // 仮想時刻を最初から注入する（実時刻のゲート基準が混ざらないように）。
+        var now = 1_000.0
+        sut.nowProvider = { now }
         // 重力を差し替え（TestDouble gravity）。校正・監視フレームは天方向基準で判定される。
         sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
 
@@ -170,8 +173,6 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.displayedPosture, .good)
 
         // 前出し(基準比116.7%)を5秒維持 → 確定(ゲート発火。仮想時刻で決定的に進める)
-        var now = 1_000.0
-        sut.nowProvider = { now }
         var frames = 0
         while !sut.snapshot.slouchGate.isFired && frames < 100 {
             now += 0.1

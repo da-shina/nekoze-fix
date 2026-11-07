@@ -373,7 +373,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     func toggleCalibrationPause() {
         guard snapshot.phase == .calibrating else { return }
         if snapshot.isCalibrationPaused {
-            calibrationLogic.resume(now: CACurrentMediaTime())
+            calibrationLogic.resume(now: nowProvider())
             snapshot.isCalibrationPaused = false
         } else {
             snapshot.isCalibrationPaused = true
@@ -753,7 +753,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(var frame) = detection else {
             windowJudgePersonOnly += 1
-            let now = CACurrentMediaTime()
+            let now = nowProvider()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false
                 updateState(presence: .personDetected, sample: nil, resolvedReference: nil, points: snapshot.visualizationPoints)
@@ -766,7 +766,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
 
         // .pose: 肩キーポイント検出あり
-        lastShoulderSeenTime = CACurrentMediaTime()
+        lastShoulderSeenTime = nowProvider()
         snapshot.isShoulderMissing = false
 
         // 向き別の信頼度フィルタ（ランドスケープは緩め。要件4.6）。
@@ -782,7 +782,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 混入するのを防ぐ）。
         frame = holdingMissingKeypoints(
             frame,
-            now: CACurrentMediaTime(),
+            now: nowProvider(),
             minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
         )
 
@@ -959,13 +959,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
-            } else if self.snapshot.displayedPosture != .personMissing {
+            } else {
                 // 判定不能(肩欠測等)でサンプルがない: 直前の猫背表示を凍結すると
                 // ゲートが猫背継続とみなしてアラートが鳴り続けるため、良好へ戻す。
-                // 長時間不在ホールド中(直前が personMissing)は personMissing 側で処理済み。
+                // 人物検出後は不在表示(personMissing)も解除する。
                 self.snapshot.displayedPosture = .good
             }
-            // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
 
             // 基準ベクトル解決元が校正時から変わったら再校正をトリガー（Comment 1 対策: 校正値の整合性確保）。
             // 向き変化時の自動再校正（grill Q3/Q5）と同様に、基準値とゲートを破棄して calibrating へ遷移。

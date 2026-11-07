@@ -663,15 +663,21 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 基準ベクトル解決元の変化で再校正する経路も5秒ゲートを再生成する(3.0 退行の固定)。
     func testSlouchGate_rebuiltBySourceChange_isFiveSeconds() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         // 校正時は重力基準。実分析も重力を返すよう latestGravity を設定する。
         sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: .gravity
         )
-        sut.snapshot.slouchGate.accumulated = 1.0
+        // ゲートを蓄積させ、破棄を検証できる状態にする。
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+        now += 1.0
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+        XCTAssertGreaterThan(sut.snapshot.slouchGate.accumulated, 0, "前提: ゲート蓄積中")
         // 重力を落とすと解決元が shoulderLine へ変わり、再校正トリガ(sourceChanged)が走る。
         sut.motionService.latestGravityInKeypointSpace = nil
-        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
         XCTAssertEqual(sut.snapshot.phase, .calibrating, "前提: 解決元変化で再校正へ遷移している")
         XCTAssertEqual(sut.snapshot.slouchGate.requiredDuration, 5.0, "再生成ゲートも5秒(ADR-0004)")
         XCTAssertEqual(sut.snapshot.slouchGate.accumulated, 0, "再生成でゲートは破棄される")
@@ -840,7 +846,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         func feed(_ detection: PoseDetector.Detection) {
-            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: now) {
                 sut.processDetection(pending.detection)
             }
         }
@@ -870,7 +876,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         func feed(_ detection: PoseDetector.Detection) {
-            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: now) {
                 sut.processDetection(pending.detection)
             }
         }
@@ -971,7 +977,8 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertLessThan(arrivals, 360, "確定は時刻駆動(6秒=360到達)であり到達回数に依存しない")
         XCTAssertGreaterThanOrEqual(arrivals, 300, "5秒以上の連続を要求する")
 
-        now += 1.0 / 60.0
+        // 回復姿勢はゲートの配送間隔以上進めてから投入する（集約で捨てられないように）。
+        now += MainHopGate.defaultDisplayInterval
         feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
@@ -1499,7 +1506,6 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
         // 顔検出実行を記録（シミュレート）
-        let now = CACurrentMediaTime()
         sut.prolongedAbsenceTracker.recordFaceDetected(now: now)
 
         // ホールド有効中は personMissing 表示を抑制（displayedPosture が personMissing にならない）
