@@ -44,7 +44,7 @@ final class DistanceMetricIntegrationTests: XCTestCase {
 
     // MARK: - 距離パス E2E
 
-    /// ロック側距離が基準比 8% 超へ成長 → 3秒連続で .slouch → 回復で .good
+    /// ロック側距離が基準比 8% 超へ成長 → .slouch → 回復で .good（確定時間は検証しない）
     func testGrowingLockSideDistance_showsSlouchThenGood() throws {
         seedCalibratedMonitoring()
         XCTAssertEqual(sut.snapshot.phase, .monitoring)
@@ -145,7 +145,7 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch, "重力なし（肩直交代替）では約14度で猫背候補")
     }
 
-    /// 重力を差し替えた結合テスト: 校正→基準保存→猫背3秒確定→改善停止
+    /// 重力を差し替えた結合テスト: 校正→基準保存→猫背5秒確定→改善停止
     func testGravityInjectedFlow_calibrationToSlouchConfirmToRecovery() {
         // 仮想時刻を最初から注入する（実時刻のゲート基準が混ざらないように）。
         var now = 1_000.0
