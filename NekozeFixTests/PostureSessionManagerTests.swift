@@ -668,7 +668,6 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: .gravity
         )
-        sut.snapshot.slouchGate.accumulated = 1.0
         // 重力を落とすと解決元が shoulderLine へ変わり、再校正トリガ(sourceChanged)が走る。
         sut.motionService.latestGravityInKeypointSpace = nil
         sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
@@ -1499,8 +1498,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
         // 顔検出実行を記録（シミュレート）
-        let now = CACurrentMediaTime()
-        sut.prolongedAbsenceTracker.recordFaceDetected(now: now)
+        let detectedAt = CACurrentMediaTime()
+        sut.prolongedAbsenceTracker.recordFaceDetected(now: detectedAt)
 
         // ホールド有効中は personMissing 表示を抑制（displayedPosture が personMissing にならない）
         // 実際の updateState 呼び出しで抑制されることを確認

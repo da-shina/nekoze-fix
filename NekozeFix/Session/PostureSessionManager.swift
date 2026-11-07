@@ -959,10 +959,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
-            } else if self.snapshot.displayedPosture != .personMissing {
-                // 判定不能(肩欠測等)でサンプルがない: 直前の猫背表示を凍結すると
-                // ゲートが猫背継続とみなしてアラートが鳴り続けるため、良好へ戻す。
-                // 長時間不在ホールド中(直前が personMissing)は personMissing 側で処理済み。
+            } else {
+                // サンプル欠如だが人物検出（またはホールド）中: personMissing を出さず良好へ戻す。
+                // 直前が personMissing でもホールド有効時は表示を切り替える。
                 self.snapshot.displayedPosture = .good
             }
             // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
