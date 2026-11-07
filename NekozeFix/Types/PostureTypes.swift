@@ -163,9 +163,6 @@ struct SessionSnapshot: Equatable {
     var calibrationReferenceSource: ReferenceVectorSource? = nil
     /// 現在の端末向きがランドスケープか（なで肩ガイダンスの分岐に使用。ADR 0014）。
     var isLandscape: Bool = false
-    /// 直近に検出された4点の生信頼度 [左耳, 右耳, 左肩, 右肩]（DEBUG 表示用。フィルタ前）。
-    /// 欠測は nil。検出なし・顔のみの場合は空配列。
-    var keypointConfidences: [Double?] = []
     
     // MARK: - 閾値ガイド表示用（スライダー操作中のみ使用）
     

@@ -395,19 +395,6 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNotEqual(manager.snapshot.visualizationPoints[2], .zero, "0.9 の耳は残る")
     }
 
-    /// DEBUG 表示用にフィルタ前の生信頼度 [左耳, 右耳, 左肩, 右肩] を記録する。
-    func testProcessDetection_recordsRawKeypointConfidences() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
-        XCTAssertEqual(sut.snapshot.keypointConfidences, [0.9, nil, 0.12, nil])
-    }
-
-    /// 人物なしでは信頼度記録を空にする。
-    func testProcessDetection_absent_clearsKeypointConfidences() {
-        sut.processDetection(.pose(testFrame(shoulderConfidence: 0.12)))
-        sut.processDetection(.absent)
-        XCTAssertEqual(sut.snapshot.keypointConfidences, [])
-    }
-
     // MARK: - キーポイント瞬断ホールド
 
     /// 肩が1フレーム欠測しても直近値を保持する（チラつき対策）。
@@ -449,8 +436,10 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 猶予（0.5秒）超過後の欠測は破棄する（古い値を使い続けない）。
     func testKeypointHold_releasesAfterGracePeriod() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
-        Thread.sleep(forTimeInterval: 0.6)
+        now += 0.6
         var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
         dropped.leftShoulder = nil
         sut.processDetection(.pose(dropped))
@@ -576,32 +565,33 @@ final class PostureSessionManagerTests: XCTestCase {
         assertThrottleResetDispatched(after: { sut.handleDidEnterBackground() }, message: "初期化直後は同一時刻でも推論対象になる")
     }
 
-    /// 間引き下でも猫背3秒連続で確定し、回復で即改善する（時刻駆動の証明。requirements 4.1/4.2）。
-    /// 10fps相当間隔（100ms）で投入し、ネイティブ60fps換算の回数基準（180）より
+    /// 間引き下でも猫背5秒連続で確定し、回復で即改善する（時刻駆動の証明。requirements 4.1/4.2）。
+    /// 10fps相当間隔（100ms）で投入し、ネイティブ60fps換算の回数基準（300）より
     /// 大幅に少ないフレーム数で確定することを数えて示す（回数基準なら確定しない）。
     func testThrottledRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
-        for _ in 0..<3 {
-            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
-        }
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は良好")
 
-        let deadline = Date().addingTimeInterval(15)
+        // 10fps相当間隔(100ms)で猫背を投入。回数基準(300回)より遥かに少ない回数で確定し、
+        // 確定が時刻駆動であることを示す。
         var fedFrames = 0
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+        while !sut.snapshot.slouchGate.isFired && fedFrames < 100 {
+            now += 0.1
             sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
             fedFrames += 1
-            usleep(100_000) // 10fps相当間隔（間引き通過レートの再現）
         }
-        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "間引き下でも猫背3秒連続で確定する")
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "間引き下でも猫背5秒連続で確定する")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
         XCTAssertLessThan(fedFrames, 60, "確定は時刻駆動であり到達回数に依存しない")
+        XCTAssertGreaterThanOrEqual(fedFrames, 50, "5秒間隔(≈10fps)を要求する")
 
-        for _ in 0..<5 {
-            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
-        }
+        now += 0.1
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
     }
@@ -637,12 +627,14 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 間引き下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.3）。
     func testThrottledRate_keypointHoldGraceSurvivesThinning() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
         XCTAssertNotEqual(sut.snapshot.visualizationPoints[0], .zero)
 
         // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
         for _ in 0..<3 {
-            usleep(100_000)
+            now += 0.1
             var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             sut.processDetection(.pose(dropped))
@@ -651,12 +643,67 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 計0.7秒 → 破棄
         for _ in 0..<4 {
-            usleep(100_000)
+            now += 0.1
             var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             sut.processDetection(.pose(dropped))
         }
         XCTAssertEqual(sut.snapshot.visualizationPoints[0], .zero, "猶予超過は間引き下でも破棄する")
+    }
+
+    // MARK: - 確定猫背ゲートの秒数固定 (ADR-0004: 3秒→5秒)
+
+    /// 確定猫背ゲートが既定で5秒であることを固定する(ADR-0004 の斜め設置対応)。
+    /// TimedConditionGateTests はゲート単体を任意の秒数で検証するため、Session の
+    /// 結線値(3.0 へ戻る退行)を検出できない。本テストが唯一の固定点。
+    func testSlouchGate_requiredDuration_isFiveSeconds() {
+        XCTAssertEqual(sut.snapshot.slouchGate.requiredDuration, 5.0, "確定猫背ゲートは5秒(ADR-0004)")
+        XCTAssertEqual(SessionSnapshot().slouchGate.requiredDuration, 5.0, "既定スナップショットも5秒")
+    }
+
+    /// 基準ベクトル解決元の変化で再校正する経路も5秒ゲートを再生成する(3.0 退行の固定)。
+    func testSlouchGate_rebuiltBySourceChange_isFiveSeconds() {
+        // 校正時は重力基準。実分析も重力を返すよう latestGravity を設定する。
+        sut.motionService.latestGravityInKeypointSpace = SIMD2<Double>(0, 1)
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: .gravity
+        )
+        sut.snapshot.slouchGate.accumulated = 1.0
+        // 重力を落とすと解決元が shoulderLine へ変わり、再校正トリガ(sourceChanged)が走る。
+        sut.motionService.latestGravityInKeypointSpace = nil
+        sut.processDetection(.pose(makeTestPoseFrame(shoulderConfidence: 0.9)))
+        XCTAssertEqual(sut.snapshot.phase, .calibrating, "前提: 解決元変化で再校正へ遷移している")
+        XCTAssertEqual(sut.snapshot.slouchGate.requiredDuration, 5.0, "再生成ゲートも5秒(ADR-0004)")
+        XCTAssertEqual(sut.snapshot.slouchGate.accumulated, 0, "再生成でゲートは破棄される")
+    }
+
+    // MARK: - 肩欠測時の表示凍結 (監査 #3)
+
+    /// 猫背候補の直後に肩が欠測し続けても、表示が「猫背」で凍結せず確定も進まない。
+    /// 修正前は sample == nil で displayedPosture == .slouch が維持され、
+    /// ゲートが猫背継続とみなして5秒後にアラートが鳴り続けていた。
+    func testShoulderMissingAfterSlouch_doesNotFreezeSlouchDisplay() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
+        sut.applyCalibrationCompletion(
+            referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
+        )
+        // 猫背候補(距離のみで判定)。表示 .slouch、ゲート蓄積開始。
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+        XCTAssertEqual(sut.snapshot.displayedPosture, .slouch, "前提: 猫背候補を表示")
+        now += 1.0
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+        XCTAssertGreaterThan(sut.snapshot.slouchGate.accumulated, 0, "前提: ゲート蓄積中")
+
+        // 肩欠測が猶予(0.5秒)を超えて継続 → 判定不能(sample == nil)が続く。
+        for _ in 0..<10 {
+            now += 0.2
+            sut.processDetection(.personOnly)
+        }
+        XCTAssertTrue(sut.snapshot.isShoulderMissing, "前提: 肩欠測が確定している")
+        XCTAssertNotEqual(sut.snapshot.displayedPosture, .slouch, "判定不能の間は猫背表示を維持しない")
+        XCTAssertLessThan(sut.snapshot.slouchGate.accumulated, 2.0, "判定不能の間は確定ゲートが進まない")
+        XCTAssertFalse(sut.snapshot.slouchGate.isFired, "判定不能で確定アラートを発火しない")
     }
 
     /// 条件化は解像度由来の状態へ触れない（解像度・プリセット不変。requirements 4.4）。
@@ -785,6 +832,8 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 削減下でも人物不在の猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
     func testHopGatedRate_personMissingGraceSurvivesReduction() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
@@ -800,14 +849,14 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 10fps相当間隔で不在を0.3秒 → 猶予内は検出維持
         for _ in 0..<3 {
-            usleep(100_000)
+            now += 0.1
             feed(.absent)
         }
         XCTAssertTrue(sut.snapshot.isPersonDetected, "0.5秒猶予内は不在をノイズ扱い")
 
         // 計0.7秒 → 不在確定
         for _ in 0..<4 {
-            usleep(100_000)
+            now += 0.1
             feed(.absent)
         }
         XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定")
@@ -816,6 +865,8 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 削減下でもキーポイントホールドの猶予（0.5秒）が時刻基準で働く（requirements 4.4）。
     func testHopGatedRate_keypointHoldGraceSurvivesReduction() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         func feed(_ detection: PoseDetector.Detection) {
@@ -828,7 +879,7 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 10fps相当間隔で肩欠測を0.3秒 → 猶予内は保持
         for _ in 0..<3 {
-            usleep(100_000)
+            now += 0.1
             var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             feed(.pose(dropped))
@@ -837,7 +888,7 @@ final class PostureSessionManagerTests: XCTestCase {
 
         // 計0.7秒 → 破棄
         for _ in 0..<4 {
-            usleep(100_000)
+            now += 0.1
             var dropped = makeTestPoseFrame(shoulderConfidence: 0.9)
             dropped.leftShoulder = nil
             feed(.pose(dropped))
@@ -889,50 +940,39 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertNil(sut.motionService.latestGravityInKeypointSpace, "受け渡し選定は保持重力に触れない")
         XCTAssertEqual(sut.frameThrottle.snapshot().arrivals, 0, "受け渡し選定は推論間引き計数に触れない")
     }
-    /// 削減下でも猫背3秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
+    /// 削減下でも猫背5秒連続で確定し、回復で即改善する（到達60fps→配送10Hzの再現）。
     /// 処理回数が毎フレーム到達より大幅に少ないことで受け渡し削減を数えて示す。
     func testHopGatedRate_slouchStillConfirmsAfter3SecondsAndRecovers() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
-        for _ in 0..<3 {
-            if let pending = sut.hopGate.submit(
-                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
-                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
-            ) {
+        func feed(_ detection: PoseDetector.Detection) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: now) {
                 sut.processDetection(pending.detection)
             }
-            usleep(16_666)
         }
+        feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は良好")
 
-        let deadline = Date().addingTimeInterval(15)
-        var processed = 0
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
-            if let pending = sut.hopGate.submit(
-                detection: .pose(throttledRateFrame(rightEarDistance: 0.21)),
-                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
-            ) {
-                sut.processDetection(pending.detection)
-                processed += 1
-            }
-            usleep(16_666) // 60fps到達の再現（ゲートが10Hzへ間引く）
+        // 60fps相当の到達をゲートが10Hzへ間引く。確定が時刻駆動で、到達回数(600回=10秒)より
+        // 遥かに少ないだけであることを数える。
+        var arrivals = 0
+        while !sut.snapshot.slouchGate.isFired && arrivals < 600 {
+            now += 1.0 / 60.0
+            feed(.pose(throttledRateFrame(rightEarDistance: 0.21)))
+            arrivals += 1
         }
-        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "削減下でも猫背3秒連続で確定する")
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "削減下でも猫背5秒連続で確定する")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
-        XCTAssertLessThan(processed, 60, "確定は時刻駆動であり削減後の処理回数に依存しない")
+        XCTAssertLessThan(arrivals, 360, "確定は時刻駆動(6秒=360到達)であり到達回数に依存しない")
+        XCTAssertGreaterThanOrEqual(arrivals, 300, "5秒以上の連続を要求する")
 
-        for _ in 0..<5 {
-            if let pending = sut.hopGate.submit(
-                detection: .pose(throttledRateFrame(rightEarDistance: 0.18)),
-                aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()
-            ) {
-                sut.processDetection(pending.detection)
-            }
-            usleep(16_666)
-        }
+        now += 1.0 / 60.0
+        feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
     }
@@ -984,6 +1024,8 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 長時間不在段階への遷移で更なる低下指示が適用される（取得頻度15Hz→10Hz、推論上限10fps据置き）。
     func testDimmedAbsentTick_appliesFurtherLowering() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
         sut.startMonitoring()
         sut.enterDimMode()
@@ -992,7 +1034,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // デバウンス猶予（0.5秒）超過まで不在を送り続け、しきい値超過で長時間不在へ進める。
         for _ in 0..<10 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
@@ -1040,13 +1082,15 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 乖離を放置すると監視中の不在入力で非暗転のまま低下する。開始時戻しで防ぐ。
     func testStartMonitoring_preventsPhantomLoweringAfterFlagLoss() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
         XCTAssertEqual(sut.dimPowerPolicy.dimmed(), .dimmed)
         sut.startMonitoring()
         // デバウンス猶予（0.5秒）超過まで不在を送り続けても通常に留まる。
         for _ in 0..<10 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         sut.throttleResetQueue.sync {}
         XCTAssertFalse(sut.snapshot.isDimmed)
@@ -1079,6 +1123,8 @@ final class PostureSessionManagerTests: XCTestCase {
 
     /// 長時間不在→停止→開始の結合: 全経路で通常水準に戻り、起停は呼出し側の則通り。
     func testDimmedAbsent_stopStartCycle_restoresNormalLevels() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
         sut.startMonitoring()
         sut.enterDimMode()
@@ -1086,7 +1132,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // デバウンス猶予（0.5秒）超過まで不在を送り続け、長時間不在へ進める。
         for _ in 0..<10 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmedAbsent)
@@ -1138,6 +1184,8 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 顔のみ検出（.personOnly）は人物ありとして不在計測を進めない（Req 2.2）。
     /// 判定ロジックへの介入はなく、検出受取り点のデバウンス確定状態のみが駆動する。
     func testDimmed_personOnlyDoesNotAdvanceAbsence() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
         sut.startMonitoring()
         sut.enterDimMode()
@@ -1146,7 +1194,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // 不在しきい値（0.2秒）を超過する期間、顔のみ検出を送り続ける。
         for _ in 0..<8 {
             sut.processDetection(.personOnly)
-            usleep(100_000)
+            now += 0.1
         }
         sut.throttleResetQueue.sync {}
         XCTAssertTrue(sut.snapshot.isPersonDetected, "顔のみ検出でも人物ありを維持する")
@@ -1158,6 +1206,8 @@ final class PostureSessionManagerTests: XCTestCase {
     /// 校正中は不在が続いても段階を進めない（Req 2.2。不在駆動は監視フェーズのみ）。
     /// 不在自体は確定する（isPersonDetected=false）が、段階は暗転に留まる。
     func testCalibrating_absentDoesNotAdvanceStage() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.dimPowerPolicy = DimPowerPolicy(absentThreshold: 0.2)
         sut.startCalibration()
         sut.enterDimMode()
@@ -1166,7 +1216,7 @@ final class PostureSessionManagerTests: XCTestCase {
         // デバウンス猶予（0.5秒）＋不在しきい値（0.2秒）を超過する期間、不在を送り続ける。
         for _ in 0..<10 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         sut.throttleResetQueue.sync {}
         XCTAssertFalse(sut.snapshot.isPersonDetected, "猶予超過で不在確定（検出側の既存則）")
@@ -1175,32 +1225,35 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertEqual(sut.motionService.updateFrequency, .fifteenHz, "校正中の不在で取得頻度を下げない")
     }
 
-    /// 暗転中も3秒連続で猫背が確定し、監視・判定・抑止・センサーが継続する
+    /// 暗転中も5秒連続で猫背が確定し、監視・判定・抑止・センサーが継続する
     /// （Req 1.1, 2.4, 6.2。判定入力・閾値・代替鎖は暗転と無関係に不変）。
     func testDimmed_slouchStillConfirmsAfter3SecondsAndContinuesMonitoring() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 0.0, referenceDistance: 0.18, referenceSide: .right, referencePoints: [], referenceSource: nil
         )
         sut.enterDimMode()
         sut.throttleResetQueue.sync {}
         XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed)
-        for _ in 0..<3 {
-            sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
-        }
+        sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "基準比100%は暗転中も良好")
 
-        let deadline = Date().addingTimeInterval(15)
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+        // 10fps相当間隔(100ms)で猫背を投入し、暗転中も5秒連続で確定する。
+        var fedFrames = 0
+        while !sut.snapshot.slouchGate.isFired && fedFrames < 100 {
+            now += 0.1
             sut.processDetection(.pose(throttledRateFrame(rightEarDistance: 0.21)))
-            usleep(100_000) // 10fps相当間隔（暗転上限の再現）
+            fedFrames += 1
         }
         sut.throttleResetQueue.sync {}
-        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "暗転中も猫背3秒連続で確定する")
+        XCTAssertTrue(sut.snapshot.slouchGate.isFired, "暗転中も猫背5秒連続で確定する")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
+        XCTAssertLessThan(fedFrames, 60, "確定は時刻駆動(暗転上限の再現)")
         XCTAssertEqual(sut.snapshot.referenceAngle, 0.0, "暗転中の判定は基準角度を変えない")
         XCTAssertEqual(sut.dimPowerPolicy.stage, .dimmed, "人物ありの判定継続は不在駆動を進めない")
-        XCTAssertTrue(sut.motionService.isRunning, "暗転中の確定後もセンサー稼働を継続する（Req 3.2）")
-        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "暗転中の確定後も抑止を継続する（Req 4.1）")
+        XCTAssertTrue(sut.motionService.isRunning, "暗転中の確定後もセンサー稼働を継続する(Req 3.2)")
+        XCTAssertTrue(UIApplication.shared.isIdleTimerDisabled, "暗転中の確定後も抑止を継続する(Req 4.1)")
     }
 
     /// 左右とも耳が肩の真上（角度0度）で、ロック側（右）の耳-肩距離だけ dist のフレーム。
@@ -1274,6 +1327,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     /// 通常モードで不在がしきい値を超えると長時間不在へ遷移し、人物検出で解除・リセットされる。
     func testNormalMode_ProlongedAbsenceTransitionAndRelease() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1286,7 +1341,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 不在継続で長時間不在へ
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
@@ -1300,6 +1355,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     /// 暗転モードで不在がしきい値を超えると長時間不在へ遷移し、人物検出で解除される。
     func testDimMode_ProlongedAbsenceTransitionAndRelease() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1313,7 +1370,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 不在継続で長時間不在へ（暗転段階とは独立に）
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
         // DimPowerPolicy も長時間不在段階へ進む
@@ -1329,6 +1386,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     /// 暗転解除で長時間不在トラッカーがリセットされ、通常水準に復帰する。
     func testExitDimMode_ResetsProlongedAbsenceTracker() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1342,7 +1401,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 長時間不在へ遷移
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
@@ -1358,6 +1417,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
     /// 注: 無効バッファでは PoseDetector が早期リターンするため、間引き動作そのものは
     /// ProlongedAbsenceTrackerTests で検証する。
     func testProlongedAbsence_TrackerThrottlesFaceFallback() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1369,7 +1430,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 長時間不在へ
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 
@@ -1394,6 +1455,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     /// 通常モードでは DimPowerPolicy は不在駆動を進めないが、ProlongedAbsenceTracker は進める（二重管理だが役割分離）。
     func testNormalMode_DimPowerPolicyStaysNormal_ProlongedAbsenceAdvances() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1405,7 +1468,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 不在継続
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
 
         // ProlongedAbsenceTracker は長時間不在へ進む
@@ -1418,6 +1481,8 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
 
     /// 顔検出実行後、間引き間隔内は faceDetectedHoldActive により personMissing 表示を抑制する。
     func testFaceDetectedHoldActive_SuppressesPersonMissing() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.applyCalibrationCompletion(
             referenceNearAngleDegrees: 45.0, referenceDistance: 0.2, referenceSide: .left, referencePoints: [], referenceSource: nil
         )
@@ -1429,7 +1494,7 @@ final class ProlongedAbsenceIntegrationTests: XCTestCase {
         // 長時間不在へ
         for _ in 0..<5 {
             sut.processDetection(.absent)
-            usleep(100_000)
+            now += 0.1
         }
         XCTAssertTrue(sut.prolongedAbsenceTracker.isProlongedAbsence)
 

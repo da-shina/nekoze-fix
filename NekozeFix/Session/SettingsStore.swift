@@ -72,7 +72,7 @@ final class SettingsStore: ObservableObject {
     // MARK: - 公開プロパティ
 
     /// 猫背判定閾値（度）。基準姿勢からの角度増加量がこの値以上で猫背候補。
-    /// 範囲: 3.0〜20.0、デフォルト: 5.0
+    /// 範囲: 1.0〜20.0、デフォルト: 5.0
     @Published var slouchThresholdDegrees: Double {
         didSet {
             let clamped = SettingsStore.clamp(slouchThresholdDegrees, to: Self.thresholdMinDegrees...Self.thresholdMaxDegrees)

@@ -169,11 +169,14 @@ final class DistanceMetricIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(sut.snapshot.displayedPosture, .good)
 
-        // 前出し（基準比116.7%）を実時間で3秒維持 → 確定（ゲート発火）
-        let deadline = Date().addingTimeInterval(10)
-        while !sut.snapshot.slouchGate.isFired && Date() < deadline {
+        // 前出し(基準比116.7%)を5秒維持 → 確定(ゲート発火。仮想時刻で決定的に進める)
+        var now = 1_000.0
+        sut.nowProvider = { now }
+        var frames = 0
+        while !sut.snapshot.slouchGate.isFired && frames < 100 {
+            now += 0.1
             sut.processDetection(.pose(frame(rightEarDistance: 0.21)))
-            usleep(20_000)
+            frames += 1
         }
         XCTAssertTrue(sut.snapshot.slouchGate.isFired, "猫背5秒連続で確定するはず")
         XCTAssertEqual(sut.snapshot.displayedPosture, .slouch)
