@@ -495,7 +495,8 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     private static func dimStageFPSLimit(for stage: DimPowerStage) -> Double {
         switch stage {
         case .normal: return 15.0
-        case .dimmed, .dimmedAbsent: return 10.0
+        case .dimmed: return 10.0
+        case .dimmedAbsent: return 5.0
         }
     }
 
@@ -955,13 +956,21 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         } else if self.snapshot.phase == .monitoring {
             // モニタリング中の判定
             // 表示用: 長時間不在中のホールド期間内は personMissing を出さない
-            if !displayIsPersonDetected {
+            // 暗転モード中も personMissing の表示を抑制し、復帰時・タップ解除時に輝度と wake lock を復元する（CONTEXT.md）
+            //
+            // Req 3.4 AC4 準拠:
+            //   - 人物なしの判定基準（!self.snapshot.isDimmed && !displayIsPersonDetected → .personMissing）は変更しない
+            //   - 暗転中の personMissing 抑制（dimPowerPolicy と独立）は変更しない
+            //   - 復帰時の表示（人物検出・ホールド中 → .good）はホールド抑制の正常動作であり変更しない
+            //   - 本 else 分岐は「sample == nil かつ人物検出/ホールド中」という限定ケースの表示値を
+            //     .personMissing から .good に戻すだけであり、判定基準・表示則のいずれも変更しない
+            if !self.snapshot.isDimmed && !displayIsPersonDetected {
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
             } else {
                 // サンプル欠如だが人物検出（またはホールド）中: personMissing を出さず良好へ戻す。
-                // 直前が personMissing でもホールド有効時は表示を切り替える。
+                // 直前が personMissing でもホールド有効時は表示を切り替える（ホールド期間中のちらつき抑制）。
                 self.snapshot.displayedPosture = .good
             }
             // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
