@@ -754,7 +754,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 「肩が映っていません」案内のチラつきを防ぐ（Q21 拡張パターン）。
         guard case .pose(var frame) = detection else {
             windowJudgePersonOnly += 1
-            let now = CACurrentMediaTime()
+            let now = nowProvider()
             if let lastSeen = lastShoulderSeenTime, now - lastSeen < Self.shoulderMissingGracePeriod {
                 snapshot.isShoulderMissing = false
                 updateState(presence: .personDetected, sample: nil, resolvedReference: nil, points: snapshot.visualizationPoints)
@@ -767,7 +767,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         }
 
         // .pose: 肩キーポイント検出あり
-        lastShoulderSeenTime = CACurrentMediaTime()
+        lastShoulderSeenTime = nowProvider()
         snapshot.isShoulderMissing = false
 
         // 向き別の信頼度フィルタ（ランドスケープは緩め。要件4.6）。
@@ -783,7 +783,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // 混入するのを防ぐ）。
         frame = holdingMissingKeypoints(
             frame,
-            now: CACurrentMediaTime(),
+            now: nowProvider(),
             minimumConfidence: keypointConfidenceThreshold(isLandscape: snapshot.isLandscape)
         )
 
@@ -995,7 +995,9 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
             } else {
                 // 確定猫背ゲート: 5秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
                 let now = nowProvider()
-                let deltaTime = now - (self.lastGateTickTime ?? now)
+                // 実時刻で初期化された lastGateTickTime と仮想時刻 nowProvider の混在を防ぐため、
+                // 負の deltaTime は 0 にクランプする（テスト決定的実行のため）。
+                let deltaTime = max(0, now - (self.lastGateTickTime ?? now))
                 self.lastGateTickTime = now
                 let isSlouch = self.snapshot.displayedPosture == .slouch
                 let fired = self.snapshot.slouchGate.tick(isConditionMet: isSlouch, deltaTime: deltaTime)
@@ -1031,6 +1033,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         snapshot.referenceSide = referenceSide
         snapshot.referencePoints = referencePoints
         snapshot.calibrationReferenceSource = referenceSource
+        // 監視開始時にゲートタイク時刻と肩最終検出時刻をリセットし、
+        // 仮想時刻注入（nowProvider）との整合性を保つ（テスト決定的実行のため）。
+        self.lastGateTickTime = nil
+        self.lastShoulderSeenTime = nil
         updateGuideParameters()
     }
 

@@ -869,7 +869,7 @@ final class PostureSessionManagerTests: XCTestCase {
         sut.startMonitoring()
         sut.throttleResetQueue.sync {}
         func feed(_ detection: PoseDetector.Detection) {
-            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: CACurrentMediaTime()) {
+            if let pending = sut.hopGate.submit(detection: detection, aspectRatio: 4.0 / 3.0, now: now) {
                 sut.processDetection(pending.detection)
             }
         }
@@ -970,7 +970,8 @@ final class PostureSessionManagerTests: XCTestCase {
         XCTAssertLessThan(arrivals, 360, "確定は時刻駆動(6秒=360到達)であり到達回数に依存しない")
         XCTAssertGreaterThanOrEqual(arrivals, 300, "5秒以上の連続を要求する")
 
-        now += 1.0 / 60.0
+        // 回復フレームをhopGateで配送させるため、表示間隔(0.1秒)を超えて仮想時刻を進める
+        now += 0.1
         feed(.pose(throttledRateFrame(rightEarDistance: 0.18)))
         XCTAssertEqual(sut.snapshot.displayedPosture, .good, "全指標閾値未満で即改善")
         XCTAssertFalse(sut.snapshot.slouchGate.isFired, "改善で確定ゲート解除")
