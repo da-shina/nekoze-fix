@@ -6,7 +6,7 @@ import XCTest
 /// personMissingGracePeriod と shoulderMissingGracePeriod は同値(0.5秒)だが
 /// 別信号・別時刻(lastPersonSeenTime/lastShoulderSeenTime)であり、
 /// 単一Debouncerへの一本化で混同してはならない。本ファイルが混同を検出する。
-/// 時刻源は CACurrentMediaTime のため、猶予超過は実スリープ(0.65秒)で再現する。
+/// 時刻源は `nowProvider` に仮想時刻を注入し、猶予超過を実スリープなしで決定的に再現する。
 @MainActor
 final class SessionDebounceSeparationTests: XCTestCase {
     var sut: PostureSessionManager!
@@ -53,8 +53,10 @@ final class SessionDebounceSeparationTests: XCTestCase {
 
     /// 猶予超過の欠測は人物なし確定。
     func testAbsent_beyondGrace_becomesPersonMissing() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.processDetection(.pose(poseFrame()))
-        Thread.sleep(forTimeInterval: 0.65)
+        now += 0.65
 
         sut.processDetection(.absent)
 
@@ -82,8 +84,10 @@ final class SessionDebounceSeparationTests: XCTestCase {
 
     /// 猶予超過の顔のみは肩欠測確定。
     func testPersonOnly_beyondGrace_becomesShoulderMissing() {
+        var now = 1_000.0
+        sut.nowProvider = { now }
         sut.processDetection(.pose(poseFrame()))
-        Thread.sleep(forTimeInterval: 0.65)
+        now += 0.65
 
         sut.processDetection(.personOnly)
 

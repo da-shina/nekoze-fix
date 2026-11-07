@@ -92,8 +92,11 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
 
     // MARK: - 初期化
 
-    /// personMissing 確定までの猶予時間（秒）。この未満の連続欠測はノイズ扱い。
-    static let personMissingGracePeriod: TimeInterval = 0.5
+    /// キーポイント信号(人物・肩・点単位)の欠測猶予時間(秒)の単一の正。
+    /// この未満の連続欠測はノイズ扱いで直前値を保持する。3用途で同値・別タイマ。
+    static let missingGracePeriod: TimeInterval = 0.5
+    /// personMissing 確定までの猶予時間(秒)。missingGracePeriod と同値(既存名の別名)。
+    static let personMissingGracePeriod: TimeInterval = missingGracePeriod
     /// 最後に人物を検出した時刻（nil は未検出継続中）
     private var lastPersonSeenTime: TimeInterval?
 
@@ -102,12 +105,12 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     var nowProvider: () -> TimeInterval = { CACurrentMediaTime() }
 
     /// 肩キーポイント欠測確定までの猶予時間（秒）。personMissingGracePeriod と同パターン。
-    static let shoulderMissingGracePeriod: TimeInterval = 0.5
+    static let shoulderMissingGracePeriod: TimeInterval = missingGracePeriod
     /// 最後に肩キーポイントを検出した時刻（nil は肩未検出継続中）
     private var lastShoulderSeenTime: TimeInterval?
 
     /// キーポイント瞬断ホールドの猶予時間（秒）。既存グレースと同一則。
-    static let keypointHoldGracePeriod: TimeInterval = 0.5
+    static let keypointHoldGracePeriod: TimeInterval = missingGracePeriod
     /// ホールド対象の4点 [左耳, 右耳, 左肩, 右肩]。
     private static let jointKeyPaths: [WritableKeyPath<PoseFrame, Keypoint?>] = [
         \.leftEar, \.rightEar, \.leftShoulder, \.rightShoulder,
@@ -733,8 +736,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
     /// 検出結果を姿勢解析しセッション状態へ反映する（メインアクタ）。
     /// captureOutput の Task 本体。テストは合成フレームの Detection を直接投入できる。
     func processDetection(_ detection: PoseDetector.Detection) {
-        // DEBUG 表示用の信頼度記録は毎フレーム取り直す（.pose 側で上書き）。
-        snapshot.keypointConfidences = []
         // 人物なし（Body Pose 観測空 かつ 顔なし）
         if case .absent = detection {
             snapshot.isShoulderMissing = false
@@ -767,14 +768,6 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
         // .pose: 肩キーポイント検出あり
         lastShoulderSeenTime = CACurrentMediaTime()
         snapshot.isShoulderMissing = false
-
-        // DEBUG 表示用にフィルタ前の生信頼度を記録する。
-        snapshot.keypointConfidences = [
-            frame.leftEar?.confidence,
-            frame.rightEar?.confidence,
-            frame.leftShoulder?.confidence,
-            frame.rightShoulder?.confidence,
-        ]
 
         // 向き別の信頼度フィルタ（ランドスケープは緩め。要件4.6）。
         // 検出層は全点を保持してくるため、ここで snapshot.isLandscape に応じて落とす。
@@ -945,7 +938,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 sample: sample,
                 referenceSource: resolvedReference?.source,
                 presence: presence,
-                now: CACurrentMediaTime(),
+                now: now,
                 points: points
             )
             self.snapshot.calibrationProgress = progress
@@ -966,8 +959,10 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.snapshot.displayedPosture = .personMissing
             } else if sample != nil {
                 self.snapshot.displayedPosture = (verdict == .slouchCandidate) ? .slouch : .good
-            } else if self.snapshot.displayedPosture == .personMissing {
-                // ホールド有効中かつサンプルなし: personMissing を維持せず good に戻す
+            } else if self.snapshot.displayedPosture != .personMissing {
+                // 判定不能(肩欠測等)でサンプルがない: 直前の猫背表示を凍結すると
+                // ゲートが猫背継続とみなしてアラートが鳴り続けるため、良好へ戻す。
+                // 長時間不在ホールド中(直前が personMissing)は personMissing 側で処理済み。
                 self.snapshot.displayedPosture = .good
             }
             // 猶予期間中のサンプル欠如は表示を維持（前回の姿勢のまま）
@@ -991,7 +986,7 @@ final class PostureSessionManager: NSObject, ObservableObject, AVCaptureVideoDat
                 self.alertPlayer?.stop()
             } else {
                 // 確定猫背ゲート: 5秒連続で .slouch が続いた時点で通知音（design.md Q17/Q18/Q20）
-                let now = CACurrentMediaTime()
+                let now = nowProvider()
                 let deltaTime = now - (self.lastGateTickTime ?? now)
                 self.lastGateTickTime = now
                 let isSlouch = self.snapshot.displayedPosture == .slouch
