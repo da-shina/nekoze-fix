@@ -56,7 +56,7 @@ Energy Impact の相対比較は同一端末・同一セッション内でのみ
   平均 inputFPS=24.89, inferFPS=12.45, dropRate=49.96%, judge 合計 g2450/s85/i9/a0/p126
   （/tmp/nekoze-measure/08-dim-normal.log）。
   機能ピン（実測値ではなく機能的正確性の証拠）:
-  通常段階の上限・頻度設定と3秒連続確定判定の意味不変は結合検証で green
+  通常段階の上限・頻度設定と5秒連続確定判定の意味不変は結合検証で green
   （PostureSessionManagerTests 全 green、FrameThrottleTests 23/23）。
 ```
 
@@ -76,7 +76,7 @@ Energy Impact の相対比較は同一端末・同一セッション内でのみ
   機能ピン（実測値ではなく機能的正確性の証拠）:
   暗転段階への遷移・上限／頻度の低下指示・解除時の通常戻しは検証で green
   （DimPowerPolicyTests 10/10、FrameThrottleTests 23/23、
-  PostureSessionManagerTests 全 green。暗転中の低下・復帰・3秒確定ピンを含む）。
+  PostureSessionManagerTests 全 green。暗転中の低下・復帰・5秒確定ピンを含む）。
   暗転中のカメラ取得は継続する（task 4.1 評価記録。停止経路なし）。
 ```
 

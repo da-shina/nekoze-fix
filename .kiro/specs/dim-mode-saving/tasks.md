@@ -50,7 +50,7 @@
   - _Requirements: 1.3, 2.3, 3.3, 6.1_
 - [x] 3.3 不在駆動の結線と既存則の回帰
   - 検出結果の受取り点に不在駆動を付随させ、判定ロジックへの介入を行わない
-  - 3秒確定則・閾値・代替鎖・通知仕様の不変を回帰で確認する
+  - 5秒確定則・閾値・代替鎖・通知仕様の不変を回帰で確認する
   - 輝度制御・スリープ抑止・起停則の不変を回帰で確認する
   - 監視継続と既存則の維持が結合検証で確認できる状態になる
   - _Requirements: 1.1, 1.2, 2.2, 2.4, 3.2, 4.1, 4.2, 4.3, 4.4, 6.2, 6.3_
@@ -66,5 +66,5 @@
   - 記録雛形（条件／電力／復帰時間／精度／比較根拠。測定できない項目は未計測と明記）に従い記録する
   - 実測値に基づき暗転時の低減を確認し、推定値を含めない（電力は Xcode Energy Report の Average Energy Impact ゲージ評価＋Average Component Utilization の領域別%を実測値として用いる。ADR-0025）
   - 測定できない項目を未計測として明記した記録が残る
-  - 進捗: 実機（iPhone 13 mini / iOS 18.7.7）で通常・暗転・長時間不在・復帰の段階切替えと判定分布を観測し `measurements-4-2.md` へ記録済み（暗転中のログ停止回避のため計測専用の一時配線を使用し、計測後に復元・未コミット）。電力は Xcode Energy Report の Average Energy Impact ゲージ評価＋Average Component Utilization の領域別%を実測手段として採用（ADR-0025）。通常・暗転の電力は同一セッションで実測済み（通常: ゲージ Low／Overhead 0%・CPU 19〜21%・GPU 0.8%・Network 0%・Display 15% → 暗転: ゲージ Low／Overhead 0%・CPU 16〜19%・GPU 4.2〜4.4%・Network 0%・Display 2.6〜2.8%）。主要な消費領域 Display の大幅低下（15%→2.7%）と CPU 微減に基づき低減を確認（ゲージ評価は両者 Low、GPU は上昇）。長時間不在・復帰直後は CPU成分のみ実測（セッション1。37〜39%／19〜21%）、長時間監視の電力と全条件の復帰時間・検出精度は未計測。長時間不在では顔フォールバック（ADR-0021）により推論あたり Vision 時間が約2倍になり、Vision 負荷では「更なる低下」(Req 2.2) が成立しないことを実測（`absent-vision-cost-4-2.md`。対策は別spec提案）。
+  - 進捗: 実機（iPhone 13 mini / iOS 18.7.7）で通常・暗転・長時間不在・復帰の段階切替えと判定分布を観測し `measurements-4-2.md` へ記録済み（暗転中のログ停止回避のため計測専用の一時配線を使用し、計測後に復元・未コミット）。電力は Xcode Energy Report の Average Energy Impact ゲージ評価＋Average Component Utilization の領域別%を実測手段として採用（ADR-0025）。通常・暗転の電力は同一セッションで実測済み（通常: ゲージ Low／Overhead 0%・CPU 19〜21%・GPU 0.8%・Network 0%・Display 15% → 暗転: ゲージ Low／Overhead 0%・CPU 16〜19%・GPU 4.2〜4.4%・Network 0%・Display 2.6〜2.8%）。主要な消費領域 Display の大幅低下（15%→2.7%）と CPU 微減に基づき低減を確認（ゲージ評価は両者 Low、GPU は上昇）。長時間不在・復帰直後は CPU成分のみ実測（セッション1。37〜39%／19〜21%）、長時間監視の電力と全条件の復帰時間・検出精度は未計測。長時間不在では顔フォールバック（ADR-0021）により推論あたり Vision 時間が約2倍になることを `absent-vision-cost-4-2.md` で実測したが、その後 absent-vision-reduction（PR #27）で長時間不在中の顔フォールバックを5秒間隔へ間引く対策が実装済み。現行コード（`PoseDetector.evaluateFaceFallbackGate` / `ProlongedAbsenceTracker.shouldExecuteAndRecordFaceFallback`）では、10fpsの姿勢推論に対し顔検出は最大0.2fpsとなり、暗転直後より実効 Vision 実行数は低下するため、Req 2.2 は ADR-0024 の「実効実行数」解釈で成立する。ただし間引き後の Vision 負荷・電力を再実測した記録は未取得。
   - _Requirements: 7.1, 7.2, 7.3, 8.1, 8.2_

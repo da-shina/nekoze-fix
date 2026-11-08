@@ -25,7 +25,7 @@
 1. When 画面暗転モードに移行する, the NekozeFix shall 推論実行頻度を通常モードより低下させる
 2. While 画面暗転モードが継続し、かつ人物が長時間検出されない, the NekozeFix shall 推論実行頻度を暗転直後よりさらに低下させる
 3. When 画面暗転モードを解除する, the NekozeFix shall 推論実行頻度を通常モードの水準に戻す
-4. While 推論実行頻度を低下させている, the NekozeFix shall 3秒連続確定判定の意味を変更しない
+4. While 推論実行頻度を低下させている, the NekozeFix shall 5秒連続確定判定の意味を変更しない
 
 ### Requirement 3: 暗転時のセンサー稼働見直し
 **Objective:** As a 長時間監視を行う利用者, I want 暗転中はセンサー取得頻度が通常より低下すること, so that 判定に必要な取得を保ちながら不要な取得を削減できる
